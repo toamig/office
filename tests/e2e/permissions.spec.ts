@@ -26,11 +26,13 @@ test("a builder asking to run something unlisted waits in the Inbox, and Deny en
     (await win.evaluate(() => window.office.invoke("tasks.list", {}))).find((t) => t.id === task.id)
       ?.status;
   await expect.poll(status).toBe("waiting-permission");
-  await expect(win.getByTestId("notification").filter({ hasText: "wants to run" })).toBeVisible();
+  // While the question is open it is the card above, not a second row; the row appears once it is answered.
+  await expect(win.getByTestId("notification").filter({ hasText: "wants to run" })).toHaveCount(0);
 
   await request.getByTestId("permission-reason").fill("not in this project");
   await request.getByTestId("permission-deny").click();
   await expect(win.getByTestId("permission-request")).toHaveCount(0);
+  await expect(win.getByTestId("notification").filter({ hasText: "wants to run" })).toHaveCount(1);
   await expect.poll(status, { timeout: 60000 }).toBe("done");
   const detail = await win.evaluate((id) => window.office.invoke("tasks.get", { id }), task.id);
   expect(detail.outputs["run"]).toContain("Could not run rm -rf build");

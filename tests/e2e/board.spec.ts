@@ -39,7 +39,7 @@ test("Home done button works too, and the project list shows git state", async (
   await expect(win.getByTestId("waiting-item")).toHaveCount(1);
 
   await win.getByTestId("rail-projects").click();
-  await expect(win.getByTestId("project-card")).toHaveCount(3); // Alpha is also shown under Pinned
+  await expect(win.getByTestId("project-card")).toHaveCount(2); // a pinned project is listed once, under Pinned
   await expect(win.getByTestId("projects")).toContainText("main");
   await app.close();
 });
