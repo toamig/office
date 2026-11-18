@@ -8,24 +8,30 @@ import { ModulesPanel } from "./setup/ModulesPanel";
 import { PreferencesPanel } from "./setup/PreferencesPanel";
 import { InventoryPanel } from "./setup/InventoryPanel";
 import { ToolsPanel } from "./setup/ToolsPanel";
-import { WorkspaceWizard } from "./setup/WorkspaceWizard";
+import { ProjectsStep } from "./setup/ProjectsStep";
+import { WorkspaceStep } from "./setup/WorkspaceStep";
 
-/** Setup: the first-run wizard, the tools table and the inventory. */
+/** Setup: the workspace, the tools table, preferences and the inventory, as plain settings. */
 export function Setup() {
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const [rerun, setRerun] = useState(false);
   const w = workspace.data;
-  const showWizard = w !== undefined && (!w.configured || rerun);
+  const showWizard = w !== undefined && rerun;
   return (
     <div className="mx-auto grid max-w-4xl gap-4 p-6" data-testid="setup">
       <h1 className="m-0 text-lg font-semibold">Setup</h1>
       {showWizard && (
-        <WorkspaceWizard
-          onDone={() => {
-            setRerun(false);
-            workspace.reload();
-          }}
-        />
+        <Panel title="Change the workspace" action={<Button onClick={() => setRerun(false)}>Cancel</Button>}>
+          <WorkspaceStep
+            onDone={() => {
+              setRerun(false);
+              workspace.reload();
+            }}
+          />
+          <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--line)" }}>
+            <ProjectsStep onDone={workspace.reload} />
+          </div>
+        </Panel>
       )}
       {w?.configured && !showWizard && (
         <Panel title="Workspace" action={<Button onClick={() => setRerun(true)}>Change</Button>}>

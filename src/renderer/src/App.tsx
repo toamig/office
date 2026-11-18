@@ -22,6 +22,7 @@ import { Inbox } from "./views/Inbox";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
+import { Welcome } from "./views/welcome/Welcome";
 
 function CurrentView({ configured }: { configured: boolean }) {
   const picked = useUi((s) => s.view);
@@ -59,6 +60,11 @@ export default function App() {
   const [, toggleSidebar] = useSidebarCollapsed();
   useGlobalShortcuts(toggleSidebar);
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
+  const setup = useQuery("setup.state", undefined, [
+    "setup.changed",
+    "workspace.changed",
+    "settings.changed",
+  ]);
   useEffect(
     () =>
       office.on("app.navigate", (e) => {
@@ -67,6 +73,23 @@ export default function App() {
       }),
     [navigate],
   );
+  // Until setup is done Office is only the welcome flow: no sidebar, no views (spec 4.8).
+  if (setup.data?.welcome) {
+    return (
+      <>
+        <Welcome state={setup.data} />
+        <ThemeApplier />
+      </>
+    );
+  }
+  if (!setup.data) {
+    return (
+      <div className="app">
+        <header className="topbar" />
+        <ThemeApplier />
+      </div>
+    );
+  }
   return (
     <div className="app">
       <TopBar />

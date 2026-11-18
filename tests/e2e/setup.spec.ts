@@ -3,21 +3,10 @@ import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { launch, pick } from "./helpers";
 
-test("the first-run wizard completes on fixtures from an empty app-data folder", async () => {
-  const { app, world, data } = await launch({ world: "unconfigured", fakeTools: true });
+test("Setup shows the workspace, the tools with their problems and fixes, and the inventory", async () => {
+  const { app, world, data } = await launch({ world: true, fakeTools: true });
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
-
-  // An unconfigured app lands on Setup, not on Home.
-  await expect(win.getByTestId("wizard")).toBeVisible();
-  await win.getByTestId("setup-root").fill(world.hub);
-  await win.getByTestId("setup-use-folder").click();
-  await expect(win.getByTestId("setup-config")).toHaveValue("Office/workspace.json");
-  await win.getByTestId("setup-next").click();
-  await win.getByTestId("setup-projects").fill(world.projectsRoot);
-  await win.getByTestId("setup-finish").click();
-
-  // Finishing the wizard lands on Home with the fixture data; Setup still shows the summary.
   await expect(win.getByTestId("home")).toBeVisible();
   await expect(win.getByTestId("waiting-item")).toHaveCount(2);
   await win.getByTestId("rail-setup").click();
@@ -28,12 +17,12 @@ test("the first-run wizard completes on fixtures from an empty app-data folder",
   );
 
   // The tools table shows the Codex config problem with its fix.
-  const codex = win.getByTestId("tool-row").filter({ hasText: "Codex" });
+  const codex = win.getByTestId("tool-row").filter({ has: win.getByText("Codex", { exact: true }) });
   await expect(codex).toContainText("Codex CLI is older than your config");
   await expect(codex).toContainText("npm i -g @openai/codex");
-  await expect(win.getByTestId("tool-row").filter({ hasText: "Claude Code" })).toContainText(
-    "logged in",
-  );
+  await expect(
+    win.getByTestId("tool-row").filter({ has: win.getByText("Claude Code", { exact: true }) }),
+  ).toContainText("logged in");
 
   // The inventory is read from the fake home, read only.
   await expect(win.getByTestId("inventory")).toContainText("example-plugin@market");
@@ -45,7 +34,7 @@ test("the first-run wizard completes on fixtures from an empty app-data folder",
   await app.close();
 });
 
-test("the wizard clones a workspace repo from a git URL", async () => {
+test("the welcome flow clones a workspace repo from a git URL", async () => {
   const { app, world, base } = await launch({ world: "unconfigured", fakeTools: true });
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
@@ -59,7 +48,7 @@ test("the wizard clones a workspace repo from a git URL", async () => {
   await app.close();
 });
 
-test("a bad folder shows a clear error and keeps the wizard open", async () => {
+test("a bad folder shows a clear error and keeps the welcome step open", async () => {
   const { app, base } = await launch({ world: "unconfigured" });
   const win = await app.firstWindow();
   await win.getByTestId("setup-root").fill(join(base, "nowhere"));

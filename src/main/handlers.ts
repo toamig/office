@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { AppSettings } from "../shared/models";
 import { workspaceView, type AppContext } from "./context";
@@ -30,15 +30,18 @@ import { getLayout, setLayout } from "./modules/sessions/layouts";
 import { userHome } from "./core/paths";
 import { readNote } from "./modules/notes/notes";
 import { buildSearchItems } from "./modules/search/items";
-import { detectTools } from "./modules/setup/detect";
 import { readInventories } from "./modules/setup/inventory";
 import {
   cloneWorkspaceRepo,
   inspectWorkspaceFolder,
   prepareWorkspace,
 } from "./modules/setup/workspace-setup";
-import { readHubStatus, runValidate } from "./modules/vault/health";
-import { installTool, loginTool } from "./modules/setup/tool-actions";
+import {
+  installSession,
+  installTool,
+  loginSession,
+  loginTool,
+} from "./modules/setup/tool-actions";
 import { rememberCodexModel } from "./modules/providers/codex";
 
 /** Registers every IPC handler, one group at a time. */
@@ -54,6 +57,14 @@ export function registerHandlers(ctx: AppContext): void {
 }
 
 /** Projects, notes and the quick switcher. */
+const isDirectory = (path: string): boolean => {
+  try {
+    return statSync(path).isDirectory();
+  } catch {
+    return false;
+  }
+};
+
 function registerProjectHandlers(ctx: AppContext): void {
   ctx.ipc.handle("app.ping", (req) => ({ text: req.text, at: new Date().toISOString() }));
   ctx.ipc.handle("workspace.get", () => workspaceView(ctx));
@@ -86,17 +97,33 @@ function registerProjectHandlers(ctx: AppContext): void {
 
 /** Setup: tools, the workspace folder and providers. */
 function registerSetupHandlers(ctx: AppContext): void {
-  ctx.ipc.handle("setup.detectTools", () => detectTools());
+  ctx.ipc.handle("setup.detectTools", () => ctx.toolsMonitor.read());
+  ctx.ipc.handle("setup.recheckTools", () => ctx.toolsMonitor.check());
+  ctx.ipc.handle("setup.state", () => ctx.setupState());
+  ctx.ipc.handle("setup.setProjectsRoot", (req) => {
+    const path = resolve(req.path);
+    if (!isDirectory(path)) throw new IpcFailure("no-projects-root", `${path} is not a folder`);
+    ctx.patchSettings({ projectsRoot: path });
+    void ctx.start().then(() => ctx.bus.emit("setup.changed", {}));
+  });
+  ctx.ipc.handle("setup.complete", () => {
+    ctx.patchSettings({ welcomeDone: true });
+    ctx.bus.emit("setup.changed", {});
+  });
   ctx.ipc.handle("setup.inspect", (req) => inspectWorkspaceFolder(req.root));
   ctx.ipc.handle("setup.clone", (req) => cloneWorkspaceRepo(req.url, req.dest));
   ctx.ipc.handle("setup.apply", async (req) => {
     prepareWorkspace(req);
+    // Reaching this with nothing recorded is a first run: the flow has begun and is not done.
+    if (ctx.settings().welcomeDone === undefined) ctx.patchSettings({ welcomeDone: false });
     ctx.patchSettings({
       workspaceRoot: req.workspaceRoot,
       workspaceConfigPath: req.workspaceConfigPath,
-      projectsRoot: req.projectsRoot,
+      // The welcome flow picks the workspace first and the projects folder next; keep what is set.
+      ...(req.projectsRoot ? { projectsRoot: req.projectsRoot } : {}),
     });
     await ctx.start();
+    ctx.bus.emit("setup.changed", {});
     return workspaceView(ctx);
   });
   ctx.ipc.handle("setup.inventory", (req) => {
@@ -106,12 +133,13 @@ function registerSetupHandlers(ctx: AppContext): void {
 
   const toolActions = {
     providers: ctx.providers,
-    startCommand: (spec: { cmd: string; args: string[] }, title: string) => {
-      ctx.sessions.startCommand(spec, title, userHome());
-    },
+    startCommand: (spec: { cmd: string; args: string[] }, title: string) =>
+      ctx.sessions.startCommand(spec, title, userHome()),
   };
   ctx.ipc.handle("setup.login", (req) => loginTool(toolActions, req.id));
   ctx.ipc.handle("setup.install", (req) => installTool(toolActions, req.id));
+  ctx.ipc.handle("setup.loginSession", (req) => loginSession(toolActions, req.id));
+  ctx.ipc.handle("setup.installSession", (req) => installSession(toolActions, req.id));
   ctx.ipc.handle("providers.list", () =>
     Promise.all(
       ctx.providers.all().map(async (p) => {
@@ -160,7 +188,11 @@ function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("layout.set", (req) => setLayout(ctx.db, req.key, req.layout));
   ctx.ipc.handle("hooks.status", () => ctx.hooks.status());
   ctx.ipc.handle("hooks.preview", (req) => ctx.hooks.preview(req.target, req.action));
-  ctx.ipc.handle("hooks.apply", (req) => ctx.hooks.apply(req.target, req.action));
+  ctx.ipc.handle("hooks.apply", async (req) => {
+    const result = await ctx.hooks.apply(req.target, req.action);
+    ctx.bus.emit("setup.changed", {});
+    return result;
+  });
   ctx.ipc.handle("capture.run", (req) => captureSession(ctx, req.id));
   ctx.ipc.handle("capture.commit", async (req) => {
     const session = ctx.sessions.get(req.id);
@@ -438,17 +470,6 @@ function registerVaultHandlers(ctx: AppContext): void {
     ctx.ops.addWaiting(req.projectId, req.text, req.source),
   );
   ctx.ipc.handle("vault.addNote", (req) => ctx.ops.addNote(req.projectId, req.text));
-  ctx.ipc.handle("vault.health", async () => {
-    const root = ctx.settings().workspaceRoot;
-    const kind = ctx.store.state.workspace?.vault.kind;
-    if (!root || kind !== "brain-hub") {
-      return {
-        validate: { ran: false, ok: true, errors: [], warnings: 0, summary: null },
-        repos: [],
-        warnings: ctx.warnings,
-      };
-    }
-    const [validate, repos] = await Promise.all([runValidate(root), readHubStatus(root)]);
-    return { validate, repos, warnings: ctx.warnings };
-  });
+  // The last result of the background check, with its time: opening a screen never runs the checks.
+  ctx.ipc.handle("vault.health", () => ctx.health.view());
 }

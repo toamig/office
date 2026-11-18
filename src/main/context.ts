@@ -1,6 +1,6 @@
 import { mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
-import type { SyncReport, WorkspaceView } from "../shared/models";
+import type { SetupState, SyncReport, WorkspaceView } from "../shared/models";
 import type { MachineSettings } from "../shared/types";
 import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
@@ -41,6 +41,11 @@ import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
+import { HealthService } from "./modules/vault/health-service";
+import { readHubStatus, runValidate } from "./modules/vault/health";
+import { detectTools } from "./modules/setup/detect";
+import { ToolsMonitor } from "./modules/setup/tools-monitor";
+import { computeSetupState } from "./modules/setup/state";
 import { VaultService } from "./modules/vault/service";
 import { VaultWriter } from "./modules/vault/writer";
 
@@ -76,6 +81,12 @@ export interface AppContext {
   chat: ChatService;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
+  /** The brain's health, refreshed in the background; reads return the last result. */
+  health: HealthService;
+  /** The last look at the command-line tools, refreshed in the background. */
+  toolsMonitor: ToolsMonitor;
+  /** Where the welcome flow stands. */
+  setupState: () => SetupState;
   /** Sync all repos and raise notifications for what needs the owner. */
   sync: () => Promise<SyncReport>;
   syncProject: (id: string) => Promise<SyncReport>;
@@ -103,6 +114,7 @@ interface Base {
 interface Notes {
   vault: VaultService;
   warnings: AppContext["warnings"];
+  health: HealthService;
   writer: VaultWriter;
   ops: VaultOps;
   projects: ProjectService;
@@ -139,6 +151,7 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
       warnings.unshift({ at: new Date().toISOString(), message: warning.message });
       warnings.length = Math.min(warnings.length, 20);
       notifyFromWarning(notifier, warning);
+      bus.emit("vault.health", {});
     },
   });
   const ops = new VaultOps({ vault, writer, workspace: () => store.state.workspace });
@@ -148,7 +161,15 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     projectsRoot: () => box.current.projectsRoot,
     waiting: (id) => vault.waitingCount(id),
   });
-  return { vault, warnings, writer, ops, projects };
+  const health = new HealthService({
+    root: () => box.current.workspaceRoot,
+    kind: () => store.state.workspace?.vault.kind,
+    warnings: () => warnings,
+    validate: runValidate,
+    repos: readHubStatus,
+    onChange: () => bus.emit("vault.health", {}),
+  });
+  return { vault, warnings, health, writer, ops, projects };
 }
 
 /** The absolute folder of a project, or undefined when it is unknown. */
@@ -334,13 +355,18 @@ function createLifecycle(
   notes: Notes,
   agents: Agents,
   orch: Orchestration,
+  toolsMonitor: ToolsMonitor,
 ): Pick<AppContext, "sync" | "syncProject" | "start" | "stop"> {
   const { box, bus, store, notifier } = base;
-  const { vault, projects } = notes;
+  const { vault, projects, health } = notes;
   const { github, brief, sessions, relay } = agents;
   const { scheduler, modules } = orch;
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
-  bus.on("vault.changed", () => waiting.check());
+  bus.on("vault.changed", () => {
+    waiting.check();
+    // The brain's validation takes seconds: it runs once things have been quiet, never per change.
+    health.schedule();
+  });
   bus.on("workspace.changed", () => {
     void vault.watch();
     projects.startAuto();
@@ -354,11 +380,13 @@ function createLifecycle(
     onReport: (report) => notifyFromSyncReport(notifier, report),
   };
 
+  let toolsStarted = false;
   let archiveTimer: NodeJS.Timeout | undefined;
   let briefTimer: NodeJS.Timeout | undefined;
   const stop = async (): Promise<void> => {
     clearInterval(archiveTimer);
     clearInterval(briefTimer);
+    health.stop();
     github.stop();
     scheduler.stop();
     sessions.stopTimer();
@@ -373,10 +401,15 @@ function createLifecycle(
     const port = await relay.start(box.current.relay.port);
     if (port !== box.current.relay.port)
       box.current = updateSettings({ relay: { ...box.current.relay, port } });
+    if (!toolsStarted) {
+      toolsStarted = true;
+      toolsMonitor.start();
+    }
     if (!isConfigured(box.current)) return;
     await store.open(box.current.workspaceRoot, box.current.workspaceConfigPath);
     waiting.prime();
     await vault.watch();
+    health.start();
     projects.startAuto();
     github.start();
     scheduler.start();
@@ -392,7 +425,11 @@ function createLifecycle(
     briefTimer = setInterval(due, 60_000);
   };
   return {
-    sync: () => syncAll(syncDeps),
+    sync: async () => {
+      const report = await syncAll(syncDeps);
+      void health.refresh();
+      return report;
+    },
     syncProject: (id) => syncProject(syncDeps, id),
     start,
     stop,
@@ -409,6 +446,22 @@ export async function createContext(
   const agents = createAgents(base, notes, relayScript);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
+  const toolsMonitor = new ToolsMonitor(detectTools, () => bus.emit("setup.changed", {}));
+  const setupState = (tools: ToolsMonitor["current"] = toolsMonitor.current): SetupState => {
+    const s = box.current;
+    const hooks = agents.hooks.status();
+    return computeSetupState({
+      settings: s,
+      workspaceError: store.state.error,
+      tools,
+      hooksInstalled: hooks.claude.installed || hooks.codex.installed,
+    });
+  };
+  // A machine that was set up before the welcome flow existed has nothing to be welcomed to.
+  if (box.current.welcomeDone === undefined) {
+    const steps = setupState(null).steps;
+    if (steps[0]!.met && steps[1]!.met) box.current = updateSettings({ welcomeDone: true });
+  }
   return {
     settings: () => box.current,
     patchSettings: (patch) => (box.current = updateSettings(patch)),
@@ -425,7 +478,10 @@ export async function createContext(
     vault: notes.vault,
     ops: notes.ops,
     warnings: notes.warnings,
-    ...createLifecycle(base, notes, agents, orch),
+    health: notes.health,
+    toolsMonitor,
+    setupState,
+    ...createLifecycle(base, notes, agents, orch, toolsMonitor),
   };
 }
 

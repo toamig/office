@@ -24,7 +24,7 @@ const explain: Record<Target, string> = {
 };
 
 /** Consent screens for the two files Office edits: you see the exact change before anything is written. */
-export function HooksPanel() {
+export function HooksPanel({ title = "Agent notifications" }: { title?: string }) {
   const status = useQuery("hooks.status");
   const [pending, setPending] = useState<Pending | null>(null);
   useEscape(() => setPending(null), pending !== null);
@@ -57,7 +57,7 @@ export function HooksPanel() {
   };
 
   return (
-    <Panel title="Agent notifications">
+    <Panel title={title}>
       <p className="mt-0" style={{ color: "var(--muted)" }}>
         Office learns that an agent needs you through hooks in each tool. Nothing is changed until
         you confirm the exact edit below.

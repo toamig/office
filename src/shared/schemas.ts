@@ -30,6 +30,11 @@ export const MachineSettings = z.object({
   /** How a new agent session opens: as a chat or in a terminal. */
   sessionMode: z.enum(["chat", "terminal"]).default("chat"),
   modules: z.record(z.string(), z.boolean()).default({}),
+  /**
+   * Whether the welcome flow was finished. Absent means the setting was never recorded: a machine that was set
+   * up before the flow existed is marked done at start; a first run records false when the flow begins.
+   */
+  welcomeDone: z.boolean().optional(),
 });
 
 export const Project = z.object({

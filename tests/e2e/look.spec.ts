@@ -128,3 +128,34 @@ test("every view in light and dark", async () => {
   }
   await app.close();
 });
+
+test("the welcome flow, every step, in light and dark", async () => {
+  mkdirSync(out, { recursive: true });
+  for (const theme of ["light", "dark"] as const) {
+    const { app, world } = await launch({ world: "unconfigured", fakeTools: true });
+    if (!world) throw new Error("no world");
+    const win = await app.firstWindow();
+    await expect(win.getByTestId("welcome")).toBeVisible();
+    await app.evaluate(({ BrowserWindow }) => {
+      BrowserWindow.getAllWindows()[0]?.setBounds({ x: 40, y: 40, width: 1360, height: 860 });
+    });
+    await win.evaluate((t) => window.office.invoke("settings.set", { theme: t }), theme);
+    await shoot(win, "welcome-1-workspace", theme);
+    await win.getByTestId("setup-root").fill(world.hub);
+    await win.getByTestId("setup-use-folder").click();
+    await expect(win.getByTestId("setup-config")).toBeVisible();
+    await shoot(win, "welcome-1b-config", theme);
+    await win.getByTestId("setup-use-workspace").click();
+    await win.getByTestId("welcome-continue").click();
+    await shoot(win, "welcome-2-projects", theme);
+    await win.getByTestId("setup-projects").fill(world.projectsRoot);
+    await win.getByTestId("setup-projects-save").click();
+    await win.getByTestId("welcome-continue").click();
+    await expect(win.getByTestId("tool-row")).toHaveCount(5);
+    await shoot(win, "welcome-3-tools", theme);
+    await win.getByTestId("welcome-continue").click();
+    await expect(win.getByTestId("hooks-rows")).toBeVisible();
+    await shoot(win, "welcome-4-notifications", theme);
+    await app.close();
+  }
+});

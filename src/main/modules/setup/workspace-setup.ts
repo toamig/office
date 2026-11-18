@@ -97,7 +97,7 @@ export interface ApplyInput {
 export function prepareWorkspace(input: ApplyInput): void {
   const root = resolve(input.workspaceRoot);
   if (!isDir(root)) throw new IpcFailure("no-workspace", `${root} is not a folder`);
-  if (!isDir(resolve(input.projectsRoot))) {
+  if (input.projectsRoot && !isDir(resolve(input.projectsRoot))) {
     throw new IpcFailure("no-projects-root", `${resolve(input.projectsRoot)} is not a folder`);
   }
   if (!input.workspaceConfigPath.trim() || input.workspaceConfigPath.includes("..")) {

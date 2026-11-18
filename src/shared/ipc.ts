@@ -42,6 +42,7 @@ import {
   SpawnStep,
   SyncReport,
   ToolStatus,
+  SetupState,
   WaitingEntry,
   WorkspaceView,
   VaultFile,
@@ -85,6 +86,10 @@ export const eventTypes = [
   "chat.event",
   "chat.state",
   "app.update",
+  /** The brain's health (validation, hub status) was refreshed by the background job. */
+  "vault.health",
+  /** Something the welcome flow looks at changed: the settings it reads, the tools, the hooks. */
+  "setup.changed",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
 
@@ -142,7 +147,20 @@ export const channels = {
   "projects.openUnreal": { req: z.object({ id: z.string() }), res: z.void() },
   "notes.read": { req: z.object({ projectId: z.string(), name: z.string() }), res: ProjectNote },
   "search.items": { req: z.void(), res: z.array(SearchItem) },
+  /** The last look at the tools (a background job does the looking). */
   "setup.detectTools": { req: z.void(), res: z.array(ToolStatus) },
+  /** Looks at the tools now (Check again) and answers with the result. */
+  "setup.recheckTools": { req: z.void(), res: z.array(ToolStatus) },
+  /** Where the welcome flow stands: the steps, which are met, and whether the app is gated on them. */
+  "setup.state": { req: z.void(), res: SetupState },
+  /** Remembers the projects folder (the welcome flow's second step). */
+  "setup.setProjectsRoot": { req: z.object({ path: z.string() }), res: z.void() },
+  /** The welcome flow is finished: open the app. */
+  "setup.complete": { req: z.void(), res: z.void() },
+  /** Opens the tool's login in a terminal and answers with its session, so a step can show it in place. */
+  "setup.loginSession": { req: z.object({ id: z.string() }), res: SessionRow },
+  /** Opens the install command of a missing tool in a terminal and answers with its session. */
+  "setup.installSession": { req: z.object({ id: z.string() }), res: SessionRow },
   /** Opens the tool's own login in a terminal tab. */
   "setup.login": { req: z.object({ id: z.string() }), res: z.void() },
   /** Opens the install command of a missing tool (Codex) in a terminal tab. */

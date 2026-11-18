@@ -172,6 +172,8 @@ export const HealthView = z.object({
   }),
   repos: z.array(HubRepoRow),
   warnings: z.array(z.object({ at: z.string(), message: z.string() })),
+  /** When the brain was last checked (a background job does it); null until the first check. */
+  checkedAt: z.string().nullable(),
 });
 export type HealthView = z.infer<typeof HealthView>;
 
@@ -289,6 +291,27 @@ export const Inventory = z.object({
   items: z.array(InventoryItem),
 });
 export type Inventory = z.infer<typeof Inventory>;
+
+/** One step of the welcome flow. */
+export const SetupStep = z.object({
+  id: z.enum(["workspace", "projects", "tools", "notifications"]),
+  label: z.string(),
+  /** A required step has to be met before the app opens; the notification step is optional. */
+  required: z.boolean(),
+  met: z.boolean(),
+  /** One line saying what is missing, null when the step is met. */
+  reason: z.string().nullable(),
+});
+export type SetupStep = z.infer<typeof SetupStep>;
+
+export const SetupState = z.object({
+  /** True while Office shows only the welcome flow: it was never finished, or a required step broke. */
+  welcome: z.boolean(),
+  steps: z.array(SetupStep),
+  /** The step to open on: the first required one that is not met, else the tools step (the first one the owner confirms). */
+  current: SetupStep.shape.id,
+});
+export type SetupState = z.infer<typeof SetupState>;
 
 export const WorkspaceInspection = z.object({
   exists: z.boolean(),

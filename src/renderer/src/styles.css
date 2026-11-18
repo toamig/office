@@ -845,3 +845,81 @@ button,
   background: var(--accent);
   color: var(--on-accent);
 }
+
+/* The welcome flow: the whole window, one step at a time. */
+.welcome {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: var(--bg);
+}
+.welcome-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  justify-content: center;
+  padding: 32px 24px;
+}
+.welcome-card {
+  width: 100%;
+  max-width: 760px;
+  display: flex;
+  flex-direction: column;
+}
+.welcome-progress {
+  display: flex;
+  gap: 18px;
+  list-style: none;
+  margin: 0 0 24px;
+  padding: 0;
+  color: var(--muted);
+}
+.welcome-progress li {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.welcome-progress li[data-state="current"] {
+  color: var(--text);
+  font-weight: 600;
+}
+.welcome-dot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1px solid var(--line);
+  font-size: 11px;
+}
+.welcome-progress li[data-state="current"] .welcome-dot {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--on-accent);
+}
+.welcome-progress li[data-state="done"] .welcome-dot {
+  color: var(--good);
+  border-color: var(--good);
+}
+.welcome-optional {
+  font-weight: 400;
+}
+.welcome-step {
+  min-height: 220px;
+}
+.welcome-footer {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid var(--line);
+}
+.welcome-reason {
+  flex: 1;
+  text-align: right;
+  color: var(--muted);
+  font-size: 12.5px;
+}
