@@ -104,7 +104,9 @@ function respond(text) {
     const names = [...text.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
     return names.map((n) => `## ${n}\n\nFake brief for ${n}: things changed.`).join("\n\n");
   }
-  if (/SUMMARY_OF_EXPLORATION/.test(text)) return "## Positioning and vision\n\nA fake exploration summary.";
+  if (/SUMMARY_OF_EXPLORATION/.test(text)) {
+    return "## Positioning and vision\n\nA fake exploration summary.\n\n## Open items\n- Name the game\n- Draw the sheep";
+  }
   if (/FAIL_RUN/.test(text)) throw new Error("the fake agent was told to fail");
   return `FAKE: ${text.slice(0, 60)}`;
 }

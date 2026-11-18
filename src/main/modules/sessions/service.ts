@@ -148,7 +148,7 @@ export class SessionService {
     return role;
   }
 
-  start(input: StartSession): SessionRow {
+  start(input: StartSession, extra: { addDirs?: string[]; roleLabel?: string } = {}): SessionRow {
     let role: Role | undefined;
     if (input.roleId) role = this.resolveRole(input.roleId, input.projectId);
     const providerId = role?.provider ?? input.providerId ?? "claude-code";
@@ -166,6 +166,7 @@ export class SessionService {
       cwd,
       officeSessionId: id,
       ...(role ? { role } : {}),
+      ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
     });
     const title = input.title ?? (input.roleId ? `${input.roleId}` : provider.label);
     return this.launch({
@@ -174,7 +175,7 @@ export class SessionService {
       spec,
       cwd,
       projectId: input.projectId ?? null,
-      roleId: input.roleId ?? null,
+      roleId: extra.roleLabel ?? input.roleId ?? null,
       title,
       ...(input.prompt ? { prompt: input.prompt } : {}),
     });

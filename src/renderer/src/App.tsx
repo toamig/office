@@ -20,6 +20,7 @@ import { useQuery } from "./lib/hooks";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Agents } from "./views/Agents";
 import { Brain } from "./views/Brain";
+import { Explore } from "./views/Explore";
 import { Home as HomeView } from "./views/Home";
 import { Inbox } from "./views/Inbox";
 import { Setup } from "./views/Setup";
@@ -58,6 +59,7 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "agents")
     return <Agents key={`${params["project"] ?? ""}-${params["session"] ?? ""}`} />;
   if (view === "brain") return <Brain />;
+  if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;
   if (view === "setup") return <Setup />;
   const item = rail.find((r) => r.id === view);

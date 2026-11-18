@@ -12,27 +12,36 @@ export interface Launched {
   data: string;
   home: string;
   gitConfig: string;
+  /** Where the fake gh creates its bare repos. */
+  ghRemotes: string;
   world?: World;
 }
 
-const GIT_CONFIG = [
-  "[user]",
-  "\tname = Office E2E",
-  "\temail = e2e@example.invalid",
-  "[init]",
-  "\tdefaultBranch = main",
-  "[commit]",
-  "\tgpgsign = false",
-  '[protocol "file"]',
-  "\tallow = always",
-  "",
-].join("\n");
+/** The fake GitHub owner that fake-gh reports, and the SSH base git rewrites to local folders. */
+export const FAKE_OWNER = "fixture-owner";
+
+function gitConfigText(ghRemotes: string): string {
+  return [
+    "[user]",
+    "\tname = Office E2E",
+    "\temail = e2e@example.invalid",
+    "[init]",
+    "\tdefaultBranch = main",
+    "[commit]",
+    "\tgpgsign = false",
+    '[protocol "file"]',
+    "\tallow = always",
+    `[url "${ghRemotes.replace(/\\/g, "/")}/"]`,
+    `\tinsteadOf = git@github.com:${FAKE_OWNER}/`,
+    "",
+  ].join("\n");
+}
 
 /** Makes the test process itself use a clean git config (fixtures build repos here). */
-export function useCleanGitConfig(): string {
+export function useCleanGitConfig(ghRemotes = join(tmpdir(), "office-e2e-ghremotes")): string {
   const dir = mkdtempSync(join(tmpdir(), "office-e2e-gitcfg-"));
   const path = join(dir, "gitconfig");
-  writeFileSync(path, GIT_CONFIG);
+  writeFileSync(path, gitConfigText(ghRemotes));
   process.env["GIT_CONFIG_GLOBAL"] = path;
   process.env["GIT_CONFIG_NOSYSTEM"] = "1";
   return path;
@@ -42,7 +51,7 @@ export interface LaunchOptions {
   env?: Record<string, string>;
   /** Build a fixture world (brain hub plus two code repos) and preconfigure settings for it. */
   world?: boolean | "unconfigured";
-  /** Copy tests/fixtures/home into the fake home and point claude/codex at the fake CLIs. */
+  /** Copy tests/fixtures/home into the fake home and point claude, codex and gh at the fake CLIs. */
   fakeTools?: boolean;
   /** Extra machine-settings fields, e.g. a relay port. */
   settings?: Record<string, unknown>;
@@ -55,23 +64,26 @@ export const packagedExe = join(repoRoot, "release", "win-unpacked", "Office.exe
 
 /** Launches the built app against a fresh data folder and a fake home. Never touches real data. */
 export async function launch(options: LaunchOptions = {}): Promise<Launched> {
-  const gitConfig = useCleanGitConfig();
   const base = options.base ?? mkdtempSync(join(tmpdir(), "office-e2e-"));
+  const ghRemotes = join(base, "gh-remotes");
+  mkdirSync(ghRemotes, { recursive: true });
+  const gitConfig = useCleanGitConfig(ghRemotes);
   const data = join(base, "data");
   const home = join(base, "home");
   mkdirSync(home, { recursive: true });
-  const toolEnv: Record<string, string> = {};
+  const toolEnv: Record<string, string> = { FAKE_GH_REMOTES: ghRemotes };
   if (options.fakeTools) {
     cpSync(join(repoRoot, "tests/fixtures/home"), home, { recursive: true });
     toolEnv["OFFICE_BIN_CLAUDE"] = join(repoRoot, "tests/fixtures/bin/fake-claude.mjs");
     toolEnv["OFFICE_BIN_CODEX"] = join(repoRoot, "tests/fixtures/bin/fake-codex.mjs");
     toolEnv["OFFICE_BIN_FAKE_CLAUDE"] = join(repoRoot, "tests/fixtures/bin/fake-claude.mjs");
+    toolEnv["OFFICE_BIN_GH"] = join(repoRoot, "tests/fixtures/bin/fake-gh.mjs");
   }
   let world: World | undefined;
   if (options.world) {
     world = makeWorld();
     mkdirSync(data, { recursive: true });
-    if (options.world === true)
+    if (options.world === true) {
       writeFileSync(
         join(data, "settings.json"),
         JSON.stringify({
@@ -84,6 +96,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
           ...options.settings,
         }),
       );
+    }
   }
   const app = await electron.launch({
     ...(options.packaged ? { executablePath: packagedExe } : {}),
@@ -98,5 +111,5 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
       ...options.env,
     } as Record<string, string>,
   });
-  return { app, base, data, home, gitConfig, ...(world ? { world } : {}) };
+  return { app, base, data, home, gitConfig, ghRemotes, ...(world ? { world } : {}) };
 }

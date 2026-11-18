@@ -12,6 +12,7 @@ import {
   codexConfigPath,
   dataDir,
   dbPath,
+  exploreDir,
   runsDir,
   sessionsDir,
   userHome,
@@ -24,6 +25,7 @@ import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
 import { HooksManager } from "./modules/setup/install-hooks";
 import { BriefService } from "./modules/brief/brief";
+import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
 import { RunService } from "./modules/runs/service";
 import { SessionService } from "./modules/sessions/service";
@@ -44,6 +46,7 @@ export interface AppContext {
   sessions: SessionService;
   runs: RunService;
   ask: AskService;
+  explore: ExploreService;
   brief: BriefService;
   hooks: HooksManager;
   relay: RelayServer;
@@ -139,6 +142,22 @@ export async function createContext(
     onClaude: (payload) => sessions.onClaudeHook(payload),
     onCodex: (payload) => sessions.onCodexEvent(payload),
   });
+  const explore = new ExploreService({
+    sessions,
+    bus,
+    exploreDir: exploreDir(),
+    workspaceRoot: () => current.workspaceRoot,
+    spawn: {
+      workspace: () => store.state.workspace,
+      workspaceRoot: () => current.workspaceRoot,
+      projectsRoot: () => current.projectsRoot,
+      workspaceFile: () => store.filePath,
+      reloadWorkspace: () => void store.reload(),
+      writer,
+      sessions,
+      runs,
+    },
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -199,6 +218,7 @@ export async function createContext(
     sessions,
     runs,
     ask,
+    explore,
     brief,
     hooks,
     relay,

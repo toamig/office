@@ -393,3 +393,42 @@ export const BriefView = z.object({
   items: z.array(BriefItem),
 });
 export type BriefView = z.infer<typeof BriefView>;
+
+export const SpawnInput = z.object({
+  name: z.string().min(1),
+  /** Folder under the projects root; defaults to the name without spaces. */
+  folder: z.string().optional(),
+  visibility: z.enum(["public", "private"]),
+  license: z.enum(["mit", "none"]),
+  group: z.string().optional(),
+  /** What it is built on, one line. Goes into the README and AGENTS.md. */
+  stack: z.string().default(""),
+  /** The brain repo's domain for the new project. */
+  domain: z.enum(["ue5", "saas", "webgames", "mobile", "meta"]).default("saas"),
+  /** The Explore session whose conclusions are written into the new notes. */
+  exploreSessionId: z.string().optional(),
+  /** Creating anything public needs this to be true, set by its own checkbox. */
+  publicConfirmed: z.boolean().default(false),
+});
+export type SpawnInput = z.infer<typeof SpawnInput>;
+
+export const SpawnStep = z.object({
+  id: z.string(),
+  label: z.string(),
+  /** The exact commands and files, shown before anything runs. */
+  detail: z.array(z.string()),
+  status: z.enum(["pending", "running", "done", "failed", "skipped"]),
+  result: z.string().optional(),
+});
+export type SpawnStep = z.infer<typeof SpawnStep>;
+
+export const SpawnReport = z.object({
+  steps: z.array(SpawnStep),
+  ok: z.boolean(),
+  /** The id of the step that failed, when one did. */
+  failedAt: z.string().optional(),
+  /** What was created, so the owner knows where things are after a stop. */
+  projectId: z.string().optional(),
+  sessionId: z.string().optional(),
+});
+export type SpawnReport = z.infer<typeof SpawnReport>;

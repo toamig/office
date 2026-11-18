@@ -20,6 +20,9 @@ import {
   ProjectDetail,
   ProjectSummary,
   SearchItem,
+  SpawnInput,
+  SpawnReport,
+  SpawnStep,
   SyncReport,
   ToolStatus,
   WaitingEntry,
@@ -163,6 +166,13 @@ export const channels = {
   "vault.audit": { req: z.void(), res: z.array(AuditEntry) },
   "brief.latest": { req: z.void(), res: BriefView },
   "brief.run": { req: z.void(), res: z.object({ date: z.string(), count: z.number() }) },
+  "explore.start": {
+    req: z.object({ providerId: z.string().optional(), title: z.string().optional() }),
+    res: SessionRow,
+  },
+  "explore.list": { req: z.void(), res: z.array(SessionRow) },
+  "explore.plan": { req: SpawnInput, res: z.array(SpawnStep) },
+  "explore.spawn": { req: SpawnInput, res: SpawnReport },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),
