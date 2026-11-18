@@ -8,6 +8,7 @@ import {
   CaptureCommit,
   CaptureResult,
   DiffResult,
+  GithubOverview,
   RepoStatus,
   HealthView,
   HookStatus,
@@ -256,6 +257,7 @@ export const channels = {
     req: z.object({ projectId: z.string(), dir: z.string().optional() }),
     res: z.object({ pushed: z.boolean(), error: z.string().optional() }),
   },
+  "github.overview": { req: z.object({ projectId: z.string() }), res: GithubOverview },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

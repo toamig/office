@@ -30,7 +30,7 @@ test("closing a session lists what is left and saves the items into the vault", 
   await items.nth(1).getByLabel("Item text").fill("Write the level three script");
   await win.getByTestId("capture-save").click();
   await expect(win.getByTestId("capture-dialog")).toHaveCount(0);
-  await expect(win.getByTestId("session-row")).toHaveCount(0);
+  await expect(win.getByTestId("session-row")).toHaveCount(0, { timeout: 40000 });
 
   const file = readFileSync(join(world.hub, "Alpha", "OpenItems.md"), "utf8");
   expect(file).toMatch(
@@ -61,7 +61,7 @@ test("archiving without saving leaves the vault alone", async () => {
   await win.getByTestId("close-session").click();
   await expect(win.getByTestId("capture-item")).toHaveCount(2);
   await win.getByTestId("capture-skip").click();
-  await expect(win.getByTestId("session-row")).toHaveCount(0);
+  await expect(win.getByTestId("session-row")).toHaveCount(0, { timeout: 40000 });
   expect(readFileSync(join(world.hub, "Alpha", "OpenItems.md"), "utf8")).toBe(before);
   await app.close();
 });

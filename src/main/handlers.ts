@@ -262,6 +262,7 @@ export function registerHandlers(ctx: AppContext): void {
     changed(req.projectId);
     return outcome.ok ? { pushed: true } : { pushed: false, error: outcome.error };
   });
+  ctx.ipc.handle("github.overview", (req) => ctx.github.overview(req.projectId));
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

@@ -19,6 +19,7 @@ import {
 } from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
+import { GithubService } from "./modules/github/gh";
 import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
@@ -51,6 +52,7 @@ export interface AppContext {
   hooks: HooksManager;
   relay: RelayServer;
   projects: ProjectService;
+  github: GithubService;
   vault: VaultService;
   ops: VaultOps;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
@@ -109,6 +111,7 @@ export async function createContext(
     workspace: () => store.state.workspace,
     workspaceRoot: () => current.workspaceRoot,
   });
+  const github = new GithubService({ projects, notifier });
   const brief = new BriefService({
     db,
     runs,
@@ -178,6 +181,7 @@ export async function createContext(
   const stop = async (): Promise<void> => {
     clearInterval(archiveTimer);
     clearInterval(briefTimer);
+    github.stop();
     sessions.stopTimer();
     await relay.stop();
     projects.stopAuto();
@@ -194,6 +198,7 @@ export async function createContext(
     waiting.prime();
     await vault.watch();
     projects.startAuto();
+    github.start();
     void projects.refreshAll();
     sessions.startTimer();
     const archive = (): void => {
@@ -223,6 +228,7 @@ export async function createContext(
     hooks,
     relay,
     projects,
+    github,
     vault,
     ops,
     warnings,

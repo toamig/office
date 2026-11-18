@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { PrsPanel } from "../components/PrsPanel";
 import { Chip, EmptyState } from "../components/ui";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
@@ -7,7 +8,7 @@ import { CommitTab } from "./git/CommitTab";
 import { DiffTab } from "./git/DiffTab";
 import { WorktreesTab } from "./git/WorktreesTab";
 
-const TABS = ["branches", "worktrees", "changes", "commit"] as const;
+const TABS = ["branches", "worktrees", "changes", "commit", "prs"] as const;
 type Tab = (typeof TABS)[number];
 
 /** The Git desk: every repo at a glance, and branches, worktrees, diffs, commits and PRs for the chosen one. */
@@ -97,6 +98,7 @@ export function Git() {
                   ["worktrees", "Worktrees"],
                   ["changes", "Changes"],
                   ["commit", "Commit"],
+                  ["prs", "PRs and CI"],
                 ] as Array<[Tab, string]>
               ).map(([id, label]) => (
                 <button
@@ -118,6 +120,7 @@ export function Git() {
             {tab === "worktrees" && <WorktreesTab key={current.id} projectId={current.id} />}
             {tab === "changes" && <DiffTab key={current.id} projectId={current.id} />}
             {tab === "commit" && <CommitTab key={current.id} projectId={current.id} />}
+            {tab === "prs" && <PrsPanel key={current.id} projectId={current.id} />}
           </>
         )}
       </div>

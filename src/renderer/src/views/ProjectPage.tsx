@@ -1,6 +1,7 @@
 import { Code, FolderOpen, Play, Plus, RefreshCw } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "../components/Markdown";
+import { PrsPanel } from "../components/PrsPanel";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
@@ -57,9 +58,7 @@ function Overview({ id }: { id: string }) {
           ))}
         </ul>
       </Panel>
-      <Panel title="Pull requests and CI">
-        <EmptyState>Pull requests and CI results arrive with the Git desk.</EmptyState>
-      </Panel>
+      <PrsPanel projectId={id} />
     </div>
   );
 }

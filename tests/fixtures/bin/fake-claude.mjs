@@ -146,6 +146,13 @@ rl.on("line", (line) => {
   if (!text) return;
   if (text === "quit") return end(0);
   if (text === "crash") return end(3);
+  if (text === "build") {
+    // Acts like a builder: leaves an uncommitted change in the folder it runs in.
+    const name = `built-${Date.now()}.txt`;
+    writeFileSync(join(process.cwd(), name), "built by the fake builder\n");
+    process.stdout.write(`built ${name}\r\n> `);
+    return;
+  }
   runHooks("UserPromptSubmit", sid, { prompt: text });
   if (text.startsWith("ask")) {
     process.stdout.write("Do you want to proceed? (y/n)\r\n");

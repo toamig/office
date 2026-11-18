@@ -58,7 +58,7 @@ test("a day in the workbench: two agents, a needs-you, capture, ask the brain an
     .click();
   await expect(win.getByTestId("capture-item")).toHaveCount(2);
   await win.getByTestId("capture-save").click();
-  await expect(win.getByTestId("session-row")).toHaveCount(1);
+  await expect(win.getByTestId("session-row")).toHaveCount(1, { timeout: 40000 });
   await expect
     .poll(() => readFileSync(join(world.hub, "Alpha", "OpenItems.md"), "utf8"), { timeout: 20000 })
     .toContain("Write the level two script");

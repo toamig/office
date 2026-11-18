@@ -1,0 +1,23 @@
+[
+  {
+    "name": "CI",
+    "status": "completed",
+    "conclusion": "failure",
+    "headBranch": "main",
+    "url": "https://github.com/fixture-owner/alpha/actions/runs/101"
+  },
+  {
+    "name": "CI",
+    "status": "completed",
+    "conclusion": "success",
+    "headBranch": "feature/sheep",
+    "url": "https://github.com/fixture-owner/alpha/actions/runs/100"
+  },
+  {
+    "name": "Deploy",
+    "status": "in_progress",
+    "conclusion": "",
+    "headBranch": "main",
+    "url": "https://github.com/fixture-owner/alpha/actions/runs/102"
+  }
+]

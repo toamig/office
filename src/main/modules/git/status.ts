@@ -129,7 +129,8 @@ export async function readLastCommit(path: string): Promise<LastCommit | null> {
 
 /** `origin` remote URL, or null. */
 export async function readOrigin(path: string): Promise<string | null> {
-  const result = await git(path, ["remote", "get-url", "origin"]);
+  // The raw configured URL: `remote get-url` applies insteadOf rewrites, which would hide github.com.
+  const result = await git(path, ["config", "--get", "remote.origin.url"]);
   return result.code === 0 ? result.stdout.trim() || null : null;
 }
 

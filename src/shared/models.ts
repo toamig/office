@@ -515,3 +515,31 @@ export const ReviewComment = z.object({
   text: z.string().min(1),
 });
 export type ReviewComment = z.infer<typeof ReviewComment>;
+
+export const PrInfo = z.object({
+  number: z.number(),
+  title: z.string(),
+  state: z.string(),
+  headRefName: z.string(),
+  reviewDecision: z.string().nullable(),
+  url: z.string(),
+});
+export type PrInfo = z.infer<typeof PrInfo>;
+
+export const RunInfo = z.object({
+  name: z.string(),
+  status: z.string(),
+  conclusion: z.string().nullable(),
+  headBranch: z.string(),
+  url: z.string(),
+});
+export type RunInfo = z.infer<typeof RunInfo>;
+
+export const GithubOverview = z.object({
+  /** False when the repo's origin is not on GitHub, so there is nothing to ask gh about. */
+  isGithub: z.boolean(),
+  prs: z.array(PrInfo),
+  runs: z.array(RunInfo),
+  error: z.string().optional(),
+});
+export type GithubOverview = z.infer<typeof GithubOverview>;
