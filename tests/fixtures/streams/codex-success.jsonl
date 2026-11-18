@@ -1,0 +1,6 @@
+{"type":"thread.started","thread_id":"019aaaaa-bbbb-cccc-dddd-eeeeeeeeeeee"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_0","type":"reasoning","text":"thinking about it"}}
+{"type":"item.completed","item":{"id":"item_1","type":"command_execution","command":"git status","aggregated_output":"","exit_code":0,"status":"completed"}}
+{"type":"item.completed","item":{"id":"item_2","type":"agent_message","text":"Review done: no problems."}}
+{"type":"turn.completed","usage":{"input_tokens":10,"output_tokens":4}}

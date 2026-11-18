@@ -92,13 +92,13 @@ export function parseClaudeMcpList(text: string): InventoryItem[] {
   return items;
 }
 
-export async function claudeInventory(projectPath?: string): Promise<Inventory> {
+export async function claudeInventory(projectPath?: string, bin = "claude"): Promise<Inventory> {
   const items: InventoryItem[] = [
     ...settingsItems(readJson(claudeSettingsPath()), "user"),
     ...skillsIn(join(claudeDir(), "skills"), "user"),
   ];
-  if (resolveTool("claude")) {
-    const mcp = await run("claude", ["mcp", "list"], { timeoutMs: 45_000, cwd: projectPath });
+  if (resolveTool(bin)) {
+    const mcp = await run(bin, ["mcp", "list"], { timeoutMs: 45_000, cwd: projectPath });
     if (mcp.code === 0) items.push(...parseClaudeMcpList(mcp.stdout));
   }
   if (projectPath) {

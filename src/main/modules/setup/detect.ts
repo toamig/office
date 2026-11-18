@@ -61,16 +61,16 @@ export function parseLoggedIn(stdout: string): boolean {
 }
 
 /** Claude Code (plan 7.2): `claude --version` and `claude auth status` (JSON with loggedIn). */
-export async function detectClaude(): Promise<ToolStatus> {
+export async function detectClaude(bin = "claude", id = "claude-code"): Promise<ToolStatus> {
   const fix =
     "Install Claude Code from https://claude.com/claude-code, then run: claude auth login";
-  const version = await probe("claude", ["--version"]);
-  if (!version || version.code !== 0) return missing("claude-code", "Claude Code", fix);
+  const version = await probe(bin, ["--version"]);
+  if (!version || version.code !== 0) return missing(id, "Claude Code", fix);
   const v = versionOf(version.stdout);
-  const auth = await run("claude", ["auth", "status"], { timeoutMs: 20_000 });
+  const auth = await run(bin, ["auth", "status"], { timeoutMs: 20_000 });
   const loggedIn = parseLoggedIn(auth.stdout);
   return {
-    id: "claude-code",
+    id,
     label: "Claude Code",
     installed: true,
     loggedIn,
@@ -83,12 +83,12 @@ export async function detectClaude(): Promise<ToolStatus> {
  * Codex (plan 7.3): `codex --version` and `codex login status`. A failure that starts with
  * "Error loading configuration" means the CLI is older than the config the desktop app wrote.
  */
-export async function detectCodex(): Promise<ToolStatus> {
+export async function detectCodex(bin = "codex"): Promise<ToolStatus> {
   const fix = "Install Codex with: npm i -g @openai/codex, then run: codex login";
-  const version = await probe("codex", ["--version"]);
+  const version = await probe(bin, ["--version"]);
   if (!version || version.code !== 0) return missing("codex", "Codex", fix);
   const v = versionOf(version.stdout);
-  const status = await run("codex", ["login", "status"], { timeoutMs: 20_000 });
+  const status = await run(bin, ["login", "status"], { timeoutMs: 20_000 });
   const output = `${status.stderr}\n${status.stdout}`.trim();
   const base = { id: "codex", label: "Codex", installed: true, ...(v ? { version: v } : {}) };
   if (status.code !== 0 && output.startsWith("Error loading configuration")) {

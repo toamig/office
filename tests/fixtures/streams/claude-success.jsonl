@@ -1,0 +1,6 @@
+{"type":"system","subtype":"init","session_id":"11111111-2222-3333-4444-555555555555","model":"claude-sonnet","tools":["Read","Grep"]}
+{"type":"assistant","message":{"content":[{"type":"text","text":"Looking at the file."}]}}
+{"type":"assistant","message":{"content":[{"type":"tool_use","id":"t1","name":"Read","input":{"file_path":"README.md"}}]}}
+{"type":"user","message":{"content":[{"type":"tool_result","tool_use_id":"t1","content":"hello"}]}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"All done."}]}}
+{"type":"result","subtype":"success","is_error":false,"result":"All done.","session_id":"11111111-2222-3333-4444-555555555555"}

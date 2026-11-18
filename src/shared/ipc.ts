@@ -5,6 +5,7 @@ import {
   NotificationFilter,
   NotificationRow,
   ProjectNote,
+  ProviderStatus,
   OpenItemsView,
   ProjectDetail,
   ProjectSummary,
@@ -96,6 +97,7 @@ export const channels = {
     req: z.object({ title: z.string().optional() }),
     res: z.string().nullable(),
   },
+  "providers.list": { req: z.void(), res: z.array(ProviderStatus) },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

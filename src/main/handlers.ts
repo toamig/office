@@ -52,6 +52,22 @@ export function registerHandlers(ctx: AppContext): void {
     return readInventories(project ? ctx.projects.absPath(project) : undefined);
   });
 
+  ctx.ipc.handle("providers.list", () =>
+    Promise.all(
+      ctx.providers.all().map(async (p) => {
+        const [d, models] = await Promise.all([p.detect(), p.models()]);
+        return {
+          id: p.id,
+          label: p.label,
+          installed: d.installed,
+          loggedIn: d.installed ? d.loggedIn : null,
+          models,
+          ...(d.version ? { version: d.version } : {}),
+          ...(d.problem ? { problem: d.problem } : {}),
+        };
+      }),
+    ),
+  );
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

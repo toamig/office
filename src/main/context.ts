@@ -9,6 +9,7 @@ import { dataDir, dbPath } from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
 import { ProjectService } from "./modules/git/service";
+import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
 import { VaultOps } from "./modules/vault/ops";
@@ -24,6 +25,7 @@ export interface AppContext {
   bus: Bus;
   ipc: IpcRegistry;
   notifier: Notifier;
+  providers: ProviderRegistry;
   projects: ProjectService;
   vault: VaultService;
   ops: VaultOps;
@@ -111,6 +113,7 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     bus,
     ipc: new IpcRegistry(checkResponses),
     notifier,
+    providers: new ProviderRegistry(),
     projects,
     vault,
     ops,

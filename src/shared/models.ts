@@ -266,3 +266,14 @@ export const WorkspaceInspection = z.object({
   configs: z.array(z.string()),
 });
 export type WorkspaceInspection = z.infer<typeof WorkspaceInspection>;
+
+export const ProviderStatus = z.object({
+  id: z.string(),
+  label: z.string(),
+  installed: z.boolean(),
+  version: z.string().optional(),
+  loggedIn: z.boolean().nullable(),
+  problem: z.string().optional(),
+  models: z.array(z.string()),
+});
+export type ProviderStatus = z.infer<typeof ProviderStatus>;
