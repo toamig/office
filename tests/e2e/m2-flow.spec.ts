@@ -48,7 +48,7 @@ test("a day in the workbench: two agents, a needs-you, capture, ask the brain an
   await win.locator(".xterm").click();
   await win.keyboard.type("yes");
   await win.keyboard.press("Enter");
-  await expect(alphaStatus).toContainText("idle", { timeout: 20000 });
+  await expect(alphaStatus).toContainText("Idle", { timeout: 20000 });
 
   // Closing it with capture sends both leftovers to the vault.
   await win

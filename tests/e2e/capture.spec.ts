@@ -23,8 +23,8 @@ test("closing a session lists what is left and saves the items into the vault", 
   const items = win.getByTestId("capture-item");
   await expect(items).toHaveCount(2);
   await expect(items.nth(0).getByLabel("Item text")).toHaveValue("Decide the art style");
-  await expect(items.nth(0).getByLabel("Where it goes")).toHaveValue("waiting");
-  await expect(items.nth(1).getByLabel("Where it goes")).toHaveValue("todo");
+  await expect(items.nth(0).getByLabel("Where it goes")).toHaveAttribute("data-value", "waiting");
+  await expect(items.nth(1).getByLabel("Where it goes")).toHaveAttribute("data-value", "todo");
 
   // Items can be edited before saving.
   await items.nth(1).getByLabel("Item text").fill("Write the level three script");

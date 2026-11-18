@@ -53,7 +53,7 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
   expect(existsSync(join(wtPath, "README.md"))).toBe(true);
 
   await row.getByTestId("agent-in-worktree").click();
-  await expect(win.getByTestId("agent-folder")).toHaveValue(wtPath);
+  await expect(win.getByTestId("agent-folder")).toHaveAttribute("data-value", wtPath);
   await win.getByTestId("mode-provider").check();
   await pick(win, "agent-provider", { label: "Fake agent" });
   await win.getByTestId("agent-start").click();
