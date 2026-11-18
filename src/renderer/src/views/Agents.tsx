@@ -81,7 +81,7 @@ function SessionList({
             {s.role && <span>role {s.role}</span>}
             <span>{timeAgo(s.updatedAt)}</span>
           </div>
-          <div className="session-actions flex gap-1.5">
+          <div className="session-actions flex gap-0.5">
             {!s.running && s.mode !== "chat" && (
               <Button
                 onClick={(e) => {
@@ -90,9 +90,10 @@ function SessionList({
                     .invoke("sessions.resume", { id: s.id })
                     .then(onChanged, () => undefined);
                 }}
+                aria-label="Resume"
                 data-testid="resume-session"
               >
-                <Play size={12} /> Resume
+                <Play size={12} />
               </Button>
             )}
             {s.running && (
@@ -102,9 +103,10 @@ function SessionList({
                   e.stopPropagation();
                   void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
                 }}
+                aria-label="Stop"
                 data-testid="stop-session"
               >
-                <Square size={12} /> Stop
+                <Square size={12} />
               </Button>
             )}
             <Button
@@ -113,9 +115,10 @@ function SessionList({
                 e.stopPropagation();
                 onCloseSession(s);
               }}
+              aria-label="Close and wrap up"
               data-testid="close-session"
             >
-              <Archive size={12} /> Close
+              <Archive size={12} />
             </Button>
           </div>
         </div>

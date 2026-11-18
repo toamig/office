@@ -106,6 +106,10 @@ test("a session's actions show on hover or focus and not before", async () => {
   await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
   // The actions float over the row: they do not reserve height of their own.
   expect(await actions.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
+  // ...and never over the middle of the row, where a click opens the session.
+  const rowBox = await row.boundingBox();
+  const actionsBox = await actions.boundingBox();
+  expect(actionsBox?.x ?? 0).toBeGreaterThan((rowBox?.x ?? 0) + (rowBox?.width ?? 0) / 2);
   const compact = (await row.boundingBox())?.height ?? 999;
   expect(compact).toBeLessThan(64);
   await row.hover();
