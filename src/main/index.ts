@@ -10,6 +10,7 @@ import {
 } from "../shared/ipc-names";
 import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
+import { isAllowedNavigation, isAppRequest } from "./core/window-security";
 import { registerHandlers } from "./handlers";
 import { PreviewPane } from "./preview";
 import { autoUpdater } from "electron-updater";
@@ -51,14 +52,17 @@ function createWindow(): BrowserWindow {
 
   // Packaged builds get the strict CSP as a header too (the page also carries it as a meta tag).
   if (!process.env["ELECTRON_RENDERER_URL"]) {
+    const appId = win.webContents.id;
     win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      // The preview pane shares this session; a previewed site keeps its own policy.
+      if (!isAppRequest(details.webContentsId, appId)) return callback({});
       callback({
         responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [CSP] },
       });
     });
   }
   win.webContents.on("will-navigate", (event, url) => {
-    if (!url.startsWith("file://") && !url.startsWith("http://localhost")) event.preventDefault();
+    if (!isAllowedNavigation(url, process.env["ELECTRON_RENDERER_URL"])) event.preventDefault();
   });
   win.webContents.setWindowOpenHandler(({ url }) => {
     if (isHttps(url)) void shell.openExternal(url);
