@@ -1,6 +1,13 @@
 import { workspaceView, type AppContext } from "./context";
 import { IpcFailure } from "./core/ipc";
 import { noteAndProjectItems, readNote } from "./modules/notes/notes";
+import { detectTools } from "./modules/setup/detect";
+import { readInventories } from "./modules/setup/inventory";
+import {
+  cloneWorkspaceRepo,
+  inspectWorkspaceFolder,
+  prepareWorkspace,
+} from "./modules/setup/workspace-setup";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 
 /** Registers every IPC handler. Grows by one block per module. */
@@ -26,6 +33,24 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("search.items", () =>
     noteAndProjectItems(ctx.store.state.workspace, ctx.settings().workspaceRoot),
   );
+
+  ctx.ipc.handle("setup.detectTools", () => detectTools());
+  ctx.ipc.handle("setup.inspect", (req) => inspectWorkspaceFolder(req.root));
+  ctx.ipc.handle("setup.clone", (req) => cloneWorkspaceRepo(req.url, req.dest));
+  ctx.ipc.handle("setup.apply", async (req) => {
+    prepareWorkspace(req);
+    ctx.patchSettings({
+      workspaceRoot: req.workspaceRoot,
+      workspaceConfigPath: req.workspaceConfigPath,
+      projectsRoot: req.projectsRoot,
+    });
+    await ctx.start();
+    return workspaceView(ctx);
+  });
+  ctx.ipc.handle("setup.inventory", (req) => {
+    const project = req.projectId ? ctx.projects.find(req.projectId) : undefined;
+    return readInventories(project ? ctx.projects.absPath(project) : undefined);
+  });
 
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));

@@ -40,11 +40,14 @@ function createWindow(): BrowserWindow {
   win.setMenuBarVisibility(false);
   win.once("ready-to-show", () => win.show());
 
-  win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
-    callback({
-      responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [CSP] },
+  // Packaged builds get the strict CSP as a header too (the page also carries it as a meta tag).
+  if (!process.env["ELECTRON_RENDERER_URL"]) {
+    win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
+      callback({
+        responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [CSP] },
+      });
     });
-  });
+  }
   win.webContents.on("will-navigate", (event, url) => {
     if (!url.startsWith("file://") && !url.startsWith("http://localhost")) event.preventDefault();
   });

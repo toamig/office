@@ -1,0 +1,44 @@
+import { RefreshCw } from "lucide-react";
+import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import { useQuery } from "../../lib/hooks";
+
+/** Which command-line tools are installed and logged in, with a fix for each problem. */
+export function ToolsPanel() {
+  const tools = useQuery("setup.detectTools");
+  return (
+    <Panel
+      title="Tools"
+      action={
+        <Button variant="ghost" onClick={tools.reload} aria-label="Check again">
+          <RefreshCw size={13} /> Check again
+        </Button>
+      }
+    >
+      {tools.error && <ErrorBanner message={tools.error} />}
+      {tools.loading && <EmptyState>Checking tools...</EmptyState>}
+      <div data-testid="tools">
+        {tools.data?.map((t) => (
+          <div
+            key={t.id}
+            className="flex items-start gap-3 border-b py-2"
+            style={{ borderColor: "var(--line)" }}
+            data-testid="tool-row"
+          >
+            <span className="w-32 font-medium">{t.label}</span>
+            {t.installed ? (
+              <Chip tone="good">installed {t.version ?? ""}</Chip>
+            ) : (
+              <Chip tone="bad">missing</Chip>
+            )}
+            {t.loggedIn === true && <Chip tone="good">logged in</Chip>}
+            {t.loggedIn === false && <Chip tone="warn">not logged in</Chip>}
+            <div className="flex-1 text-[12.5px]">
+              {t.problem && <div style={{ color: "#c98a12" }}>{t.problem}</div>}
+              {t.fix && <div style={{ color: "var(--muted)" }}>Fix: {t.fix}</div>}
+            </div>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}

@@ -13,13 +13,14 @@ import {
 } from "lucide-react";
 import { useEffect, type ComponentType } from "react";
 import { SyncReportDialog } from "./components/SyncReportDialog";
-import { Button } from "./components/ui";
+import { Button, ErrorBanner } from "./components/ui";
 import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
 import { useQuery } from "./lib/hooks";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Home as HomeView } from "./views/Home";
 import { Inbox } from "./views/Inbox";
+import { Setup } from "./views/Setup";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Placeholder } from "./views/Placeholder";
@@ -36,8 +37,9 @@ const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: numb
   { id: "setup", label: "Setup", icon: Settings },
 ];
 
-function CurrentView() {
-  const view = useUi((s) => s.view);
+function CurrentView({ configured }: { configured: boolean }) {
+  const picked = useUi((s) => s.view);
+  const view = configured ? picked : "setup";
   const params = useUi((s) => s.params);
   if (view === "home") return <HomeView />;
   if (view === "projects") return <Projects />;
@@ -52,6 +54,7 @@ function CurrentView() {
     );
   }
   if (view === "inbox") return <Inbox />;
+  if (view === "setup") return <Setup />;
   const item = rail.find((r) => r.id === view);
   return <Placeholder title={item?.label ?? view} note="Coming in a later task." />;
 }
@@ -91,6 +94,7 @@ function TopBar() {
 
 export default function App() {
   const { view, navigate } = useUi();
+  const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const counts = useQuery("notifications.counts", undefined, [
     "notification.new",
     "notification.read",
@@ -140,7 +144,12 @@ export default function App() {
       <div className="flex min-w-0 flex-1 flex-col">
         <TopBar />
         <main className="min-h-0 flex-1 overflow-auto">
-          <CurrentView />
+          {workspace.data?.error && (
+            <div className="p-3" data-testid="workspace-error">
+              <ErrorBanner message={workspace.data.error} />
+            </div>
+          )}
+          {workspace.data && <CurrentView configured={workspace.data.configured} />}
         </main>
       </div>
       <SyncReportDialog />

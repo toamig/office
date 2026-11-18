@@ -1,0 +1,32 @@
+{
+  "model": "opus",
+  "permissions": {
+    "allow": ["Bash(git status:*)"]
+  },
+  "enabledPlugins": {
+    "example-plugin@market": true
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "node /fake/vault-hook.mjs hook"
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "echo stopped"
+          }
+        ]
+      }
+    ]
+  }
+}

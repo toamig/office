@@ -12,6 +12,7 @@ export default tseslint.config(
       "node_modules/**",
       ".dev/**",
       "tests/fixtures/**/template/**",
+      "tests/fixtures/bin/**",
       "test-results/**",
     ],
   },

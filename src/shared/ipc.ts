@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   HealthView,
+  Inventory,
   NotificationFilter,
   NotificationRow,
   ProjectNote,
@@ -9,8 +10,10 @@ import {
   ProjectSummary,
   SearchItem,
   SyncReport,
+  ToolStatus,
   WaitingEntry,
   WorkspaceView,
+  WorkspaceInspection,
   WriteResult,
 } from "./models";
 
@@ -70,6 +73,29 @@ export const channels = {
   "projects.openFolder": { req: z.object({ id: z.string() }), res: z.void() },
   "notes.read": { req: z.object({ projectId: z.string(), name: z.string() }), res: ProjectNote },
   "search.items": { req: z.void(), res: z.array(SearchItem) },
+  "setup.detectTools": { req: z.void(), res: z.array(ToolStatus) },
+  "setup.inspect": { req: z.object({ root: z.string() }), res: WorkspaceInspection },
+  "setup.clone": {
+    req: z.object({ url: z.string(), dest: z.string() }),
+    res: z.object({ path: z.string(), hubCloned: z.boolean() }),
+  },
+  "setup.apply": {
+    req: z.object({
+      workspaceRoot: z.string(),
+      workspaceConfigPath: z.string(),
+      projectsRoot: z.string(),
+      createIfMissing: z.boolean(),
+    }),
+    res: WorkspaceView,
+  },
+  "setup.inventory": {
+    req: z.object({ projectId: z.string().optional() }),
+    res: z.array(Inventory),
+  },
+  "setup.pickFolder": {
+    req: z.object({ title: z.string().optional() }),
+    res: z.string().nullable(),
+  },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

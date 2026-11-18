@@ -1,0 +1,12 @@
+# Codex config written by the desktop app (fixture)
+model = "gpt-5-codex"
+service_tier = "default"   # older CLIs reject this value
+notify = ["node", "C:/fake/codex-notify.js"]   # the desktop app's own notify command
+
+[mcp_servers.notion]
+command = "npx"
+args = ["-y", "@notionhq/notion-mcp-server"]
+
+# a trailing comment that must survive any edit
+[projects.'C:\fake\project']
+trust_level = "trusted"

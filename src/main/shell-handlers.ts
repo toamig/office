@@ -1,4 +1,4 @@
-import { shell } from "electron";
+import { BrowserWindow, dialog, shell } from "electron";
 import type { AppContext } from "./context";
 import { run } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
@@ -10,6 +10,19 @@ export function registerShellHandlers(ctx: AppContext): void {
     if (!project) throw new IpcFailure("not-found", `No project with id ${id}`);
     return ctx.projects.absPath(project);
   };
+  ctx.ipc.handle("setup.pickFolder", async (req) => {
+    const win = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    const options = {
+      title: req.title ?? "Choose a folder",
+      properties: ["openDirectory", "createDirectory"] as Array<
+        "openDirectory" | "createDirectory"
+      >,
+    };
+    const result = win
+      ? await dialog.showOpenDialog(win, options)
+      : await dialog.showOpenDialog(options);
+    return result.canceled ? null : (result.filePaths[0] ?? null);
+  });
   ctx.ipc.handle("projects.openFolder", async (req) => {
     const error = await shell.openPath(folderOf(req.id));
     if (error) throw new IpcFailure("open-failed", error);

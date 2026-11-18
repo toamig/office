@@ -230,3 +230,39 @@ export const SearchItem = z.object({
   link: z.object({ view: z.string(), params: z.record(z.string(), z.string()).optional() }),
 });
 export type SearchItem = z.infer<typeof SearchItem>;
+
+export const ToolStatus = z.object({
+  id: z.string(),
+  label: z.string(),
+  installed: z.boolean(),
+  version: z.string().optional(),
+  /** null when the tool has no login (git, node) or the state is unknown. */
+  loggedIn: z.boolean().nullable(),
+  problem: z.string().optional(),
+  fix: z.string().optional(),
+});
+export type ToolStatus = z.infer<typeof ToolStatus>;
+
+export const InventoryItem = z.object({
+  kind: z.enum(["skill", "plugin", "mcp", "hook", "model", "notify"]),
+  name: z.string(),
+  detail: z.string().optional(),
+  source: z.enum(["user", "project"]),
+});
+export type InventoryItem = z.infer<typeof InventoryItem>;
+
+export const Inventory = z.object({
+  provider: z.string(),
+  label: z.string(),
+  items: z.array(InventoryItem),
+});
+export type Inventory = z.infer<typeof Inventory>;
+
+export const WorkspaceInspection = z.object({
+  exists: z.boolean(),
+  isGitRepo: z.boolean(),
+  hasBrainHub: z.boolean(),
+  /** Config files found under the folder, relative paths (workspace.json). */
+  configs: z.array(z.string()),
+});
+export type WorkspaceInspection = z.infer<typeof WorkspaceInspection>;
