@@ -11,6 +11,7 @@ export function registerHandlers(ctx: AppContext): void {
     if (!detail) throw new IpcFailure("not-found", `No project with id ${req.id}`);
     return detail;
   });
+  ctx.ipc.handle("git.syncAll", () => ctx.sync());
   ctx.ipc.handle("projects.refresh", async (req) => {
     if (req.id) await ctx.projects.refresh(req.id);
     else await ctx.projects.refreshAll();

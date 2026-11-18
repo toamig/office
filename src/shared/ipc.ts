@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { ProjectDetail, ProjectSummary, WorkspaceView } from "./models";
+import { ProjectDetail, ProjectSummary, SyncReport, WorkspaceView } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
 export const eventTypes = [
@@ -31,6 +31,7 @@ export const channels = {
   "workspace.get": { req: z.void(), res: WorkspaceView },
   "projects.list": { req: z.void(), res: z.array(ProjectSummary) },
   "projects.get": { req: z.object({ id: z.string() }), res: ProjectDetail },
+  "git.syncAll": { req: z.void(), res: SyncReport },
   "projects.refresh": { req: z.object({ id: z.string().optional() }), res: z.void() },
 } as const;
 

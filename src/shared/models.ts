@@ -72,3 +72,33 @@ export const ProjectDetail = z.object({
   origin: z.string().nullable(),
 });
 export type ProjectDetail = z.infer<typeof ProjectDetail>;
+
+export const SyncAction = z.enum([
+  "pulled",
+  "pushed",
+  "pulled-and-pushed",
+  "up-to-date",
+  "conflict",
+  "skipped",
+  "failed",
+]);
+export type SyncAction = z.infer<typeof SyncAction>;
+
+export const SyncRepoResult = z.object({
+  /** Project id, or "hub:<folder>" for a nested brain repo reported by the hub tool. */
+  id: z.string(),
+  name: z.string(),
+  action: SyncAction,
+  /** Why a repo was skipped or failed, in plain words. */
+  reason: z.string().optional(),
+  /** True when the push step failed (raises git.push-failed). */
+  pushFailed: z.boolean().optional(),
+});
+export type SyncRepoResult = z.infer<typeof SyncRepoResult>;
+
+export const SyncReport = z.object({
+  startedAt: z.string(),
+  finishedAt: z.string(),
+  repos: z.array(SyncRepoResult),
+});
+export type SyncReport = z.infer<typeof SyncReport>;
