@@ -14,8 +14,8 @@ const key = (k: string, mods: Partial<KeyInput> = {}): KeyInput => ({
 const ctrl = (k: string, mods: Partial<KeyInput> = {}): KeyInput =>
   key(k, { control: true, ...mods });
 
-describe("browser keys", () => {
-  it("blocks reload, print, save, new window, close, view source and open file", () => {
+describe("the keys the main process takes", () => {
+  it("blocks nothing: with no application menu the browser's accelerators do not exist, and the programs in terminals need their keys", () => {
     for (const input of [
       key("F5"),
       ctrl("r"),
@@ -29,17 +29,21 @@ describe("browser keys", () => {
       ctrl("u"),
       ctrl("o"),
       ctrl("T", { shift: true }),
+      ctrl("b"),
+      ctrl("k"),
+      ctrl("f"),
       key("r", { meta: true }),
+      key("F7"),
     ]) {
-      expect(classifyKey(input, false)).toEqual({ kind: "block" });
-      expect(classifyKey(input, true)).toEqual({ kind: "block" });
+      expect(classifyKey(input, false)).toEqual({ kind: "allow" });
+      expect(classifyKey(input, true)).toEqual({ kind: "allow" });
     }
   });
 
-  it("blocks developer tools in a packaged app and allows them in development", () => {
+  it("opens developer tools from F12 and Ctrl+Shift+I or J in development runs only", () => {
     for (const input of [key("F12"), ctrl("I", { shift: true }), ctrl("J", { shift: true })]) {
-      expect(classifyKey(input, false)).toEqual({ kind: "block" });
-      expect(classifyKey(input, true)).toEqual({ kind: "allow" });
+      expect(classifyKey(input, true)).toEqual({ kind: "devtools" });
+      expect(classifyKey(input, false)).toEqual({ kind: "allow" });
     }
   });
 
@@ -48,16 +52,7 @@ describe("browser keys", () => {
     expect(classifyKey(ctrl("+", { shift: true }), false)).toEqual({ kind: "zoom", step: 1 });
     expect(classifyKey(ctrl("-"), false)).toEqual({ kind: "zoom", step: -1 });
     expect(classifyKey(ctrl("0"), false)).toEqual({ kind: "zoom", step: 0 });
-  });
-
-  it("leaves editing keys and Office's own keys alone", () => {
-    for (const k of ["c", "v", "x", "a", "z", "y", "f", "k", "b", "/", ",", "1", "9"]) {
-      expect(classifyKey(ctrl(k), false)).toEqual({ kind: "allow" });
-    }
-    expect(classifyKey(ctrl("A", { shift: true }), false)).toEqual({ kind: "allow" });
-    expect(classifyKey(key("ArrowLeft", { alt: true }), false)).toEqual({ kind: "allow" });
-    expect(classifyKey(key("a"), false)).toEqual({ kind: "allow" });
-    expect(classifyKey({ ...key("F5"), type: "keyUp" }, false)).toEqual({ kind: "allow" });
+    expect(classifyKey({ ...ctrl("="), type: "keyUp" }, false)).toEqual({ kind: "allow" });
   });
 
   it("keeps the interface zoom between 80 and 150 percent", () => {

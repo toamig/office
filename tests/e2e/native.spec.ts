@@ -43,8 +43,9 @@ test("the browser keys do nothing, a dropped file stays out, and the interface z
   const windows = (): Promise<number> =>
     app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length);
 
-  // Reload, hard reload, print, save, new window, close window, view source: none of them is delivered.
-  const blocked: Array<[string, string[]]> = [
+  // With no application menu nothing reloads, prints, saves or opens a window or developer tools: the keys
+  // reach the page (a terminal needs them) and change nothing in the app.
+  const keys: Array<[string, string[]]> = [
     ["F5", []],
     ["R", ["control"]],
     ["R", ["control", "shift"]],
@@ -55,21 +56,19 @@ test("the browser keys do nothing, a dropped file stays out, and the interface z
     ["W", ["control"]],
     ["U", ["control"]],
   ];
-  if (packaged) blocked.push(["I", ["control", "shift"]], ["J", ["control", "shift"]], ["F12", []]);
-  for (const [code, mods] of blocked) await press(app, code, mods);
+  if (packaged) keys.push(["I", ["control", "shift"]], ["J", ["control", "shift"]], ["F12", []]);
+  for (const [code, mods] of keys) await press(app, code, mods);
   await new Promise((r) => setTimeout(r, 600));
-  expect(await seen()).toEqual([]);
   expect(await marker()).toBe(42);
   expect(await windows()).toBe(1);
+  expect(win.url()).toMatch(/index.html|localhost/);
   expect(
     await app.evaluate(({ BrowserWindow }) =>
       BrowserWindow.getAllWindows()[0]?.webContents.isDevToolsOpened(),
     ),
   ).toBe(false);
-
-  // A key that is not blocked still arrives (the filter is not just dropping everything).
-  await press(app, "K", ["control"]);
-  await expect.poll(seen).toContain("k");
+  // The keys were not swallowed on the way: the page saw them.
+  expect(await seen()).toEqual(expect.arrayContaining(["F5", "r", "p", "s", "n", "w", "u"]));
 
   // Dropping a file on the window does not take the app to the file.
   const prevented = await win.evaluate(() => {

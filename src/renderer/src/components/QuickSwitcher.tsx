@@ -36,7 +36,9 @@ export function QuickSwitcher() {
   const setSwitcherOpen = useUi((s) => s.setSwitcherOpen);
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k") {
+      // In a terminal Ctrl+K belongs to the program (readline kills the line with it).
+      const inTerminal = Boolean((document.activeElement as Element | null)?.closest?.(".xterm"));
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "k" && !inTerminal) {
         e.preventDefault();
         setSwitcherOpen(!useUi.getState().switcherOpen);
       } else if (e.key === "Escape") setSwitcherOpen(false);

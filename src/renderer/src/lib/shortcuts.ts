@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { RAIL } from "../components/Sidebar";
 import { VIEW_LABELS } from "./views";
 import { office } from "./ipc";
+import { appShortcut } from "./keys";
 import { useUi } from "../stores/ui";
 
 export interface Shortcut {
@@ -17,6 +18,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: "Ctrl+Shift+A", label: "New agent session" },
   { keys: "Ctrl+,", label: "Setup" },
   { keys: "Ctrl+F", label: "Find in the current view" },
+  { keys: "Ctrl+Shift+F", label: "Find in a terminal" },
   { keys: "Alt+Left / Alt+Right", label: "Back and forward" },
   { keys: "Ctrl+= / Ctrl+- / Ctrl+0", label: "Zoom the interface, or reset it" },
   { keys: "Ctrl+/", label: "This list" },
@@ -31,43 +33,20 @@ export function useGlobalShortcuts(toggleSidebar: () => void): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const ui = useUi.getState();
-      const mod = e.ctrlKey || e.metaKey;
-      if (e.altKey && !mod && e.key === "ArrowLeft") {
-        e.preventDefault();
-        return ui.back();
-      }
-      if (e.altKey && !mod && e.key === "ArrowRight") {
-        e.preventDefault();
-        return ui.forward();
-      }
-      if (!mod || e.altKey) return;
-      const key = e.key.toLowerCase();
-      if (key === "/") {
-        e.preventDefault();
-        return ui.setShortcutsOpen(!ui.shortcutsOpen);
-      }
-      if (key === ",") {
-        e.preventDefault();
-        return ui.navigate("setup");
-      }
-      if (key === "b") {
-        e.preventDefault();
-        return toggleSidebar();
-      }
-      if (key === "a" && e.shiftKey) {
-        e.preventDefault();
-        return ui.navigate("agents", { start: "1" });
-      }
-      if (key === "f" && !e.shiftKey) {
-        e.preventDefault();
-        window.dispatchEvent(new Event(FIND_EVENT));
-        return;
-      }
-      const digit = Number(e.key);
-      const target = Number.isInteger(digit) && digit >= 1 ? RAIL[digit - 1] : undefined;
-      if (target) {
-        e.preventDefault();
-        ui.navigate(target.id);
+      const inTerminal = Boolean((document.activeElement as Element | null)?.closest?.(".xterm"));
+      const action = appShortcut(e, inTerminal);
+      if (!action) return;
+      e.preventDefault();
+      if (action.kind === "back") ui.back();
+      else if (action.kind === "forward") ui.forward();
+      else if (action.kind === "shortcuts") ui.setShortcutsOpen(!ui.shortcutsOpen);
+      else if (action.kind === "setup") ui.navigate("setup");
+      else if (action.kind === "sidebar") toggleSidebar();
+      else if (action.kind === "new-agent") ui.navigate("agents", { start: "1" });
+      else if (action.kind === "find") window.dispatchEvent(new Event(FIND_EVENT));
+      else {
+        const target = RAIL[action.index];
+        if (target) ui.navigate(target.id);
       }
     };
     window.addEventListener("keydown", onKey);

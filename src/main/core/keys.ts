@@ -10,32 +10,26 @@ export interface KeyInput {
 
 export type KeyAction =
   | { kind: "allow" }
-  | { kind: "block" }
   /** Interface zoom: a step of 10 percent up or down, or back to 100. */
-  | { kind: "zoom"; step: 1 | -1 | 0 };
+  | { kind: "zoom"; step: 1 | -1 | 0 }
+  /** Opens developer tools (development runs only). */
+  | { kind: "devtools" };
 
 /**
- * Keys that make Office feel like a web page and are turned off (plan 12.1): reload, developer tools,
- * print, save page, new window, close window or tab, view source and open file. Developer tools stay on in
- * development runs. The browser's zoom keys become Office's own interface zoom.
+ * The only keys the main process takes (plan 12.1): Office's interface zoom, and F12 for developer tools in
+ * development runs. With no application menu there are no reload, print, save, new-window or developer-tool
+ * accelerators at all, so nothing is blocked here: this runs before the page, and blocking Ctrl+R, Ctrl+W,
+ * Ctrl+U, Ctrl+O, Ctrl+P or Ctrl+N would take them from the programs running in terminals.
  */
 export function classifyKey(input: KeyInput, development: boolean): KeyAction {
   if (input.type !== "keyDown") return { kind: "allow" };
   const key = input.key.toLowerCase();
   const mod = input.control || input.meta;
-  if (key === "f5" || key === "f7") return { kind: "block" };
-  if (key === "f12") return development ? { kind: "allow" } : { kind: "block" };
-  if (!mod) return { kind: "allow" };
-
-  if (key === "i" && (input.shift || input.alt)) {
-    return development ? { kind: "allow" } : { kind: "block" };
+  if (development) {
+    if (key === "f12") return { kind: "devtools" };
+    if (mod && input.shift && (key === "i" || key === "j")) return { kind: "devtools" };
   }
-  if (key === "j" && input.shift) return development ? { kind: "allow" } : { kind: "block" };
-  if (key === "r") return { kind: "block" };
-  if (["p", "s", "n", "w", "u", "o"].includes(key) && !input.alt) return { kind: "block" };
-  if (key === "t" && input.shift) return { kind: "block" };
-  if (key === "delete" && input.shift) return { kind: "block" };
-
+  if (!mod || input.alt) return { kind: "allow" };
   if (key === "=" || key === "+") return { kind: "zoom", step: 1 };
   if (key === "-" || key === "_") return { kind: "zoom", step: -1 };
   if (key === "0") return { kind: "zoom", step: 0 };

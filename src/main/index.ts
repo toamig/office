@@ -78,7 +78,10 @@ function installNativeBehaviour(win: BrowserWindow): void {
   const wc = win.webContents;
   wc.on("before-input-event", (event, input) => {
     const action = classifyKey(input, development);
-    if (action.kind === "block") return event.preventDefault();
+    if (action.kind === "devtools") {
+      event.preventDefault();
+      wc.toggleDevTools();
+    }
     if (action.kind === "zoom" && ctx) {
       event.preventDefault();
       ctx.patchSettings({ zoom: nextZoom(ctx.settings().zoom, action.step) });

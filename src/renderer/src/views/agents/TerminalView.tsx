@@ -8,6 +8,7 @@ import { ChevronDown, ChevronUp, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { terminalTheme } from "@shared/theme";
 import { office } from "../../lib/ipc";
+import { terminalKeyAction } from "../../lib/keys";
 import { FIND_EVENT } from "../../lib/shortcuts";
 import { useTheme } from "../../lib/theme";
 
@@ -66,18 +67,20 @@ export function TerminalView({ id }: { id: string }) {
     } catch {
       /* no WebGL here: the default renderer stays */
     }
-    // Office's own keys are not for the program in the terminal: let them reach the app instead of sending
-    // them to the pty (Ctrl+F is find, Ctrl+K the switcher, Ctrl+1..9 the views, and so on).
+    // The program comes first (plan 12.1): every plain Ctrl+letter goes to it, the clipboard works as in
+    // Windows Terminal, and only the keys no terminal program needs stay Office's.
     term.attachCustomKeyEventHandler((e) => {
-      if (e.type !== "keydown") return true;
-      const mod = e.ctrlKey || e.metaKey;
-      const key = e.key.toLowerCase();
-      const own =
-        (mod && ["k", "b", "f", "/", ",", "=", "-", "0"].includes(key)) ||
-        (mod && /^[1-9]$/.test(key)) ||
-        (mod && e.shiftKey && key === "a") ||
-        (e.altKey && (key === "arrowleft" || key === "arrowright"));
-      return !own;
+      const action = terminalKeyAction(e, term.hasSelection());
+      if (action === "program") return true;
+      if (action === "app") return false;
+      e.preventDefault();
+      if (action === "copy") {
+        void navigator.clipboard.writeText(term.getSelection());
+        term.clearSelection();
+      } else {
+        void navigator.clipboard.readText().then((text) => term.paste(text));
+      }
+      return false;
     });
     termRef.current = term;
     // The terminal is reachable from the page for tests that check its theme.

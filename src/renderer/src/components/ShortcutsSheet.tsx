@@ -26,6 +26,17 @@ export function ShortcutsSheet() {
               <kbd className="kbd">{s.keys}</kbd>
             </div>
           ))}
+          <p
+            className="mt-3 text-[12px]"
+            style={{ color: "var(--muted)" }}
+            data-testid="shortcuts-terminal-note"
+          >
+            While a terminal has focus, the program in it comes first: every plain Ctrl+letter goes
+            to it, including Ctrl+K, Ctrl+B and Ctrl+F (a shell and Claude Code use them). There
+            only Ctrl+1 to Ctrl+9, Ctrl+/, Ctrl+, , Ctrl+Shift+A, Ctrl+Shift+F, the zoom keys and
+            Alt+Left / Alt+Right are Office&apos;s. Copy and paste work as in Windows Terminal:
+            Ctrl+C copies when text is selected, Ctrl+V pastes.
+          </p>
         </div>
       </div>
     </div>
