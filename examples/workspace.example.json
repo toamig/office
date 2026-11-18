@@ -1,0 +1,67 @@
+{
+  "version": 1,
+  "vault": { "kind": "folder", "openItemsFile": "OpenItems.md", "waitingHeading": "Waiting on you" },
+  "projects": [
+    { "id": "my-app", "name": "My App", "path": "my-app", "group": "Products", "pinned": true },
+    { "id": "side-project", "name": "Side Project", "path": "side-project", "group": "Ideas" }
+  ],
+  "roles": {
+    "planner": {
+      "provider": "claude-code",
+      "model": "opus",
+      "effort": "high",
+      "permissionMode": "plan",
+      "instructions": "Plan only. Write the plan to the file you are given. Do not edit code."
+    },
+    "builder": {
+      "provider": "claude-code",
+      "model": "sonnet",
+      "effort": "medium",
+      "instructions": "Implement the approved plan exactly. Commit per step. Run the project's checks."
+    },
+    "reviewer": {
+      "provider": "codex",
+      "readOnly": true,
+      "instructions": "Review the diff against the plan. List problems by severity with file and line."
+    },
+    "researcher": {
+      "provider": "claude-code",
+      "model": "sonnet",
+      "readOnly": true,
+      "instructions": "Research and summarise with sources. Do not edit files."
+    },
+    "brief": { "provider": "claude-code", "model": "haiku", "readOnly": true, "instructions": "" }
+  },
+  "pipelines": {
+    "feature": {
+      "name": "Feature",
+      "stages": [
+        {
+          "id": "plan",
+          "role": "planner",
+          "gate": true,
+          "prompt": "{{task.description}}\n\nWrite the plan to {{stage.outputPath}}."
+        },
+        {
+          "id": "build",
+          "role": "builder",
+          "worktree": true,
+          "prompt": "Implement the plan in {{stages.plan.outputPath}}."
+        },
+        {
+          "id": "review",
+          "role": "reviewer",
+          "gate": true,
+          "prompt": "Review the changes on branch {{task.branch}} against {{stages.plan.outputPath}}. Write findings to {{stage.outputPath}}."
+        }
+      ]
+    }
+  },
+  "notifications": {
+    "urgent": ["agent.needs-you", "git.conflict", "ci.failed", "task.gate"],
+    "mutedProjects": []
+  },
+  "automations": [],
+  "archiveAfterDays": 7,
+  "briefTime": "08:00"
+}
