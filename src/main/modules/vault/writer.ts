@@ -9,7 +9,7 @@ import { runValidate } from "./health";
 
 export class VaultWriteError extends Error {
   constructor(
-    readonly code: "pull-failed" | "not-found" | "commit-failed" | "no-repo",
+    readonly code: "pull-failed" | "not-found" | "commit-failed" | "no-repo" | "dirty" | "conflict",
     message: string,
   ) {
     super(message);
@@ -92,6 +92,15 @@ export class VaultWriter {
     if (top.code !== 0) throw new VaultWriteError("no-repo", `${file} is not inside a git repo`);
     const repo = top.stdout.trim();
 
+    const rel = relative(repo, file).replace(/\\/g, "/");
+    // An edit of the owner's own, not yet committed, is never mixed into an automatic commit.
+    const dirty = await git(repo, ["status", "--porcelain", "--", rel]);
+    if (dirty.stdout.trim() !== "") {
+      const why = `${rel} has changes that are not committed yet; commit or discard them first`;
+      this.deps.onWarning({ kind: "write-failed", message: why });
+      throw new VaultWriteError("dirty", why);
+    }
+
     const hasUpstream = (await git(repo, ["rev-parse", "--abbrev-ref", "@{u}"])).code === 0;
     if (hasUpstream) {
       const pull = await git(repo, ["pull", "--rebase", "--autostash", "--quiet"], {
@@ -103,6 +112,16 @@ export class VaultWriter {
         this.deps.onWarning({ kind: "write-failed", message: why });
         throw new VaultWriteError("pull-failed", why);
       }
+      // `pull --autostash` exits 0 even when putting the stash back conflicts; check for unmerged files.
+      const unmerged = await git(repo, ["diff", "--name-only", "--diff-filter=U"]);
+      if (unmerged.stdout.trim() !== "") {
+        const files = unmerged.stdout.trim().split(/\r?\n/).join(", ");
+        // Git keeps the stash entry when it conflicts, so the owner's changes are not lost.
+        await git(repo, ["reset", "--hard", "HEAD"]);
+        const why = `Could not write: your uncommitted changes in ${basename(repo)} conflict with the update (${files}). They are kept in "git stash"; nothing was written`;
+        this.deps.onWarning({ kind: "write-failed", message: why });
+        throw new VaultWriteError("conflict", why);
+      }
     }
 
     const before = readFileSync(file, "utf8");
@@ -112,7 +131,6 @@ export class VaultWriter {
     if (after === before) return { committed: false, pushed: false, validateErrors: [] };
     writeTextFile(file, after);
 
-    const rel = relative(repo, file).replace(/\\/g, "/");
     const add = await git(repo, ["add", "--", rel]);
     const commit =
       add.code === 0

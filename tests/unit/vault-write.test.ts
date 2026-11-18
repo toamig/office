@@ -130,6 +130,51 @@ describe("vault writer", () => {
     expect(warnings.map((w) => w.kind)).toContain("validate");
   });
 
+  it("refuses to write a file that has changes of the owner's that are not committed", async () => {
+    const { ops, alphaRepo, file } = setup();
+    const edited = `${readFileSync(file, "utf8")}\nmy own unsaved thought\n`;
+    writeFileSync(file, edited);
+    const head = sh(alphaRepo, "rev-parse", "HEAD");
+    await expect(ops.addWaiting("alpha", "Fresh item")).rejects.toThrow(/not committed yet/);
+    expect(readFileSync(file, "utf8")).toBe(edited);
+    expect(sh(alphaRepo, "rev-parse", "HEAD")).toBe(head);
+  });
+
+  it("never commits conflict markers when the owner's uncommitted edit conflicts with the update", async () => {
+    const { ops, world, alphaRepo, warnings } = setup();
+    const overview = join(alphaRepo, "Overview.md");
+    const other = cloneOf(
+      { root: world.root, bare: world.remotes["Alpha"] as string, work: alphaRepo },
+      "alpha-other",
+    );
+    const original = readFileSync(overview, "utf8");
+    writeFileSync(
+      join(other, "Overview.md"),
+      original.replace("# Alpha: overview", "# Alpha: theirs"),
+    );
+    sh(other, "add", "Overview.md");
+    sh(other, "commit", "-q", "-m", "other machine");
+    sh(other, "push", "-q");
+    // The owner has an uncommitted edit of the same line in a different file than the one being written.
+    writeFileSync(overview, original.replace("# Alpha: overview", "# Alpha: mine"));
+    const head = sh(alphaRepo, "rev-parse", "HEAD");
+
+    await expect(ops.addWaiting("alpha", "Fresh item")).rejects.toThrow(/conflict/);
+
+    expect(sh(alphaRepo, "status", "--porcelain")).not.toMatch(/^(UU|AA|DU|UD)/m);
+    expect(readFileSync(overview, "utf8")).not.toContain("<<<<<<<");
+    expect(readFileSync(join(alphaRepo, "OpenItems.md"), "utf8")).not.toContain("Fresh item");
+    // Nothing new was committed or pushed, and the owner's edit is kept in the stash.
+    expect(sh(alphaRepo, "log", "-1", "--format=%s").trim()).toBe("other machine");
+    expect(sh(alphaRepo, "rev-parse", "HEAD")).not.toBe(head); // the pull did fast-forward
+    expect(sh(alphaRepo, "stash", "list")).toContain("autostash");
+    expect(sh(alphaRepo, "show", "stash@{0}")).toContain("# Alpha: mine");
+    expect(sh(world.remotes["Alpha"] as string, "log", "-1", "--format=%s").trim()).toBe(
+      "other machine",
+    );
+    expect(warnings.map((w) => w.kind)).toContain("write-failed");
+  });
+
   it("refuses a Co-Authored-By trailer", async () => {
     const { file } = setup();
     const writer = new VaultWriter({ hubRoot: () => null, onWarning: () => undefined });
