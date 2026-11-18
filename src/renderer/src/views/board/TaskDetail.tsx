@@ -14,9 +14,17 @@ const tone = (s: string): "neutral" | "good" | "warn" | "bad" =>
         ? "warn"
         : "neutral";
 
-function BuildDiff({ projectId, worktree }: { projectId: string; worktree: string }) {
+function BuildDiff({
+  projectId,
+  worktree,
+  baseBranch,
+}: {
+  projectId: string;
+  worktree: string;
+  baseBranch?: string;
+}) {
   const branches = useQuery("branches.list", { projectId });
-  const base = branches.data?.defaultBranch ?? "main";
+  const base = baseBranch ?? branches.data?.defaultBranch ?? "main";
   const diff = useQuery("diff.get", { projectId, dir: worktree, mode: "branch", base });
   const files = diff.data?.files ?? [];
   return (
@@ -66,6 +74,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
   const [comment, setComment] = useState("");
   const [rejecting, setRejecting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [confirmKeep, setConfirmKeep] = useState<number | null>(null);
 
   const t = task.data;
   const run = async (work: () => Promise<void>): Promise<void> => {
@@ -148,6 +157,75 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
               shown.stageId === t.stages[t.stages.length - 1]?.stageId && (
                 <BuildDiff projectId={t.projectId} worktree={t.worktree} />
               )}
+          </div>
+        )}
+        {t.variants.length > 0 && (
+          <div className="mb-3" data-testid="compare">
+            <div className="mb-1 font-semibold">Builders, side by side</div>
+            <div
+              className="grid gap-3"
+              style={{
+                gridTemplateColumns: `repeat(${Math.min(t.variants.length, 2)}, minmax(0, 1fr))`,
+              }}
+            >
+              {t.variants.map((v) => (
+                <div
+                  key={v.n}
+                  className="rounded border p-2"
+                  style={{ borderColor: "var(--line)" }}
+                  data-testid="variant"
+                  data-status={v.status}
+                >
+                  <div className="mb-1 flex items-center gap-1.5">
+                    <span className="font-medium">Builder {v.n}</span>
+                    <Chip tone={tone(v.status === "kept" ? "done" : v.status)}>{v.status}</Chip>
+                  </div>
+                  <div
+                    className="mb-1 text-[12px]"
+                    style={{ color: "var(--muted)" }}
+                    data-testid="variant-checks"
+                  >
+                    {v.status === "failed"
+                      ? (v.error ?? "failed")
+                      : `${v.commits} commit(s), ${v.files.length} file(s), +${v.additions} -${v.deletions}`}
+                  </div>
+                  {v.status === "done" && t.branch && (
+                    <BuildDiff
+                      projectId={t.projectId}
+                      worktree={v.worktree}
+                      baseBranch={t.branch}
+                    />
+                  )}
+                  {waiting &&
+                    v.status === "done" &&
+                    (confirmKeep === v.n ? (
+                      <div className="mt-2" data-testid="keep-confirm">
+                        <div className="mb-1 text-[12.5px]" style={{ color: "#c98a12" }}>
+                          This merges {v.branch} into the task branch and removes the other
+                          builders' worktrees. Continue?
+                        </div>
+                        <Button
+                          variant="primary"
+                          onClick={() =>
+                            void run(async () => {
+                              await office.invoke("tasks.keep", { id, variant: v.n });
+                              setConfirmKeep(null);
+                            })
+                          }
+                          data-testid="keep-yes"
+                        >
+                          Yes, keep builder {v.n}
+                        </Button>
+                        <Button onClick={() => setConfirmKeep(null)}>No</Button>
+                      </div>
+                    ) : (
+                      <Button onClick={() => setConfirmKeep(v.n)} data-testid="keep-variant">
+                        Keep this one
+                      </Button>
+                    ))}
+                </div>
+              ))}
+            </div>
           </div>
         )}
         {waiting && (

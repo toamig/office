@@ -11,6 +11,7 @@ import { writeTextFile } from "../../core/settings";
 import { nowIso } from "../../core/util";
 import { createWorktree } from "../git/worktrees";
 import type { RunService } from "../runs/service";
+import { FanOut } from "./fanout";
 import { renderTemplate } from "./templates";
 
 export interface TaskEngineDeps {
@@ -35,6 +36,7 @@ interface TaskRow {
   branch: string | null;
   worktree: string | null;
   stage_index: number;
+  fanout: number;
   status: TaskStatus;
   created_at: string;
   updated_at: string;
@@ -63,8 +65,10 @@ const MAX_OUTPUT_BYTES = 200_000;
 export class TaskEngine {
   private readonly starts = new Map<string, string>();
   private readonly lastError = new Map<string, string>();
+  private readonly fanout: FanOut;
 
   constructor(private readonly deps: TaskEngineDeps) {
+    this.fanout = new FanOut({ db: deps.db, runs: deps.runs, changed: (id) => this.changed(id) });
     this.recover();
   }
 
@@ -128,6 +132,11 @@ export class TaskEngine {
           "UPDATE task_stages SET status = 'failed' WHERE task_id = ? AND idx = ? AND status IN ('running','pending')",
         )
         .run(t.id, t.stage_index);
+      this.deps.db
+        .prepare(
+          "UPDATE task_variants SET status = 'failed', error = 'interrupted' WHERE task_id = ? AND status = 'running'",
+        )
+        .run(t.id);
       this.lastError.set(`${t.id}:${t.stage_index}`, "interrupted");
       this.deps.db
         .prepare("UPDATE tasks SET status = 'failed', updated_at = ? WHERE id = ?")
@@ -162,6 +171,7 @@ export class TaskEngine {
       branch: t.branch,
       worktree: t.worktree,
       stageIndex: t.stage_index,
+      fanout: t.fanout,
       status: t.status,
       createdAt: t.created_at,
       updatedAt: t.updated_at,
@@ -195,15 +205,18 @@ export class TaskEngine {
     return rows.map((r) => this.view(r));
   }
 
-  get(id: string): TaskDetail {
-    const view = this.view(this.task(id));
+  async get(id: string): Promise<TaskDetail> {
+    const row = this.task(id);
+    const view = this.view(row);
     const outputs: Record<string, string> = {};
     for (const s of view.stages) {
       if (s.outputPath && existsSync(s.outputPath)) {
         outputs[s.stageId] = readFileSync(s.outputPath, "utf8").slice(0, MAX_OUTPUT_BYTES);
       }
     }
-    return { ...view, outputs };
+    const repo = this.deps.projectPath(row.project_id);
+    const variants = repo ? await this.fanout.variants(id, row.branch, repo) : [];
+    return { ...view, outputs, variants };
   }
 
   // ---------- actions ----------
@@ -213,6 +226,7 @@ export class TaskEngine {
     pipeline: string;
     title: string;
     description: string;
+    fanout?: number;
   }): TaskView {
     const ws = this.deps.workspace();
     const pipeline = ws?.pipelines[input.pipeline];
@@ -227,10 +241,19 @@ export class TaskEngine {
     this.deps.db.transaction(() => {
       this.deps.db
         .prepare(
-          `INSERT INTO tasks (id, project_id, pipeline, title, description, branch, worktree, stage_index, status, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, 'running', ?, ?)`,
+          `INSERT INTO tasks (id, project_id, pipeline, title, description, branch, worktree, stage_index, fanout, status, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, NULL, NULL, 0, ?, 'running', ?, ?)`,
         )
-        .run(id, input.projectId, input.pipeline, input.title.trim(), input.description, now, now);
+        .run(
+          id,
+          input.projectId,
+          input.pipeline,
+          input.title.trim(),
+          input.description,
+          Math.min(4, Math.max(1, input.fanout ?? 1)),
+          now,
+          now,
+        );
       pipeline.stages.forEach((s, idx) => {
         this.deps.db
           .prepare(
@@ -250,6 +273,9 @@ export class TaskEngine {
     const t = this.task(id);
     if (t.status !== "waiting-gate")
       throw new IpcFailure("not-waiting", "This task is not waiting for approval");
+    if (this.fanout.awaitingChoice(id)) {
+      throw new IpcFailure("pick-one", "Pick one builder's result to keep first");
+    }
     this.setStage(id, t.stage_index, { status: "approved", approved_at: nowIso() });
     this.setTask(id, { stage_index: t.stage_index + 1, status: "running" });
     void this.drive(id);
@@ -262,7 +288,11 @@ export class TaskEngine {
       throw new IpcFailure("not-waiting", "This task is not waiting for approval");
     this.setStage(id, t.stage_index, { status: "pending", approved_at: null });
     this.setTask(id, { status: "running" });
-    void this.drive(id, comment.trim());
+    const repo = this.deps.projectPath(t.project_id);
+    void (async () => {
+      if (repo && this.fanout.awaitingChoice(id)) await this.fanout.discardAll(id, repo);
+      await this.drive(id, comment.trim());
+    })();
   }
 
   /** Runs the current stage again after a failure or an interruption. */
@@ -276,11 +306,25 @@ export class TaskEngine {
     void this.drive(id);
   }
 
+  /** Keeps one builder of a fan-out stage: merges it into the task branch and removes the others. */
+  async keep(id: string, variant: number): Promise<void> {
+    const t = this.task(id);
+    const repo = this.deps.projectPath(t.project_id);
+    if (t.status !== "waiting-gate" || !this.fanout.awaitingChoice(id) || !repo || !t.worktree) {
+      throw new IpcFailure("not-waiting", "This task has no builder results waiting for a choice");
+    }
+    await this.fanout.keep(id, variant, { repo, taskWorktree: t.worktree });
+    this.setStage(id, t.stage_index, { status: "approved", approved_at: nowIso() });
+    this.setTask(id, { stage_index: t.stage_index + 1, status: "running" });
+    void this.drive(id);
+  }
+
   cancel(id: string): void {
     const t = this.task(id);
     if (t.status === "done" || t.status === "cancelled") return;
     const stage = this.stages(id).find((s) => s.idx === t.stage_index);
     if (stage?.run_id) this.deps.runs.cancel(stage.run_id);
+    this.fanout.cancel(id);
     this.setTask(id, { status: "cancelled" });
   }
 
@@ -324,6 +368,47 @@ export class TaskEngine {
     return "stop";
   }
 
+  /** The build stage with several builders: they run in parallel, then the owner picks one result. */
+  private async runFanout(
+    t: TaskRow,
+    idx: number,
+    o: { current: TaskRow; repo: string; role: Role; prompt: string; outputPath: string },
+  ): Promise<"continue" | "stop"> {
+    if (this.fanout.rows(t.id).length > 0) await this.fanout.discardAll(t.id, o.repo);
+    this.deps.db.prepare("DELETE FROM task_variants WHERE task_id = ?").run(t.id);
+    const succeeded = await this.fanout.run({
+      taskId: t.id,
+      stageIdx: idx,
+      count: o.current.fanout,
+      repo: o.repo,
+      taskBranch: o.current.branch as string,
+      slug: `${o.current.title} ${t.id.slice(0, 4)}`,
+      role: o.role,
+      projectId: t.project_id,
+      prompt: o.prompt,
+      providerId: o.role.provider,
+    });
+    if (this.task(t.id).status === "cancelled") return "stop";
+    if (succeeded === 0) return this.fail(t, idx, "Every builder failed");
+    writeTextFile(
+      o.outputPath,
+      `# Builders for ${o.current.title}
+
+${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
+`,
+    );
+    this.setStage(t.id, idx, { output_path: o.outputPath, status: "waiting-gate" });
+    this.setTask(t.id, { status: "waiting-gate" });
+    this.deps.notifier.notify({
+      kind: "task.gate",
+      projectId: t.project_id,
+      title: `Pick a builder result for ${o.current.title}`,
+      body: `${succeeded} of ${o.current.fanout} builders finished`,
+      link: { view: "board" },
+    });
+    return "stop";
+  }
+
   private async runStage(t: TaskRow, idx: number, feedback?: string): Promise<"continue" | "stop"> {
     const ws = this.deps.workspace();
     const stage = ws?.pipelines[t.pipeline]?.stages[idx];
@@ -361,6 +446,9 @@ export class TaskEngine {
       if (feedback)
         prompt += `\n\nThe owner rejected the previous attempt with this feedback. Address it:\n${feedback}`;
 
+      if (stage.worktree && current.fanout > 1 && current.branch) {
+        return this.runFanout(t, idx, { current, repo, role, prompt, outputPath });
+      }
       const handle = this.deps.runs.start({
         kind: "stage",
         providerId: role.provider,

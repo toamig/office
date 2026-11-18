@@ -273,6 +273,7 @@ export const channels = {
   "tasks.create": { req: CreateTask, res: TaskView },
   "tasks.approve": { req: z.object({ id: z.string() }), res: z.void() },
   "tasks.reject": { req: z.object({ id: z.string(), comment: z.string() }), res: z.void() },
+  "tasks.keep": { req: z.object({ id: z.string(), variant: z.number() }), res: z.void() },
   "tasks.cancel": { req: z.object({ id: z.string() }), res: z.void() },
   "tasks.retry": { req: z.object({ id: z.string() }), res: z.void() },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },

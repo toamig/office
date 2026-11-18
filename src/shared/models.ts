@@ -544,6 +544,21 @@ export const GithubOverview = z.object({
 });
 export type GithubOverview = z.infer<typeof GithubOverview>;
 
+export const TaskVariant = z.object({
+  n: z.number(),
+  branch: z.string(),
+  worktree: z.string(),
+  /** running, done (finished, not chosen yet), failed, kept or discarded. */
+  status: z.enum(["running", "done", "failed", "kept", "discarded"]),
+  error: z.string().nullable(),
+  /** Check results: the run's outcome and what the builder changed against the task branch. */
+  commits: z.number(),
+  files: z.array(z.string()),
+  additions: z.number(),
+  deletions: z.number(),
+});
+export type TaskVariant = z.infer<typeof TaskVariant>;
+
 export const TaskStageView = z.object({
   idx: z.number(),
   stageId: z.string(),
@@ -574,6 +589,8 @@ export const TaskView = z.object({
   branch: z.string().nullable(),
   worktree: z.string().nullable(),
   stageIndex: z.number(),
+  /** How many builders run in parallel on the build stage (1 means no fan-out). */
+  fanout: z.number(),
   status: TaskStatus,
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -584,6 +601,8 @@ export type TaskView = z.infer<typeof TaskView>;
 export const TaskDetail = TaskView.extend({
   /** Stage outputs by stage id, as text (plans, reviews). */
   outputs: z.record(z.string(), z.string()),
+  /** The builders of a fan-out stage, with their check results. */
+  variants: z.array(TaskVariant),
 });
 export type TaskDetail = z.infer<typeof TaskDetail>;
 
@@ -592,5 +611,7 @@ export const CreateTask = z.object({
   pipeline: z.string(),
   title: z.string().min(1),
   description: z.string().default(""),
+  /** Run the build stage with this many builders (2 to 4); 1 means a single builder. */
+  fanout: z.number().int().min(1).max(4).default(1),
 });
 export type CreateTask = z.infer<typeof CreateTask>;

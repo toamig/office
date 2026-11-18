@@ -136,7 +136,7 @@ describe("task engine with fake providers", () => {
     const atPlan = await waitFor(h.engine, created.id, "waiting-gate");
     expect(atPlan.stageIndex).toBe(0);
     expect(atPlan.stages[0]).toMatchObject({ status: "waiting-gate", provider: "fake" });
-    const detail = h.engine.get(created.id);
+    const detail = await h.engine.get(created.id);
     expect(detail.outputs["plan"]).toContain("# Plan");
     expect(h.notifier.list().map((n) => n.kind)).toEqual(["task.gate"]);
 
@@ -152,7 +152,7 @@ describe("task engine with fake providers", () => {
       "Fake builder change",
     );
     expect(sh(alpha, "branch", "--show-current").trim()).toBe("main");
-    expect(h.engine.get(created.id).outputs["review"]).toContain("No problems found.");
+    expect((await h.engine.get(created.id)).outputs["review"]).toContain("No problems found.");
 
     h.engine.approve(created.id);
     const done = await waitFor(h.engine, created.id, "done");
@@ -222,7 +222,7 @@ describe("task engine with fake providers", () => {
     delete process.env["FAKE_DELAY_MS"];
     restarted.retry(slow.id);
     await waitFor(restarted, slow.id, "waiting-gate");
-    expect(restarted.get(slow.id).outputs["plan"]).toContain("# Plan");
+    expect((await restarted.get(slow.id)).outputs["plan"]).toContain("# Plan");
   });
 
   it("fails a stage clearly when its prompt has an unknown placeholder or its provider fails", async () => {
@@ -276,5 +276,79 @@ describe("task engine with fake providers", () => {
     expect(readFileSync(join(h.world.hub, "Alpha", "OpenItems.md"), "utf8")).toContain(
       "Waiting on you",
     );
+  });
+});
+
+describe("fan-out", () => {
+  it("runs two builders in parallel, keeps one, and leaves no stray worktrees", async () => {
+    const h = harness();
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "feature",
+      title: "Two builders",
+      description: "Add it.",
+      fanout: 2,
+    });
+    await waitFor(h.engine, t.id, "waiting-gate"); // plan gate
+    h.engine.approve(t.id);
+
+    // The build stage ends at a choice, not at a plain gate.
+    await until(() => h.engine.list()[0]?.stages[1]?.status === "waiting-gate");
+    const detail = await h.engine.get(t.id);
+    expect(detail.variants.map((v) => [v.n, v.status, v.commits, v.files.length])).toEqual([
+      [1, "done", 1, 1],
+      [2, "done", 1, 1],
+    ]);
+    expect(detail.variants[0]?.branch).toMatch(/^office\/two-builders-.*-v1$/);
+    expect(() => h.engine.approve(t.id)).toThrow(/Pick one/);
+
+    const alpha = h.world.code["alpha"]?.work as string;
+    const beforeBranches = sh(alpha, "branch", "--format=%(refname:short)").trim().split("\n");
+    expect(beforeBranches.filter((b) => b.includes("-v"))).toHaveLength(2);
+
+    await h.engine.keep(t.id, 2);
+    // The kept builder's work is merged into the task branch; the review stage runs next.
+    const atReview = await waitFor(h.engine, t.id, "waiting-gate");
+    expect(atReview.stageIndex).toBe(2);
+    expect(sh(atReview.worktree as string, "log", "--format=%s", "-3")).toContain("Merge office/");
+    expect(sh(atReview.worktree as string, "ls-files")).toContain("built-");
+
+    // No variant worktree or branch is left behind.
+    const worktrees = sh(alpha, "worktree", "list", "--porcelain");
+    expect(worktrees.match(/^worktree /gm)).toHaveLength(2);
+    expect(sh(alpha, "branch", "--format=%(refname:short)")).not.toMatch(/-v\d/);
+    const after = await h.engine.get(t.id);
+    expect(after.variants.map((v) => v.status)).toEqual(["discarded", "kept"]);
+    h.engine.approve(t.id);
+    await waitFor(h.engine, t.id, "done");
+  });
+
+  it("a rejection discards every builder and runs them again; keeping a failed one is refused", async () => {
+    const h = harness();
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "feature",
+      title: "Redo",
+      description: "x",
+      fanout: 2,
+    });
+    await waitFor(h.engine, t.id, "waiting-gate");
+    h.engine.approve(t.id);
+    await until(() => h.engine.list()[0]?.stages[1]?.status === "waiting-gate");
+    const first = (await h.engine.get(t.id)).variants.map((v) => v.worktree);
+    h.engine.reject(t.id, "Try a different approach");
+    await until(
+      () =>
+        h.engine.list()[0]?.stages[1]?.status === "waiting-gate" &&
+        h.engine.list()[0]?.status === "waiting-gate",
+    );
+    const again = (await h.engine.get(t.id)).variants;
+    expect(again).toHaveLength(2);
+    expect(again.map((v) => v.status)).toEqual(["done", "done"]);
+    const alpha = h.world.code["alpha"]?.work as string;
+    expect(sh(alpha, "worktree", "list", "--porcelain").match(/^worktree /gm)).toHaveLength(4);
+    expect(first.length).toBe(2);
+    await expect(h.engine.keep(t.id, 9)).rejects.toThrow(/not available/);
+    h.engine.cancel(t.id);
   });
 });

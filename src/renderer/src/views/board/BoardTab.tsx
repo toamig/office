@@ -28,6 +28,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
   const [pipeline, setPipeline] = useState("");
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
+  const [fanout, setFanout] = useState(1);
   const [error, setError] = useState<string | null>(null);
   const chosen = pipeline || pipelines[0]?.[0] || "";
 
@@ -39,6 +40,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
         pipeline: chosen,
         title,
         description,
+        fanout,
       });
       onCreated(task.id);
     } catch (err) {
@@ -101,6 +103,21 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
               onChange={(e) => setTitle(e.target.value)}
               data-testid="task-title"
             />
+          </label>
+          <label className="grid grid-cols-[100px_1fr] items-center gap-2">
+            Builders
+            <select
+              className={field}
+              style={fieldStyle}
+              value={fanout}
+              onChange={(e) => setFanout(Number(e.target.value))}
+              data-testid="task-fanout"
+            >
+              <option value={1}>One builder</option>
+              <option value={2}>Run with 2 builders and compare</option>
+              <option value={3}>Run with 3 builders and compare</option>
+              <option value={4}>Run with 4 builders and compare</option>
+            </select>
           </label>
           <label className="grid grid-cols-[100px_1fr] items-start gap-2">
             Description

@@ -273,6 +273,7 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("tasks.create", (req) => ctx.tasks.create(req));
   ctx.ipc.handle("tasks.approve", (req) => ctx.tasks.approve(req.id));
   ctx.ipc.handle("tasks.reject", (req) => ctx.tasks.reject(req.id, req.comment));
+  ctx.ipc.handle("tasks.keep", (req) => ctx.tasks.keep(req.id, req.variant));
   ctx.ipc.handle("tasks.cancel", (req) => ctx.tasks.cancel(req.id));
   ctx.ipc.handle("tasks.retry", (req) => ctx.tasks.retry(req.id));
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
