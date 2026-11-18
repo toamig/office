@@ -10,7 +10,9 @@ import { WorkspaceStore } from "./core/workspace";
 import type { SyncReport } from "../shared/models";
 import { ProjectService } from "./modules/git/service";
 import { syncAll } from "./modules/git/syncall";
+import { VaultOps } from "./modules/vault/ops";
 import { VaultService } from "./modules/vault/service";
+import { VaultWriter, type WriterWarning } from "./modules/vault/writer";
 
 /** Everything the main process shares: settings, workspace, database, bus and the IPC registry. */
 export interface AppContext {
@@ -22,6 +24,10 @@ export interface AppContext {
   ipc: IpcRegistry;
   projects: ProjectService;
   vault: VaultService;
+  ops: VaultOps;
+  /** Warnings shown in the health strip (failed pushes, validate errors). */
+  warnings: Array<{ at: string; message: string }>;
+  warningHooks: Array<(warning: WriterWarning) => void>;
   /** Sync all repos; the notifier hooks in through reportHooks. */
   sync: () => Promise<SyncReport>;
   reportHooks: Array<(report: SyncReport) => void | Promise<void>>;
@@ -39,6 +45,18 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     workspace: () => store.state.workspace,
     workspaceRoot: () => current.workspaceRoot,
   });
+  const warnings: AppContext["warnings"] = [];
+  const warningHooks: AppContext["warningHooks"] = [];
+  const writer = new VaultWriter({
+    hubRoot: () =>
+      store.state.workspace?.vault.kind === "brain-hub" ? current.workspaceRoot : null,
+    onWarning: (warning) => {
+      warnings.unshift({ at: new Date().toISOString(), message: warning.message });
+      warnings.length = Math.min(warnings.length, 20);
+      for (const hook of warningHooks) hook(warning);
+    },
+  });
+  const ops = new VaultOps({ vault, writer, workspace: () => store.state.workspace });
   const projects = new ProjectService({
     bus,
     projects: () => store.state.workspace?.projects ?? [],
@@ -67,6 +85,9 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     ipc: new IpcRegistry(checkResponses),
     projects,
     vault,
+    ops,
+    warnings,
+    warningHooks,
   };
 }
 

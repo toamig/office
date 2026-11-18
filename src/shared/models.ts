@@ -160,3 +160,11 @@ export const HealthView = z.object({
   warnings: z.array(z.object({ at: z.string(), message: z.string() })),
 });
 export type HealthView = z.infer<typeof HealthView>;
+
+export const WriteResult = z.object({
+  committed: z.boolean(),
+  pushed: z.boolean(),
+  pushError: z.string().optional(),
+  validateErrors: z.array(z.string()),
+});
+export type WriteResult = z.infer<typeof WriteResult>;

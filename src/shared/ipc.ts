@@ -7,6 +7,7 @@ import {
   SyncReport,
   WaitingEntry,
   WorkspaceView,
+  WriteResult,
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
@@ -42,6 +43,22 @@ export const channels = {
   "git.syncAll": { req: z.void(), res: SyncReport },
   "vault.openItems": { req: z.object({ projectId: z.string() }), res: OpenItemsView },
   "vault.waiting": { req: z.void(), res: z.array(WaitingEntry) },
+  "vault.tickWaiting": {
+    req: z.object({ projectId: z.string(), raw: z.string() }),
+    res: WriteResult,
+  },
+  "vault.addWaiting": {
+    req: z.object({
+      projectId: z.string(),
+      text: z.string().min(1),
+      source: z.string().optional(),
+    }),
+    res: WriteResult,
+  },
+  "vault.addNote": {
+    req: z.object({ projectId: z.string(), text: z.string().min(1) }),
+    res: WriteResult,
+  },
   "vault.health": { req: z.void(), res: HealthView },
   "projects.refresh": { req: z.object({ id: z.string().optional() }), res: z.void() },
 } as const;
