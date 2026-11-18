@@ -172,7 +172,8 @@ export class ChatService {
     if (!provider?.chatCommand) throw new IpcFailure("no-chat", "This tool has no chat mode");
     if (options) this.saveOptions(id, { ...this.options(id), ...options });
     const picked = this.options(id);
-    const resume = this.history(id).some((l) => l.event.t === "user");
+    // --resume only for a conversation that exists, --session-id only for one that does not.
+    const resume = row.conversationStarted;
     this.append(id, { t: "user", id: `u${Date.now()}`, text, images: images.length });
     this.append(id, { t: "turn-start" });
     this.deps.sessions.setStatus(id, "working");
@@ -205,6 +206,8 @@ export class ChatService {
         });
         live = { handle, working: true, stopped: false, kind, started: Date.now() };
         this.live.set(id, live);
+        // A process for this conversation has run, so from now on it is resumed, never started again.
+        this.deps.sessions.markStarted(id);
         void this.readClaude(id, live);
       }
       live.working = true;

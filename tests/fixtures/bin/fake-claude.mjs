@@ -17,6 +17,30 @@ const flag = (name) => {
 const has = (name) => args.includes(name);
 const home = process.env["OFFICE_HOME"] ?? "";
 
+/**
+ * Like the real CLI, an interactive or chat process refuses --session-id for a conversation that already
+ * exists and --resume for one that does not. Conversations are remembered as files under the fake home.
+ */
+function checkConversation() {
+  if (!home) return;
+  const dir = join(home, ".fake-claude-sessions");
+  const created = flag("--session-id");
+  const resumed = flag("--resume");
+  if (created) {
+    mkdirSync(dir, { recursive: true });
+    if (existsSync(join(dir, created))) {
+      process.stderr.write(`Error: Session ID ${created} is already in use.
+`);
+      process.exit(1);
+    }
+    writeFileSync(join(dir, created), "");
+  } else if (resumed && !existsSync(join(dir, resumed))) {
+    process.stderr.write(`No conversation found with session ID: ${resumed}
+`);
+    process.exit(1);
+  }
+}
+
 function out(obj) {
   process.stdout.write(`${JSON.stringify(obj)}\n`);
 }
@@ -175,6 +199,7 @@ async function needsPermission(text) {
 // message, tool calls and results, and a result line. The text of the message picks what happens:
 //   THINK, READ <path>, EDIT, RUN <cmd>, TODO, NEEDS_PERMISSION: <cmd>, SLOW, anything else is echoed.
 async function chatLoop() {
+  checkConversation();
   const log = process.env["FAKE_ARGS_LOG"];
   if (log) {
     const { appendFileSync } = await import("node:fs");
@@ -264,6 +289,7 @@ if (prompt !== null) {
 // ---------- interactive ----------
 // Reads lines as prompts. "ask" makes it raise a Notification (needs you), "quit" ends the session,
 // anything else is a turn: UserPromptSubmit, a short reply, Stop.
+checkConversation();
 const sid = sessionId;
 runHooks("SessionStart", sid);
 process.stdout.write(`fake-claude ready (${sid})\r\n> `);

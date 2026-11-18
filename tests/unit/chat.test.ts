@@ -446,6 +446,48 @@ describe("a Claude chat with the fake CLI", () => {
     h.chat.stop(row.id);
   });
 
+  it("a session that began as a terminal carries on in the chat with --resume, never --session-id", async () => {
+    const h = harness();
+    const log = join(h.dir, "origin.log");
+    const row = h.sessions.start({ providerId: "fake", projectId: "p", mode: "terminal" });
+    await until(() => h.sessions.history(row.id).data.includes("ready"));
+    expect(h.sessions.get(row.id).conversationStarted).toBe(true);
+    await h.sessions.stop(row.id);
+    process.env["FAKE_ARGS_LOG"] = log;
+    const back = await h.chat.toChat(row.id);
+    expect(back.mode).toBe("chat");
+    h.chat.send(row.id, "carry on from the terminal");
+    await until(() => kinds(h, row.id).includes("result"));
+    expect(JSON.stringify(h.chat.history(row.id))).toContain("echo: carry on from the terminal");
+    expect(JSON.stringify(h.chat.history(row.id))).not.toContain('"t":"error"');
+    const args = (
+      JSON.parse(readFileSync(log, "utf8").trim().split("\n")[0] as string) as { args: string[] }
+    ).args;
+    expect(args).toContain("--resume");
+    expect(args).not.toContain("--session-id");
+    h.chat.stop(row.id);
+    h.sessions.shutdown();
+  });
+
+  it("a chat with no message yet opens in a terminal as a new conversation, not a resume of one that does not exist", async () => {
+    const h = harness();
+    const row = h.sessions.start({ providerId: "fake", projectId: "p" });
+    expect(h.sessions.get(row.id).conversationStarted).toBe(false);
+    const terminal = h.chat.toTerminal(row.id);
+    expect(terminal.mode).toBe("terminal");
+    await until(() => h.sessions.history(row.id).data.includes("ready"));
+    await new Promise((r) => setTimeout(r, 300));
+    expect(h.sessions.get(row.id).running).toBe(true); // the fake exits at once on a bad --resume
+    expect(h.sessions.get(row.id).conversationStarted).toBe(true);
+    // And back to the chat, the first message resumes the conversation the terminal began.
+    await h.chat.toChat(row.id);
+    h.chat.send(row.id, "hello again");
+    await until(() => kinds(h, row.id).includes("result"));
+    expect(JSON.stringify(h.chat.history(row.id))).not.toContain('"t":"error"');
+    h.chat.stop(row.id);
+    h.sessions.shutdown();
+  });
+
   it("opens as a terminal when asked, and old sessions stay terminals", () => {
     const h = harness();
     const asked = h.sessions.start({ providerId: "fake", projectId: "p", mode: "terminal" });

@@ -429,6 +429,8 @@ export const SessionRow = z.object({
   running: z.boolean(),
   /** Whether the session is a chat or a terminal. Sessions made before chats existed are terminals. */
   mode: SessionMode,
+  /** True once a process for the provider conversation has run, so resuming it is possible. */
+  conversationStarted: z.boolean(),
 });
 export type SessionRow = z.infer<typeof SessionRow>;
 

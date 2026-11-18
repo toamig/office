@@ -55,6 +55,7 @@ interface DbSession {
   last_output_at: string | null;
   captured_at: string | null;
   mode: string;
+  conversation_started: number;
 }
 
 interface Runtime extends LiveState {
@@ -133,6 +134,7 @@ export class SessionService {
       capturedAt: r.captured_at,
       running: r.mode === "chat" ? (this.chat?.running(r.id) ?? false) : this.pty.isRunning(r.id),
       mode: r.mode === "chat" ? "chat" : "terminal",
+      conversationStarted: r.conversation_started === 1,
     };
   }
 
@@ -220,6 +222,7 @@ export class SessionService {
       id,
       provider: providerId,
       spec,
+      started: true,
       cwd,
       projectId: input.projectId ?? null,
       roleId: extra.roleLabel ?? input.roleId ?? null,
@@ -272,10 +275,15 @@ export class SessionService {
     return this.get(id);
   }
 
+  /** Records that a process for the provider conversation has run, so it can be resumed. */
+  markStarted(id: string): void {
+    this.deps.db.prepare("UPDATE sessions SET conversation_started = 1 WHERE id = ?").run(id);
+  }
+
   /** Remembers the provider's own conversation id (a Codex thread), which resuming needs. */
   setProviderSessionId(id: string, providerSessionId: string): void {
     this.deps.db
-      .prepare("UPDATE sessions SET provider_session_id = ? WHERE id = ?")
+      .prepare("UPDATE sessions SET provider_session_id = ?, conversation_started = 1 WHERE id = ?")
       .run(providerSessionId, id);
   }
 
@@ -302,13 +310,15 @@ export class SessionService {
     title: string;
     prompt?: string;
     existing?: boolean;
+    /** A new provider conversation begins with this process. */
+    started?: boolean;
   }): SessionRow {
     const now = nowIso();
     if (!o.existing) {
       this.deps.db
         .prepare(
           `INSERT INTO sessions (id, provider, provider_session_id, project_id, cwd, branch, role, title, status,
-             interactive, created_at, updated_at) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'starting', 1, ?, ?)`,
+             interactive, created_at, updated_at, conversation_started) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'starting', 1, ?, ?, ?)`,
         )
         .run(
           o.id,
@@ -320,6 +330,7 @@ export class SessionService {
           o.title,
           now,
           now,
+          o.started ? 1 : 0,
         );
     } else {
       this.deps.db
@@ -362,7 +373,16 @@ export class SessionService {
     // first notify; before that, the tool's own "most recent session in this folder" is the right target.
     const ownId = row.provider === "claude-code" || row.provider === "fake";
     const providerSessionId = row.providerSessionId ?? (ownId ? row.id : "");
-    const spec = provider.resumeCommand(providerSessionId, { cwd: row.cwd, officeSessionId: id });
+    // A conversation that never ran (a chat with no message yet) is started, not resumed: --resume of an
+    // unknown conversation fails, and --session-id of a known one does.
+    const spec = row.conversationStarted
+      ? provider.resumeCommand(providerSessionId, { cwd: row.cwd, officeSessionId: id })
+      : provider.interactiveCommand({
+          cwd: row.cwd,
+          officeSessionId: id,
+          ...(row.role ? { role: this.resolveRole(row.role, row.projectId ?? undefined) } : {}),
+        });
+    if (!row.conversationStarted) this.markStarted(id);
     this.pty.release(id);
     return this.launch({
       id,

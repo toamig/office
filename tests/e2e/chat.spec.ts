@@ -182,3 +182,34 @@ test("the Start agent dialog offers Chat or Terminal and remembers the choice", 
   expect((await win.evaluate(() => window.office.invoke("settings.get"))).sessionMode).toBe("chat");
   await app.close();
 });
+
+test("a session that began as a terminal goes to a chat and resumes its conversation", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  await expect(win.getByTestId("topbar")).toBeVisible();
+  const session = await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Began in a terminal",
+      mode: "terminal",
+    }),
+  );
+  await win.getByTestId("rail-agents").click();
+  await win.getByTestId("session-row").first().click();
+  await expect.poll(() => terminalText(win), { timeout: 20000 }).toContain("fake-claude ready");
+  await win.locator(".xterm").click();
+  await win.keyboard.type("typed in the terminal");
+  await win.keyboard.press("Enter");
+  await expect.poll(() => terminalText(win)).toContain("echo: typed in the terminal");
+
+  await win.getByTestId("back-to-chat").click();
+  await expect(win.getByTestId("chat")).toBeVisible();
+  await say(win, "now from the chat");
+  await expect(win.getByTestId("chat-turn")).toBeVisible({ timeout: 30000 });
+  await expect(win.getByTestId("chat")).toContainText("echo: now from the chat");
+  await expect(win.getByTestId("chat-error")).toHaveCount(0);
+  const row = (await win.evaluate(() => window.office.invoke("sessions.list", {})))[0];
+  expect(row).toMatchObject({ id: session.id, mode: "chat", conversationStarted: true });
+  await app.close();
+});
