@@ -14,3 +14,31 @@ test("the packaged app shows the fixture workspace and opens the database", asyn
   expect(counts).toEqual({ unread: 0, urgentUnread: 0 });
   await app.close();
 });
+
+test("the packaged app runs a terminal session and finds the relay script in its resources", async () => {
+  const { app } = await launch({ world: true, fakeTools: true, packaged: true });
+  const win = await app.firstWindow();
+  const session = await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Packaged",
+    }),
+  );
+  await expect
+    .poll(
+      async () =>
+        (await win.evaluate((id) => window.office.invoke("sessions.history", { id }), session.id))
+          .data,
+      { timeout: 30000 },
+    )
+    .toContain("fake-claude ready");
+
+  const preview = await win.evaluate(() =>
+    window.office.invoke("hooks.preview", { target: "claude", action: "install" }),
+  );
+  expect(preview.diff).toMatch(/resources\/relay\/office-relay\.mjs/);
+  const update = await win.evaluate(() => window.office.invoke("app.update.status"));
+  expect(update.enabled).toBe(false); // test data is in use, so no update check runs
+  await app.close();
+});
