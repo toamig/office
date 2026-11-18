@@ -1,5 +1,5 @@
 import { _electron as electron, type ElectronApplication } from "@playwright/test";
-import { cpSync, mkdirSync, mkdtempSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { makeWorld, type World } from "../fixtures/vault/make";
@@ -84,8 +84,13 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
     world = makeWorld();
     mkdirSync(data, { recursive: true });
     if (options.world === true) {
+      // A second launch on the same folder keeps what the first one saved (window bounds, theme).
+      const settingsFile = join(data, "settings.json");
+      const before = existsSync(settingsFile)
+        ? (JSON.parse(readFileSync(settingsFile, "utf8")) as Record<string, unknown>)
+        : {};
       writeFileSync(
-        join(data, "settings.json"),
+        settingsFile,
         JSON.stringify({
           version: 1,
           workspaceRoot: world.hub,
@@ -93,6 +98,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
           projectsRoot: world.projectsRoot,
           editorCommand: "code",
           relay: { port: 47999, token: "e2e-token" },
+          ...before,
           ...options.settings,
         }),
       );

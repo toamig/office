@@ -54,6 +54,13 @@ import {
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
+const ChromeStateSchema = z.object({
+  theme: z.enum(["light", "dark"]),
+  background: z.string(),
+  overlayColor: z.string(),
+  overlaySymbol: z.string(),
+});
+
 export const eventTypes = [
   "workspace.changed",
   "project.status",
@@ -68,6 +75,7 @@ export const eventTypes = [
   "app.navigate",
   "preview.state",
   "permission.changed",
+  "settings.changed",
   "app.update",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
@@ -301,6 +309,8 @@ export const channels = {
     req: z.object({ id: z.string(), allow: z.boolean(), reason: z.string().optional() }),
     res: z.void(),
   },
+  /** The colours the native window chrome was last given (for tests and the title bar). */
+  "app.chrome": { req: z.void(), res: ChromeStateSchema },
   "projects.update": {
     req: z.object({
       id: z.string(),

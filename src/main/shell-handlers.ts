@@ -2,6 +2,7 @@ import { BrowserWindow, dialog, shell } from "electron";
 import type { AppContext } from "./context";
 import type { UpdateService } from "./core/update";
 import type { PreviewPane } from "./preview";
+import { currentChrome } from "./chrome";
 import { detectDevServer } from "./core/dev-server";
 import { run } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
@@ -14,6 +15,7 @@ export function registerShellHandlers(
   preview: PreviewPane,
   updates: UpdateService,
 ): void {
+  ctx.ipc.handle("app.chrome", () => currentChrome());
   ctx.ipc.handle("app.update.status", () => updates.status());
   ctx.ipc.handle("app.update.check", () => updates.check());
   ctx.ipc.handle("app.update.install", () => updates.installNow());

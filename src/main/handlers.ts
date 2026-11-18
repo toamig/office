@@ -356,6 +356,9 @@ function registerConfigHandlers(ctx: AppContext): void {
       theme: s.theme,
       accent: s.accent,
       density: s.density,
+      zoom: s.zoom,
+      sidebarCollapsed: s.sidebarCollapsed,
+      sessionMode: s.sessionMode,
       quietHours: s.quietHours ?? null,
       editorCommand: s.editorCommand,
       artVaultRoot: s.artVaultRoot,
@@ -363,6 +366,7 @@ function registerConfigHandlers(ctx: AppContext): void {
   };
   ctx.ipc.handle("settings.get", () => appSettings());
   ctx.ipc.handle("settings.set", (req) => {
+    queueMicrotask(() => ctx.bus.emit("settings.changed", {}));
     const { quietHours, ...rest } = req;
     ctx.patchSettings({
       ...rest,

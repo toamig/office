@@ -1,4 +1,13 @@
-import { app, BrowserWindow, ipcMain, Notification, nativeImage, shell } from "electron";
+import {
+  app,
+  BrowserWindow,
+  ipcMain,
+  nativeImage,
+  nativeTheme,
+  Notification,
+  screen,
+  shell,
+} from "electron";
 import { join } from "node:path";
 import type { NotificationRow } from "../shared/models";
 import {
@@ -10,7 +19,10 @@ import {
 } from "../shared/ipc-names";
 import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
+import { applyChrome, startingChrome } from "./chrome";
+import { restoreBounds, toSaved } from "./core/window-state";
 import { isAllowedNavigation, isAppRequest } from "./core/window-security";
+import { TITLE_BAR_HEIGHT } from "../shared/theme";
 import { registerHandlers } from "./handlers";
 import { PreviewPane } from "./preview";
 import { autoUpdater } from "electron-updater";
@@ -32,14 +44,27 @@ function isHttps(url: string): boolean {
 }
 
 function createWindow(): BrowserWindow {
+  const settings = ctx?.settings();
+  const chrome = startingChrome(settings?.theme ?? "system");
+  const placed = restoreBounds(
+    settings?.window,
+    screen.getAllDisplays().map((d) => d.workArea),
+    screen.getPrimaryDisplay().workArea,
+  );
   const win = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...placed.bounds,
     minWidth: 900,
     minHeight: 600,
     show: false,
     title: "Office",
-    backgroundColor: "#1b1d20",
+    // No system title bar: the app draws its own top bar and the system draws only the window buttons.
+    titleBarStyle: "hidden",
+    titleBarOverlay: {
+      color: chrome.overlayColor,
+      symbolColor: chrome.overlaySymbol,
+      height: TITLE_BAR_HEIGHT,
+    },
+    backgroundColor: chrome.background,
     webPreferences: {
       preload: join(__dirname, "../preload/index.js"),
       contextIsolation: true,
@@ -48,7 +73,27 @@ function createWindow(): BrowserWindow {
     },
   });
   win.setMenuBarVisibility(false);
+  if (placed.maximized) win.maximize();
   win.once("ready-to-show", () => win.show());
+
+  // The window reopens where it was left, maximised or not.
+  let saveTimer: NodeJS.Timeout | undefined;
+  const remember = (): void => {
+    if (win.isDestroyed() || win.isMinimized() || win.isFullScreen() || !ctx) return;
+    ctx.patchSettings({ window: toSaved(win.getNormalBounds(), win.isMaximized()) });
+  };
+  const rememberSoon = (): void => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(remember, 400);
+  };
+  win.on("resize", rememberSoon);
+  win.on("move", rememberSoon);
+  win.on("maximize", rememberSoon);
+  win.on("unmaximize", rememberSoon);
+  win.on("close", () => {
+    clearTimeout(saveTimer);
+    remember();
+  });
 
   // Packaged builds get the strict CSP as a header too (the page also carries it as a meta tag).
   if (!process.env["ELECTRON_RENDERER_URL"]) {
@@ -149,6 +194,10 @@ async function boot(): Promise<void> {
       context.sessions.resize(id, cols, rows);
     }
   });
+  // The window chrome follows the theme setting and the system's colour scheme at once.
+  const refreshChrome = (): void => void applyChrome(mainWindow, context.settings().theme);
+  context.bus.on("settings.changed", refreshChrome);
+  nativeTheme.on("updated", refreshChrome);
   context.notifier.addChannel({ id: "desktop", send: showDesktopNotification });
   context.notifier.onUnreadUrgentChange = updateBadge;
   mainWindow = createWindow();

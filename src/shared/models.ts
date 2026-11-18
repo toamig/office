@@ -685,6 +685,9 @@ export const AppSettings = z.object({
   theme: z.enum(["system", "light", "dark"]),
   accent: z.string(),
   density: z.enum(["compact", "comfortable"]),
+  zoom: z.number(),
+  sidebarCollapsed: z.boolean(),
+  sessionMode: z.enum(["chat", "terminal"]),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
   editorCommand: z.string(),
   artVaultRoot: z.string(),
@@ -698,6 +701,9 @@ export const AppSettingsPatch = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #3b6fd4")
     .optional(),
   density: z.enum(["compact", "comfortable"]).optional(),
+  zoom: z.number().int().min(80).max(150).optional(),
+  sidebarCollapsed: z.boolean().optional(),
+  sessionMode: z.enum(["chat", "terminal"]).optional(),
   quietHours: z
     .object({
       from: z.string().regex(/^\d{2}:\d{2}$/),

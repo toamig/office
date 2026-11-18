@@ -11,10 +11,23 @@ export const MachineSettings = z.object({
   artVaultRoot: z.string().default(""),
   relay: z.object({ port: z.number().int(), token: z.string() }),
   quietHours: z.object({ from: z.string(), to: z.string() }).optional(),
-  window: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional(),
+  window: z
+    .object({
+      x: z.number(),
+      y: z.number(),
+      w: z.number(),
+      h: z.number(),
+      maximized: z.boolean().optional(),
+    })
+    .optional(),
   theme: z.enum(["system", "light", "dark"]).default("system"),
   accent: z.string().default("#3b6fd4"),
   density: z.enum(["compact", "comfortable"]).default("comfortable"),
+  /** Interface zoom in percent (80 to 150), set with Ctrl+= and Ctrl+-. */
+  zoom: z.number().int().min(80).max(150).default(100),
+  sidebarCollapsed: z.boolean().default(false),
+  /** How a new agent session opens: as a chat or in a terminal. */
+  sessionMode: z.enum(["chat", "terminal"]).default("chat"),
   modules: z.record(z.string(), z.boolean()).default({}),
 });
 
