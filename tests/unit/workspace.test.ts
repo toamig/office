@@ -122,6 +122,8 @@ describe("the example workspace", () => {
     if (!loaded.ok) throw new Error(loaded.error);
     expect(loaded.workspace.roles["builder"]?.permissionMode).toBe("acceptEdits");
     expect(loaded.workspace.roles["builder"]?.readOnly).toBe(false);
+    expect(loaded.workspace.roles["builder"]?.allowedCommands).toContain("Bash(git commit:*)");
+    expect(loaded.workspace.roles["planner"]?.allowedCommands).toEqual([]);
     expect(loaded.workspace.roles["planner"]?.permissionMode).toBe("plan");
   });
 });

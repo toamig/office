@@ -3,7 +3,9 @@
 // lives in this public repo.
 //
 //   node --experimental-strip-types scripts/seed-owner.mjs \
-//     --plan <Implementation.md> --root <workspaceRoot> --projects <projectsRoot> [--config Office/workspace.json]
+//     --plan <Implementation.md> --root <workspaceRoot> --projects <projectsRoot> [--config Office/workspace.json] [--dry-run]
+//
+// --dry-run prints the config it would write to stdout and touches nothing (no pull, no commit, no push).
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -76,6 +78,12 @@ const { Workspace } = await import(
   pathToFileURL(resolve(import.meta.dirname, "../src/shared/schemas.ts")).href
 );
 const parsed = Workspace.parse(config);
+
+if (process.argv.includes("--dry-run")) {
+  process.stdout.write(`${JSON.stringify(parsed, null, 2)}
+`);
+  process.exit(0);
+}
 
 const target = join(root, configRel);
 const repoDir = join(root, configRel.split("/")[0]);

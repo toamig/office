@@ -8,7 +8,18 @@ import { writeTextFile } from "./settings";
 export interface RelayHandlers {
   onClaude: (payload: Record<string, unknown>) => boolean;
   onCodex: (payload: Record<string, unknown>) => boolean;
+  /**
+   * A headless run asks whether it may use a tool. The answer can take hours, so the response is held
+   * until it resolves; `signal` aborts when the asking process goes away.
+   */
+  onPermission?: (
+    runId: string,
+    body: Record<string, unknown>,
+    signal: AbortSignal,
+  ) => Promise<Record<string, unknown>>;
 }
+
+const PERMISSION_ROUTE = /^\/permission\/([A-Za-z0-9-]{1,80})$/;
 
 const MAX_BODY = 1024 * 1024;
 
@@ -65,6 +76,35 @@ export class RelayServer {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
 
+  /** Keeps the response open until the owner answers; a dropped connection cancels the question. */
+  private holdPermission(
+    res: http.ServerResponse,
+    runId: string,
+    body: Record<string, unknown>,
+  ): void {
+    const abort = new AbortController();
+    res.on("close", () => {
+      if (!res.writableEnded) abort.abort();
+    });
+    void (this.handlers.onPermission as NonNullable<RelayHandlers["onPermission"]>)(
+      runId,
+      body,
+      abort.signal,
+    )
+      .then((answer) => {
+        if (res.writableEnded || res.destroyed) return;
+        res.setHeader("Content-Type", "application/json");
+        res.end(JSON.stringify(answer));
+      })
+      .catch((err) => {
+        console.error("permission handler failed:", err);
+        if (!res.writableEnded) {
+          res.statusCode = 500;
+          res.end();
+        }
+      });
+  }
+
   private handle(req: http.IncomingMessage, res: http.ServerResponse): void {
     const end = (code: number): void => {
       res.statusCode = code;
@@ -72,9 +112,17 @@ export class RelayServer {
     };
     if (req.method !== "POST") return end(405);
     if (!tokenOk(req.headers.authorization, this.token)) return end(401);
+    const permission = PERMISSION_ROUTE.exec(req.url ?? "");
     const route =
-      req.url === "/hook/claude" ? "claude" : req.url === "/hook/codex" ? "codex" : null;
+      req.url === "/hook/claude"
+        ? "claude"
+        : req.url === "/hook/codex"
+          ? "codex"
+          : permission
+            ? "permission"
+            : null;
     if (!route) return end(404);
+    if (route === "permission" && !this.handlers.onPermission) return end(404);
     const chunks: Buffer[] = [];
     let size = 0;
     req.on("data", (chunk: Buffer) => {
@@ -95,6 +143,10 @@ export class RelayServer {
         return end(400);
       }
       if (!payload || typeof payload !== "object") return end(400);
+      if (route === "permission") {
+        this.holdPermission(res, permission?.[1] ?? "", payload as Record<string, unknown>);
+        return;
+      }
       try {
         const body = payload as Record<string, unknown>;
         const matched =

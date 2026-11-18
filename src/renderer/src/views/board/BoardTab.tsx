@@ -8,7 +8,11 @@ import { TaskDetail } from "./TaskDetail";
 
 const columns: Array<{ id: string; title: string; match: (t: TaskView) => boolean }> = [
   { id: "running", title: "Running", match: (t) => t.status === "running" },
-  { id: "waiting", title: "Waiting on you", match: (t) => t.status === "waiting-gate" },
+  {
+    id: "waiting",
+    title: "Waiting on you",
+    match: (t) => t.status === "waiting-gate" || t.status === "waiting-permission",
+  },
   { id: "done", title: "Done", match: (t) => t.status === "done" },
   {
     id: "failed",

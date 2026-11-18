@@ -130,7 +130,15 @@ export class Scheduler {
         title: result.ok
           ? `Automation finished: ${automation.id}`
           : `Automation failed: ${automation.id}`,
-        body: (result.ok ? result.resultText : (result.error ?? "")).slice(0, 300) || null,
+        body:
+          [
+            (result.ok ? result.resultText : (result.error ?? "")).slice(0, 300),
+            result.denied?.length
+              ? `Refused (not in the role's allowed commands): ${result.denied.join("; ")}`
+              : "",
+          ]
+            .filter(Boolean)
+            .join("\n") || null,
         link: { view: "project", params: { id: automation.project } },
       });
       return handle.id;

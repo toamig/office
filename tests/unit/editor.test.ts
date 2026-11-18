@@ -38,6 +38,7 @@ describe("role editing", () => {
       effort: "low",
       instructions: "Test everything.",
       readOnly: true,
+      allowedCommands: [],
     });
     expect(JSON.parse(readFileSync(file, "utf8")).roles.qa.model).toBe("haiku");
     expect(sh(join(world.hub, "Office"), "log", "-1", "--format=%s").trim()).toBe(
@@ -145,5 +146,22 @@ describe("the in-memory workspace after an edit", () => {
     expect(sh(repo, "rev-parse", "HEAD").trim()).not.toBe(before);
     expect(store.state.workspace?.notifications.ntfyTopicUrl).toBe("https://ntfy.example/topic");
     await store.close();
+  });
+});
+
+describe("allowed commands on a role", () => {
+  it("are saved with the role and come back as the owner wrote them", async () => {
+    const { store, editor, file } = await setup();
+    await editor.saveRole("ci", {
+      provider: "claude-code",
+      instructions: "",
+      readOnly: false,
+      allowedCommands: ["Bash(git commit:*)", "Bash(npm test:*)"],
+    });
+    expect(store.state.workspace?.roles["ci"]?.allowedCommands).toEqual([
+      "Bash(git commit:*)",
+      "Bash(npm test:*)",
+    ]);
+    expect(JSON.parse(readFileSync(file, "utf8")).roles.ci.allowedCommands).toHaveLength(2);
   });
 });

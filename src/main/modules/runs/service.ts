@@ -8,7 +8,8 @@ import { IpcFailure } from "../../core/ipc";
 import { writeTextFile } from "../../core/settings";
 import { nowIso } from "../../core/util";
 import type { ProviderRegistry } from "../providers/registry";
-import type { AgentEvent, AgentRun, AgentRunResult } from "../providers/types";
+import type { AgentEvent, AgentRun, AgentRunResult, RunPermission } from "../providers/types";
+import type { PermissionBroker } from "./permissions";
 
 export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation";
 
@@ -38,7 +39,19 @@ export interface RunServiceDeps {
   bus: Bus;
   providers: ProviderRegistry;
   runsDir: string;
+  /**
+   * What a builder stage needs to ask the owner. Without it, a writable run gets only its allowed commands
+   * and anything else is refused.
+   */
+  permissions?: {
+    broker: PermissionBroker;
+    /** Writes the run's MCP config (serving office_permission) into its folder; returns the file path. */
+    writeMcpConfig: (runId: string, dir: string) => string;
+  };
 }
+
+/** Runs that only read: they get read tools and nothing ever asks. */
+const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary"];
 
 /** Runs headless agent tasks and records each one: a database row plus events.jsonl and result.md. */
 export class RunService {
@@ -76,6 +89,7 @@ export class RunService {
       );
 
     const run = provider.headless({
+      permission: this.permissionFor(req, id, dir),
       cwd: req.cwd,
       prompt: req.prompt,
       officeSessionId: id,
@@ -96,6 +110,7 @@ export class RunService {
 
     const result = run.done.then((done) => {
       this.active.delete(id);
+      this.deps.permissions?.broker.cancelRun(id);
       writeTextFile(join(dir, "result.md"), `${done.resultText}\n`);
       const cancelled = done.error === "cancelled";
       this.deps.db
@@ -112,8 +127,24 @@ export class RunService {
     return { id, dir, run, result };
   }
 
+  /**
+   * Who answers "may I run this?" for a run (spec 6.3): read-only runs and roles get read tools only;
+   * a writable stage asks the owner; a writable automation is limited to its allowed commands.
+   */
+  private permissionFor(req: RunRequest, id: string, dir: string): RunPermission {
+    if (!req.role || req.role.readOnly || READ_ONLY_KINDS.includes(req.kind)) {
+      return { kind: "readonly" };
+    }
+    const permissions = this.deps.permissions;
+    if (req.kind === "stage" && permissions) {
+      return { kind: "ask", mcpConfig: permissions.writeMcpConfig(id, dir) };
+    }
+    return { kind: "allowlist" };
+  }
+
   cancel(id: string): void {
     this.active.get(id)?.cancel();
+    this.deps.permissions?.broker.cancelRun(id);
   }
 
   /** Recent runs, newest first, optionally of one kind. */

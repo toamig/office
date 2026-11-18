@@ -406,7 +406,7 @@ async function stepNotes(c: Ctx): Promise<string> {
   const handle = deps.runs.start({
     kind: "explore-summary",
     providerId,
-    role: { provider: providerId, instructions: "", readOnly: true },
+    role: { provider: providerId, instructions: "", readOnly: true, allowedCommands: [] },
     cwd: session.cwd,
     prompt: SUMMARY_PROMPT,
     resumeId: session.providerSessionId ?? session.id,

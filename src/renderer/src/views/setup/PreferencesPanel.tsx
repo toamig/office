@@ -22,6 +22,7 @@ const KINDS = [
   "task.done",
   "automation.done",
   "brief.ready",
+  "permission.request",
 ];
 
 /** Theme, accent and density, plus the notification rules: quiet hours, muted projects, what is urgent, ntfy. */

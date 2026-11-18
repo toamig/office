@@ -162,7 +162,12 @@ export class SessionService {
     if (!provider) throw new IpcFailure("no-provider", `Unknown provider "${providerId}"`);
     if (input.model)
       role = {
-        ...(role ?? { provider: providerId, instructions: "", readOnly: false }),
+        ...(role ?? {
+          provider: providerId,
+          instructions: "",
+          readOnly: false,
+          allowedCommands: [],
+        }),
         model: input.model,
       };
     const cwd = input.cwd ?? (input.projectId ? this.deps.projectPath(input.projectId) : undefined);

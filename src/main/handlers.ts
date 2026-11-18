@@ -387,6 +387,14 @@ function registerConfigHandlers(ctx: AppContext): void {
 
 /** The task board and the inbox. */
 function registerTaskHandlers(ctx: AppContext): void {
+  ctx.ipc.handle("permissions.list", () => ctx.permissions.list());
+  ctx.ipc.handle("permissions.answer", (req) => {
+    try {
+      ctx.permissions.answer(req.id, req.allow, req.reason);
+    } catch (err) {
+      throw new IpcFailure("not-waiting", (err as Error).message);
+    }
+  });
   ctx.ipc.handle("tasks.list", (req) => ctx.tasks.list(req.projectId));
   ctx.ipc.handle("tasks.get", (req) => ctx.tasks.get(req.id));
   ctx.ipc.handle("tasks.create", (req) => ctx.tasks.create(req));

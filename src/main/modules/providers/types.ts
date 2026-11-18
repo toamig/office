@@ -1,7 +1,22 @@
 import type { Inventory } from "../../../shared/models";
 import type { Role } from "../../../shared/types";
 
+/**
+ * Who answers "may I run this?" in a headless run (spec 6.3, plan 9.5). Claude Code only; Codex runs in
+ * its own sandbox and ignores it.
+ * - readonly: read tools only, nothing ever asks.
+ * - ask: the role's allowed commands run; anything else goes to Office through the MCP permission tool.
+ * - allowlist: the role's allowed commands run; anything else is refused and named in the run log.
+ */
+export interface RunPermission {
+  kind: "readonly" | "ask" | "allowlist";
+  /** The MCP config that serves the permission tool (kind "ask" only). */
+  mcpConfig?: string;
+}
+
 export interface RunOptions {
+  /** How permission requests are handled in a headless run. */
+  permission?: RunPermission;
   cwd: string;
   role?: Role;
   officeSessionId: string;
@@ -18,9 +33,13 @@ export type AgentEvent =
   | { kind: "text"; text: string }
   | { kind: "tool"; name: string; summary: string }
   | { kind: "result"; text: string; ok: boolean }
-  | { kind: "error"; message: string };
+  | { kind: "error"; message: string }
+  /** A tool the run asked for and did not get, because nobody could answer. */
+  | { kind: "denied"; name: string; summary: string };
 
 export interface AgentRunResult {
+  /** Tools the run asked for and was refused because nobody could answer, as "Bash: rm -rf x". */
+  denied?: string[];
   ok: boolean;
   resultText: string;
   providerSessionId?: string;

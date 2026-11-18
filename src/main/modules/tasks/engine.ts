@@ -131,15 +131,39 @@ export class TaskEngine {
     this.deps.bus.emit("task.changed", { id }, projectId);
   }
 
+  /**
+   * A builder run started or stopped waiting for the owner's answer to a permission request. The stage and
+   * its task show "waiting-permission" meanwhile, and go back to running once nothing is left to answer.
+   */
+  permissionWaiting(runId: string, waiting: boolean): void {
+    const run = this.deps.db.prepare("SELECT task_id FROM runs WHERE id = ?").get(runId) as
+      { task_id: string | null } | undefined;
+    if (!run?.task_id) return;
+    const t = this.deps.db.prepare("SELECT * FROM tasks WHERE id = ?").get(run.task_id) as
+      TaskRow | undefined;
+    if (!t) return;
+    // A fan-out builder's run is not a stage's own run, so the stage is the task's current one.
+    const stage =
+      this.stages(t.id).find((s) => s.run_id === runId) ?? this.stages(t.id)[t.stage_index];
+    if (waiting && t.status === "running") {
+      if (stage) this.setStage(t.id, stage.idx, { status: "waiting-permission" });
+      this.setTask(t.id, { status: "waiting-permission" });
+    } else if (!waiting && t.status === "waiting-permission") {
+      if (stage?.status === "waiting-permission")
+        this.setStage(t.id, stage.idx, { status: "running" });
+      this.setTask(t.id, { status: "running" });
+    }
+  }
+
   /** After a restart: a stage that was running did not finish, so it is failed and can be retried. */
   private recover(): void {
     const running = this.deps.db
-      .prepare("SELECT * FROM tasks WHERE status = 'running'")
+      .prepare("SELECT * FROM tasks WHERE status IN ('running', 'waiting-permission')")
       .all() as TaskRow[];
     for (const t of running) {
       this.deps.db
         .prepare(
-          "UPDATE task_stages SET status = 'failed' WHERE task_id = ? AND idx = ? AND status IN ('running','pending')",
+          "UPDATE task_stages SET status = 'failed' WHERE task_id = ? AND idx = ? AND status IN ('running','pending','waiting-permission')",
         )
         .run(t.id, t.stage_index);
       this.deps.db

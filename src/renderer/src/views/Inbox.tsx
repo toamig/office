@@ -1,5 +1,6 @@
 import { Check } from "lucide-react";
 import { useState } from "react";
+import { PermissionRequests } from "../components/PermissionRequests";
 import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
@@ -62,6 +63,7 @@ export function Inbox() {
           <Check size={14} /> Mark all read
         </Button>
       </div>
+      <PermissionRequests />
       {list.error && <ErrorBanner message={list.error} />}
       {list.data?.length === 0 && (
         <EmptyState>

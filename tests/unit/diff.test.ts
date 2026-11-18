@@ -141,7 +141,13 @@ describe("review comments", () => {
       vault: { kind: "none", openItemsFile: "OpenItems.md", waitingHeading: "Waiting on you" },
       projects: [],
       roles: {
-        builder: { provider: "fake", model: "sonnet", instructions: "Build.", readOnly: false },
+        builder: {
+          provider: "fake",
+          model: "sonnet",
+          instructions: "Build.",
+          readOnly: false,
+          allowedCommands: [],
+        },
       },
       pipelines: {},
       notifications: { urgent: [], mutedProjects: [] },

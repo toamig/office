@@ -42,6 +42,7 @@ const role = (over: Partial<Role> = {}): Role => ({
   provider: "claude-code",
   instructions: "",
   readOnly: false,
+  allowedCommands: [],
   ...over,
 });
 

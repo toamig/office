@@ -50,6 +50,7 @@ import {
   WorktreeRow,
   WriteResult,
   RunSummary,
+  PermissionRequest,
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
@@ -66,6 +67,7 @@ export const eventTypes = [
   "task.changed",
   "app.navigate",
   "preview.state",
+  "permission.changed",
   "app.update",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
@@ -293,6 +295,12 @@ export const channels = {
   "github.overview": { req: z.object({ projectId: z.string() }), res: GithubOverview },
   "roles.save": { req: z.object({ id: z.string(), role: Role }), res: z.void() },
   "roles.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "permissions.list": { req: z.void(), res: z.array(PermissionRequest) },
+  /** Answers one waiting request: allow it once, or deny it with an optional reason. */
+  "permissions.answer": {
+    req: z.object({ id: z.string(), allow: z.boolean(), reason: z.string().optional() }),
+    res: z.void(),
+  },
   "projects.update": {
     req: z.object({
       id: z.string(),

@@ -55,7 +55,7 @@ export async function captureSession(
   const handle = deps.runs.start({
     kind: "capture",
     providerId: provider.id,
-    role: { provider: provider.id, instructions: "", readOnly: true },
+    role: { provider: provider.id, instructions: "", readOnly: true, allowedCommands: [] },
     cwd: session.cwd,
     prompt: CAPTURE_PROMPT,
     resumeId: session.providerSessionId ?? session.id,

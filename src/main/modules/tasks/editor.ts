@@ -1,5 +1,6 @@
 import { Role as RoleSchema, Workspace as WorkspaceSchema } from "../../../shared/schemas";
-import type { Automation, Role, Workspace } from "../../../shared/types";
+import type { z } from "zod";
+import type { Automation, Workspace } from "../../../shared/types";
 import { validCron } from "../../core/scheduler";
 import { IpcFailure } from "../../core/ipc";
 import type { VaultWriter } from "../vault/writer";
@@ -13,6 +14,9 @@ export interface EditorDeps {
 }
 
 type Json = Record<string, unknown>;
+
+/** A role as the owner writes it: fields with defaults may be left out. */
+type RoleInput = z.input<typeof RoleSchema>;
 
 const ID_RE = /^[a-z0-9-]+$/;
 
@@ -41,7 +45,7 @@ export class WorkspaceEditor {
   }
 
   /** Adds or replaces a role. The role is checked against the schema before anything is written. */
-  async saveRole(id: string, role: Role): Promise<void> {
+  async saveRole(id: string, role: RoleInput): Promise<void> {
     if (!ID_RE.test(id))
       throw new IpcFailure("bad-id", "A role id uses lowercase letters, digits and dashes");
     const parsed = RoleSchema.safeParse(role);

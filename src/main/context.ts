@@ -1,5 +1,5 @@
 import { mkdirSync } from "node:fs";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import type { SyncReport, WorkspaceView } from "../shared/models";
 import type { MachineSettings } from "../shared/types";
 import { Bus } from "./core/bus";
@@ -36,6 +36,8 @@ import { BriefService } from "./modules/brief/brief";
 import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
 import { RunService } from "./modules/runs/service";
+import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
+import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
 import { VaultService } from "./modules/vault/service";
@@ -67,6 +69,8 @@ export interface AppContext {
   github: GithubService;
   vault: VaultService;
   ops: VaultOps;
+  /** Questions from headless builders waiting for the owner (plan 9.5). */
+  permissions: PermissionBroker;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
   /** Sync all repos and raise notifications for what needs the owner. */
@@ -157,7 +161,25 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
   const { box, bus, db, store, notifier } = base;
   const { writer, projects } = notes;
   const providers = new ProviderRegistry();
-  const runs = new RunService({ db, bus, providers, runsDir: runsDir() });
+  // The task engine is built later; the broker reaches it through this hook.
+  const permissionHook: { onWaiting?: (runId: string, waiting: boolean) => void } = {};
+  const broker = new PermissionBroker({
+    db,
+    bus,
+    notifier,
+    onWaiting: (runId, waiting) => permissionHook.onWaiting?.(runId, waiting),
+  });
+  const bridgeScript = join(dirname(relayScript), "office-permission-mcp.mjs");
+  const runs = new RunService({
+    db,
+    bus,
+    providers,
+    runsDir: runsDir(),
+    permissions: {
+      broker,
+      writeMcpConfig: (runId, dir) => writePermissionMcpConfig(dir, runId, bridgeScript),
+    },
+  });
   const ask = new AskService({
     runs,
     workspace: () => store.state.workspace,
@@ -193,6 +215,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
   const relay = new RelayServer(box.current.relay.token, {
     onClaude: (payload) => sessions.onClaudeHook(payload),
     onCodex: (payload) => sessions.onCodexEvent(payload),
+    onPermission: (runId, body, signal) => broker.request(runId, body, signal),
   });
   const explore = new ExploreService({
     sessions,
@@ -210,7 +233,19 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
       runs,
     },
   });
-  return { providers, runs, ask, github, brief, sessions, hooks, relay, explore };
+  return {
+    providers,
+    runs,
+    ask,
+    github,
+    brief,
+    sessions,
+    hooks,
+    relay,
+    explore,
+    broker,
+    permissionHook,
+  };
 }
 
 type Agents = ReturnType<typeof createAgents>;
@@ -265,6 +300,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     },
     log: (m) => console.log(m),
   });
+  agents.permissionHook.onWaiting = (runId, waiting) => tasks.permissionWaiting(runId, waiting);
   return { editor, tasks, scheduler, modules };
 }
 
@@ -361,6 +397,7 @@ export async function createContext(
     notifier,
     ntfy,
     ...agents,
+    permissions: agents.broker,
     ...orch,
     projects: notes.projects,
     vault: notes.vault,

@@ -43,6 +43,13 @@ export function parseClaudeLine(line: string): AgentEvent[] {
     const events: AgentEvent[] = [];
     if (obj["session_id"])
       events.push({ kind: "session", providerSessionId: str(obj["session_id"]) });
+    // A tool the run asked for while nobody could answer is listed on the final result.
+    const denials = Array.isArray(obj["permission_denials"])
+      ? (obj["permission_denials"] as Json[])
+      : [];
+    for (const d of denials) {
+      events.push({ kind: "denied", name: str(d["tool_name"]), summary: short(d["tool_input"]) });
+    }
     events.push({ kind: "result", text: str(obj["result"]), ok: obj["is_error"] !== true });
     return events;
   }
@@ -114,6 +121,7 @@ export function startAgentRun(
   let sawResult = false;
   let resultOk = true;
   let cancelled = false;
+  const denied: string[] = [];
 
   const done = (async (): Promise<AgentRunResult> => {
     for await (const line of stream.lines) {
@@ -125,6 +133,7 @@ export function startAgentRun(
           resultText = event.text;
           resultOk = event.ok;
         } else if (event.kind === "error") error = event.message;
+        else if (event.kind === "denied") denied.push(`${event.name}: ${event.summary}`);
         queue.push(event);
         wake?.();
       }
@@ -147,6 +156,7 @@ export function startAgentRun(
       resultText: text,
       ...(sessionId ? { providerSessionId: sessionId } : {}),
       ...(error ? { error } : {}),
+      ...(denied.length > 0 ? { denied } : {}),
     };
   })();
 

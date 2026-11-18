@@ -6,6 +6,7 @@
 import { execFileSync, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
+import { spawn } from "node:child_process";
 import { createInterface } from "node:readline";
 
 const args = process.argv.slice(2);
@@ -111,14 +112,72 @@ function respond(text) {
   return `FAKE: ${text.slice(0, 60)}`;
 }
 
+// ---------- permissions, as Claude Code handles them in a headless run ----------
+/** True when a rule such as "Bash(git status:*)" lists the command. */
+function listed(command, rules) {
+  return rules.some((rule) => {
+    const m = /^Bash\((.*?)(:\*)?\)$/.exec(rule);
+    return m ? command.startsWith(m[1]) : false;
+  });
+}
+
+/** Asks the --permission-prompt-tool MCP server (a stdio program from --mcp-config) and returns its decision. */
+async function askPermissionTool(toolRef, command) {
+  const config = JSON.parse(readFileSync(flag("--mcp-config"), "utf8"));
+  const server = config.mcpServers[toolRef.split("__")[1]];
+  const child = spawn(server.command, server.args, {
+    env: { ...process.env, ...(server.env ?? {}) },
+    stdio: ["pipe", "pipe", "inherit"],
+  });
+  const lines = createInterface({ input: child.stdout });
+  const waiting = new Map();
+  lines.on("line", (line) => {
+    const msg = JSON.parse(line);
+    waiting.get(msg.id)?.(msg);
+  });
+  let next = 1;
+  const call = (method, params) =>
+    new Promise((resolve) => {
+      const id = next++;
+      waiting.set(id, resolve);
+      child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
+    });
+  await call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "fake-claude", version: "1" } });
+  child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
+  const reply = await call("tools/call", {
+    name: toolRef.split("__")[2],
+    arguments: { tool_name: "Bash", input: { command }, tool_use_id: "toolu_fake" },
+  });
+  child.stdin.end();
+  return JSON.parse(reply.result.content[0].text);
+}
+
+/** NEEDS_PERMISSION: <command> makes the run want to run a shell command. Returns [text, denials]. */
+async function needsPermission(text) {
+  const command = /NEEDS_PERMISSION: (.+)$/m.exec(text)[1].trim();
+  const rules = (flag("--allowedTools") ?? "").split(/\s(?=Bash\()/).filter(Boolean);
+  if (listed(command, rules)) return [`Ran ${command}`, []];
+  const tool = flag("--permission-prompt-tool");
+  if (tool && flag("--permission-prompts") !== "none") {
+    const decision = await askPermissionTool(tool, command);
+    if (decision.behavior === "allow") return [`Ran ${command} after the owner allowed it`, []];
+    return [`Could not run ${command}: ${decision.message}`, []];
+  }
+  // Nobody can answer: Claude Code refuses and lists the request on the final result.
+  return [`Refused ${command}`, [{ tool_name: "Bash", tool_input: { command } }]];
+}
+
 if (prompt !== null) {
   out({ type: "system", subtype: "init", session_id: sessionId, model: flag("--model") ?? "fake" });
   try {
     const delay = Number(process.env["FAKE_DELAY_MS"] ?? 0);
     if (delay) await new Promise((r) => setTimeout(r, delay));
-    const final = respond(prompt);
+    let denials = [];
+    let final;
+    if (/NEEDS_PERMISSION: /.test(prompt)) [final, denials] = await needsPermission(prompt);
+    else final = respond(prompt);
     out({ type: "assistant", message: { content: [{ type: "text", text: final }] } });
-    out({ type: "result", subtype: "success", is_error: false, result: final, session_id: sessionId });
+    out({ type: "result", subtype: "success", is_error: false, result: final, session_id: sessionId, permission_denials: denials });
     process.exit(0);
   } catch (err) {
     out({ type: "result", subtype: "error_during_execution", is_error: true, result: String(err.message), session_id: sessionId });

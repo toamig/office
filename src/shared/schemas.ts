@@ -36,6 +36,8 @@ export const Role = z.object({
   instructions: z.string().default(""),
   permissionMode: z.string().optional(),
   readOnly: z.boolean().default(false),
+  /** Claude Code permission rules a headless run may use without asking, e.g. "Bash(git commit:*)". */
+  allowedCommands: z.array(z.string()).default([]),
 });
 
 export const Stage = z.object({

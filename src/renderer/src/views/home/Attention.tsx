@@ -1,5 +1,6 @@
 import { ExternalLink } from "lucide-react";
 import type { NotificationRow, TaskView } from "@shared/models";
+import { PermissionRequests } from "../../components/PermissionRequests";
 import { Button } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
@@ -25,6 +26,7 @@ export function GatesAndReviews() {
   const gates = (tasks.data ?? []).filter((t: TaskView) => t.status === "waiting-gate");
   return (
     <>
+      <PermissionRequests compact />
       {gates.map((t) => {
         const stage = t.stages[t.stageIndex];
         return (

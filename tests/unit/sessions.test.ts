@@ -27,8 +27,20 @@ const workspace: Workspace = {
     { id: "p", name: "P", path: "p", pinned: false, archived: false, roles: { builder: "alt" } },
   ],
   roles: {
-    builder: { provider: "fake", model: "sonnet", instructions: "Build.", readOnly: false },
-    alt: { provider: "fake", model: "haiku", instructions: "Alt build.", readOnly: false },
+    builder: {
+      provider: "fake",
+      model: "sonnet",
+      instructions: "Build.",
+      readOnly: false,
+      allowedCommands: [],
+    },
+    alt: {
+      provider: "fake",
+      model: "haiku",
+      instructions: "Alt build.",
+      readOnly: false,
+      allowedCommands: [],
+    },
   },
   pipelines: {},
   notifications: { urgent: ["agent.needs-you"], mutedProjects: [] },

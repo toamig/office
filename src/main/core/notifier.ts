@@ -96,17 +96,24 @@ export class Notifier {
     const iso = at.toISOString();
     const project = input.projectId ?? null;
     const ws = this.deps.workspace();
-    const urgent = ws?.notifications.urgent.includes(input.kind) ?? false;
+    // A task is stopped until the owner answers a permission request, so it is always urgent.
+    const urgent =
+      input.kind === "permission.request" ||
+      (ws?.notifications.urgent.includes(input.kind) ?? false);
     const muted = project !== null && (ws?.notifications.mutedProjects.includes(project) ?? false);
     const link = input.link ? JSON.stringify(input.link) : null;
 
     const since = new Date(at.getTime() - DEDUP_WINDOW_MS).toISOString();
-    const existing = db
-      .prepare(
-        `SELECT * FROM notifications WHERE kind = ? AND title = ? AND project_id IS ? AND created_at >= ?
+    // One row per permission request, however alike they look.
+    const existing =
+      input.kind === "permission.request"
+        ? undefined
+        : (db
+            .prepare(
+              `SELECT * FROM notifications WHERE kind = ? AND title = ? AND project_id IS ? AND created_at >= ?
          ORDER BY created_at DESC LIMIT 1`,
-      )
-      .get(input.kind, input.title, project, since) as DbRow | undefined;
+            )
+            .get(input.kind, input.title, project, since) as DbRow | undefined);
 
     if (existing) {
       db.prepare(

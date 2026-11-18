@@ -14,6 +14,44 @@ import type {
 
 export const CLAUDE_MODELS = ["opus", "sonnet", "haiku"];
 const READ_ONLY_TOOLS = "Read Grep Glob";
+/** The name Claude Code gives Office's permission tool: mcp__<server>__<tool>. */
+export const PERMISSION_TOOL = "mcp__office__office_permission";
+
+/**
+ * The flags that say who answers permission requests in a headless run. Every run sets
+ * `--permission-prompts` explicitly, so the default of the installed Claude Code never decides.
+ */
+export function permissionFlags(o: RunOptions): string[] {
+  const allowed = (o.role?.allowedCommands ?? []).join(" ");
+  const kind = o.permission?.kind;
+  if (kind === "readonly")
+    return ["--allowedTools", READ_ONLY_TOOLS, "--permission-prompts", "none"];
+  if (kind === "allowlist")
+    return [...(allowed ? ["--allowedTools", allowed] : []), "--permission-prompts", "none"];
+  if (kind === "ask") {
+    return [
+      ...(allowed ? ["--allowedTools", allowed] : []),
+      ...(o.permission?.mcpConfig ? ["--mcp-config", o.permission.mcpConfig] : []),
+      "--permission-prompts",
+      "host",
+      "--permission-prompt-tool",
+      PERMISSION_TOOL,
+    ];
+  }
+  // No kind given: the older behaviour, read-only roles get read tools.
+  return o.role?.readOnly ? ["--allowedTools", READ_ONLY_TOOLS] : [];
+}
+
+/** The arguments of `claude -p` for one headless run. */
+export function claudeHeadlessArgs(
+  o: RunOptions & { prompt: string; resumeId?: string },
+  roleFlags: string[],
+): string[] {
+  const args = ["-p", o.prompt, "--output-format", "stream-json", "--verbose", ...roleFlags];
+  if (o.resumeId) args.push("--resume", o.resumeId);
+  args.push(...permissionFlags(o));
+  return args;
+}
 
 export interface ClaudeProviderConfig {
   id?: string;
@@ -85,16 +123,7 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun {
-    const args = [
-      "-p",
-      o.prompt,
-      "--output-format",
-      "stream-json",
-      "--verbose",
-      ...this.roleFlags(o),
-    ];
-    if (o.resumeId) args.push("--resume", o.resumeId);
-    if (o.role?.readOnly) args.push("--allowedTools", READ_ONLY_TOOLS);
+    const args = claudeHeadlessArgs(o, this.roleFlags(o));
     const spec = this.command(args, o.env);
     const stream = spawnStream(spec.cmd, spec.args, {
       cwd: o.cwd,

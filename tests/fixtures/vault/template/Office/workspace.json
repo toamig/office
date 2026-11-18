@@ -18,12 +18,27 @@
   ],
   "roles": {
     "planner": { "provider": "fake", "model": "opus", "instructions": "Plan only." },
-    "builder": { "provider": "fake", "model": "sonnet", "instructions": "Build." },
+    "builder": {
+      "provider": "fake",
+      "model": "sonnet",
+      "instructions": "Build.",
+      "allowedCommands": ["Bash(git status:*)", "Bash(npm test:*)"]
+    },
     "reviewer": { "provider": "fake", "readOnly": true, "instructions": "Review." },
     "researcher": { "provider": "fake", "readOnly": true, "instructions": "Research." },
     "brief": { "provider": "fake", "readOnly": true, "instructions": "" }
   },
   "pipelines": {
+    "perm": {
+      "name": "Permission check",
+      "stages": [
+        {
+          "id": "run",
+          "role": "builder",
+          "prompt": "NEEDS_PERMISSION: {{task.description}}"
+        }
+      ]
+    },
     "feature": {
       "name": "Feature",
       "stages": [

@@ -10,7 +10,7 @@ const tone = (s: string): "neutral" | "good" | "warn" | "bad" =>
     ? "good"
     : s === "failed"
       ? "bad"
-      : s === "waiting-gate" || s === "running"
+      : s === "waiting-gate" || s === "waiting-permission" || s === "running"
         ? "warn"
         : "neutral";
 

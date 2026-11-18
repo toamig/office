@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -208,5 +208,39 @@ describe("scheduler with a fake clock", () => {
     await h.scheduler.fire(automation);
     expect(h.scheduler.list()[0]?.lastFiredAt).toBeTruthy();
     expect(h.notifier.list()).toHaveLength(1);
+  });
+});
+
+describe("an automation that wants to run something outside its allowed commands", () => {
+  it("is refused, the run log names the command, and the notification says so", async () => {
+    const h = setup(at(19, 12, 0));
+    // The builder role is writable and allows only a few commands (see the fixture workspace).
+    (h.ws.automations[0] as { role: string; prompt: string }).role = "builder";
+    (h.ws.automations[0] as { prompt: string }).prompt = "NEEDS_PERMISSION: rm -rf build";
+    const runId = await h.scheduler.fire(h.ws.automations[0] as never);
+    expect(runId).toBeTruthy();
+    const note = h.notifier.list()[0];
+    expect(note?.title).toBe("Automation finished: nightly");
+    expect(note?.body).toContain("Refused (not in the role's allowed commands): Bash:");
+    expect(note?.body).toContain("rm -rf build");
+    const log = readFileSync(
+      (
+        h.db.prepare("SELECT output_path FROM runs WHERE id = ?").get(runId) as {
+          output_path: string;
+        }
+      ).output_path.replace(/result\.md$/, "events.jsonl"),
+      "utf8",
+    );
+    expect(log).toContain('"kind":"denied"');
+    expect(log).toContain("rm -rf build");
+  });
+
+  it("still runs a listed command", async () => {
+    const h = setup(at(19, 12, 0));
+    (h.ws.automations[0] as { role: string }).role = "builder";
+    (h.ws.automations[0] as { prompt: string }).prompt = "NEEDS_PERMISSION: npm test --silent";
+    await h.scheduler.fire(h.ws.automations[0] as never);
+    expect(h.notifier.list()[0]?.body).toContain("Ran npm test --silent");
+    expect(h.notifier.list()[0]?.body).not.toContain("Refused");
   });
 });

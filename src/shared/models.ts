@@ -198,6 +198,7 @@ export const NotificationKind = z.enum([
   "task.done",
   "automation.done",
   "brief.ready",
+  "permission.request",
 ]);
 export type NotificationKind = z.infer<typeof NotificationKind>;
 
@@ -219,6 +220,23 @@ export const NotificationRow = z.object({
   readAt: z.string().nullable(),
 });
 export type NotificationRow = z.infer<typeof NotificationRow>;
+
+/** A headless builder asking whether it may run something outside its role's allowed commands. */
+export const PermissionRequest = z.object({
+  id: z.string(),
+  runId: z.string(),
+  taskId: z.string().nullable(),
+  projectId: z.string().nullable(),
+  /** What the task or run is called, for the Inbox line. */
+  subject: z.string(),
+  toolName: z.string(),
+  /** The command or file the tool wants to use, short enough for a button row. */
+  summary: z.string(),
+  /** The tool's full input as text. */
+  detail: z.string(),
+  createdAt: z.string(),
+});
+export type PermissionRequest = z.infer<typeof PermissionRequest>;
 
 export const NotificationFilter = z.object({
   unread: z.boolean().optional(),
@@ -582,7 +600,15 @@ export const TaskStageView = z.object({
   provider: z.string().nullable(),
   gate: z.boolean(),
   worktree: z.boolean(),
-  status: z.enum(["pending", "running", "waiting-gate", "approved", "done", "failed"]),
+  status: z.enum([
+    "pending",
+    "running",
+    "waiting-gate",
+    "waiting-permission",
+    "approved",
+    "done",
+    "failed",
+  ]),
   runId: z.string().nullable(),
   outputPath: z.string().nullable(),
   approvedAt: z.string().nullable(),
@@ -591,7 +617,14 @@ export const TaskStageView = z.object({
 });
 export type TaskStageView = z.infer<typeof TaskStageView>;
 
-export const TaskStatus = z.enum(["running", "waiting-gate", "done", "failed", "cancelled"]);
+export const TaskStatus = z.enum([
+  "running",
+  "waiting-gate",
+  "waiting-permission",
+  "done",
+  "failed",
+  "cancelled",
+]);
 export type TaskStatus = z.infer<typeof TaskStatus>;
 
 export const TaskView = z.object({

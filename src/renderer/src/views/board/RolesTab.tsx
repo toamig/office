@@ -133,6 +133,31 @@ function RoleForm({
         />
       </label>
       <label className="grid grid-cols-[130px_1fr] items-start gap-2">
+        <span>
+          Allowed commands
+          <span className="block text-[12px]" style={{ color: "var(--muted)" }}>
+            one rule per line, for example Bash(git commit:*). Claude Code only: Codex roles run in
+            Codex&apos;s own sandbox and ignore this.
+          </span>
+        </span>
+        <textarea
+          className={field}
+          style={fieldStyle}
+          rows={5}
+          value={draft.allowedCommands.join("\n")}
+          onChange={(e) =>
+            set(
+              "allowedCommands",
+              e.target.value
+                .split("\n")
+                .map((l) => l.trim())
+                .filter(Boolean),
+            )
+          }
+          data-testid="role-allowed-commands"
+        />
+      </label>
+      <label className="grid grid-cols-[130px_1fr] items-start gap-2">
         Instructions
         <textarea
           className={field}
@@ -236,7 +261,7 @@ export function RolesTab() {
     try {
       await office.invoke("roles.save", {
         id: newId.trim(),
-        role: { provider: "claude-code", instructions: "", readOnly: false },
+        role: { provider: "claude-code", instructions: "", readOnly: false, allowedCommands: [] },
       });
       setSelected(newId.trim());
       setNewId("");
