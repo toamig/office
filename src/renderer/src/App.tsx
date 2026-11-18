@@ -18,6 +18,7 @@ import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
 import { useQuery } from "./lib/hooks";
 import { QuickSwitcher } from "./components/QuickSwitcher";
+import { Agents } from "./views/Agents";
 import { Home as HomeView } from "./views/Home";
 import { Inbox } from "./views/Inbox";
 import { Setup } from "./views/Setup";
@@ -53,6 +54,8 @@ function CurrentView({ configured }: { configured: boolean }) {
       />
     );
   }
+  if (view === "agents")
+    return <Agents key={`${params["project"] ?? ""}-${params["session"] ?? ""}`} />;
   if (view === "inbox") return <Inbox />;
   if (view === "setup") return <Setup />;
   const item = rail.find((r) => r.id === view);

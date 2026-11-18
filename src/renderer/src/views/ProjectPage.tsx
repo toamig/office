@@ -165,6 +165,34 @@ function Todos({ id }: { id: string }) {
   );
 }
 
+function ProjectAgents({ id }: { id: string }) {
+  const navigate = useUi((s) => s.navigate);
+  const sessions = useQuery("sessions.list", { projectId: id }, ["session.status"]);
+  return (
+    <Panel title="Agents here">
+      {sessions.data?.length === 0 && (
+        <EmptyState>No agent sessions for this project yet.</EmptyState>
+      )}
+      {sessions.data?.map((s) => (
+        <div
+          key={s.id}
+          className="flex items-center gap-2 border-b py-1.5"
+          style={{ borderColor: "var(--line)" }}
+          data-testid="project-session"
+        >
+          <span className="flex-1">{s.title ?? s.provider}</span>
+          <Chip
+            tone={s.status === "needs-you" ? "warn" : s.status === "failed" ? "bad" : "neutral"}
+          >
+            {s.status}
+          </Chip>
+          <Button onClick={() => navigate("agents", { project: id, session: s.id })}>Open</Button>
+        </div>
+      ))}
+    </Panel>
+  );
+}
+
 function Notes({ id, initial }: { id: string; initial?: string }) {
   const [name, setName] = useState(initial ?? "Overview");
   const note = useQuery("notes.read", { projectId: id, name }, ["vault.changed"]);
@@ -250,7 +278,10 @@ export function ProjectPage({
         {project.group && <Chip>{project.group}</Chip>}
         {project.waiting > 0 && <Chip tone="warn">{project.waiting} waiting</Chip>}
         <div className="flex-1" />
-        <Button disabled title="Agents arrive with the Workbench" data-testid="start-agent">
+        <Button
+          onClick={() => navigate("agents", { project: id, start: "1" })}
+          data-testid="start-agent"
+        >
           <Play size={13} /> Start agent
         </Button>
         <Button onClick={() => void run(() => office.invoke("projects.openEditor", { id }))}>
@@ -287,11 +318,7 @@ export function ProjectPage({
       </div>
       {tab === "overview" && <Overview id={id} />}
       {tab === "todos" && <Todos id={id} />}
-      {tab === "agents" && (
-        <Panel title="Agents here">
-          <EmptyState>No agent sessions for this project yet.</EmptyState>
-        </Panel>
-      )}
+      {tab === "agents" && <ProjectAgents id={id} />}
       {tab === "notes" && <Notes id={id} {...(note ? { initial: note } : {})} />}
     </div>
   );

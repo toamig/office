@@ -277,3 +277,62 @@ export const ProviderStatus = z.object({
   models: z.array(z.string()),
 });
 export type ProviderStatus = z.infer<typeof ProviderStatus>;
+
+export const SessionStatus = z.enum([
+  "starting",
+  "working",
+  "needs-you",
+  "idle",
+  "exited",
+  "failed",
+]);
+export type SessionStatus = z.infer<typeof SessionStatus>;
+
+export const SessionRow = z.object({
+  id: z.string(),
+  provider: z.string(),
+  providerSessionId: z.string().nullable(),
+  projectId: z.string().nullable(),
+  cwd: z.string(),
+  branch: z.string().nullable(),
+  role: z.string().nullable(),
+  title: z.string().nullable(),
+  status: SessionStatus,
+  interactive: z.boolean(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  endedAt: z.string().nullable(),
+  archivedAt: z.string().nullable(),
+  lastOutputAt: z.string().nullable(),
+  capturedAt: z.string().nullable(),
+  /** True while the terminal process is alive. */
+  running: z.boolean(),
+});
+export type SessionRow = z.infer<typeof SessionRow>;
+
+export const StartSession = z.object({
+  /** A role id from the workspace config; its provider, model and instructions are used. */
+  roleId: z.string().optional(),
+  /** Used when no role is given. */
+  providerId: z.string().optional(),
+  model: z.string().optional(),
+  projectId: z.string().optional(),
+  /** Folder to run in; defaults to the project folder. */
+  cwd: z.string().optional(),
+  title: z.string().optional(),
+  prompt: z.string().optional(),
+});
+export type StartSession = z.infer<typeof StartSession>;
+
+export const PtyHistory = z.object({ data: z.string(), upTo: z.number() });
+export type PtyHistory = z.infer<typeof PtyHistory>;
+
+export const Layout = z.object({
+  /** Open tabs, as session ids, in order. */
+  open: z.array(z.string()),
+  active: z.string().nullable(),
+  split: z.enum(["single", "columns", "rows", "grid"]),
+  /** Sessions shown side by side (at most four). */
+  panes: z.array(z.string()).max(4),
+});
+export type Layout = z.infer<typeof Layout>;

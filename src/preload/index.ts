@@ -27,8 +27,8 @@ const api: OfficeApi = {
   },
   pty: {
     onData(id, cb) {
-      const handler = (_e: unknown, ptyId: string, data: string): void => {
-        if (ptyId === id) cb(data);
+      const handler = (_e: unknown, ptyId: string, data: string, end: number): void => {
+        if (ptyId === id) cb(data, end);
       };
       ipcRenderer.on(IPC_PTY_DATA, handler);
       return () => ipcRenderer.removeListener(IPC_PTY_DATA, handler);

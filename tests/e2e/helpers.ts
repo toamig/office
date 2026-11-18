@@ -65,6 +65,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
     cpSync(join(repoRoot, "tests/fixtures/home"), home, { recursive: true });
     toolEnv["OFFICE_BIN_CLAUDE"] = join(repoRoot, "tests/fixtures/bin/fake-claude.mjs");
     toolEnv["OFFICE_BIN_CODEX"] = join(repoRoot, "tests/fixtures/bin/fake-codex.mjs");
+    toolEnv["OFFICE_BIN_FAKE_CLAUDE"] = join(repoRoot, "tests/fixtures/bin/fake-claude.mjs");
   }
   let world: World | undefined;
   if (options.world) {

@@ -1,7 +1,13 @@
 import { app, BrowserWindow, ipcMain, Notification, nativeImage, shell } from "electron";
 import { join } from "node:path";
 import type { NotificationRow } from "../shared/models";
-import { IPC_EVENT, IPC_INVOKE } from "../shared/ipc";
+import {
+  IPC_EVENT,
+  IPC_INVOKE,
+  IPC_PTY_DATA,
+  IPC_PTY_RESIZE,
+  IPC_PTY_WRITE,
+} from "../shared/ipc-names";
 import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
 import { registerHandlers } from "./handlers";
@@ -106,6 +112,18 @@ async function boot(): Promise<void> {
   context.bus.on("*", (event) => {
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC_EVENT, event);
   });
+  context.sessions.sink = (id, data, end) => {
+    for (const win of BrowserWindow.getAllWindows())
+      win.webContents.send(IPC_PTY_DATA, id, data, end);
+  };
+  ipcMain.on(IPC_PTY_WRITE, (_e, id: unknown, data: unknown) => {
+    if (typeof id === "string" && typeof data === "string") context.sessions.write(id, data);
+  });
+  ipcMain.on(IPC_PTY_RESIZE, (_e, id: unknown, cols: unknown, rows: unknown) => {
+    if (typeof id === "string" && typeof cols === "number" && typeof rows === "number") {
+      context.sessions.resize(id, cols, rows);
+    }
+  });
   context.notifier.addChannel({ id: "desktop", send: showDesktopNotification });
   context.notifier.onUnreadUrgentChange = updateBadge;
   mainWindow = createWindow();
@@ -126,5 +144,8 @@ if (!gotLock) {
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
-  app.on("before-quit", () => void ctx?.stop());
+  app.on("before-quit", () => {
+    ctx?.sessions.shutdown();
+    void ctx?.stop();
+  });
 }

@@ -1,5 +1,8 @@
 import { workspaceView, type AppContext } from "./context";
+import { resolveCommand, resolveTool } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
+import { getLayout, setLayout } from "./modules/sessions/layouts";
+import { userHome } from "./core/paths";
 import { noteAndProjectItems, readNote } from "./modules/notes/notes";
 import { detectTools } from "./modules/setup/detect";
 import { readInventories } from "./modules/setup/inventory";
@@ -68,6 +71,27 @@ export function registerHandlers(ctx: AppContext): void {
       }),
     ),
   );
+  ctx.ipc.handle("sessions.list", (req) => ctx.sessions.list(req));
+  ctx.ipc.handle("sessions.start", (req) => ctx.sessions.start(req));
+  ctx.ipc.handle("sessions.startCommand", (req) => {
+    // A raw command channel is for tests and logins only; it is off unless the environment opts in.
+    if (process.env["OFFICE_ALLOW_RAW_TERMINAL"] !== "1") {
+      throw new IpcFailure("forbidden", "Raw terminals are disabled");
+    }
+    const resolved = resolveCommand(resolveTool(req.cmd) ?? req.cmd, req.args);
+    return ctx.sessions.startCommand(
+      { cmd: resolved.file, args: resolved.args },
+      req.title,
+      req.cwd ?? userHome(),
+    );
+  });
+  ctx.ipc.handle("sessions.history", (req) => ctx.sessions.history(req.id));
+  ctx.ipc.handle("sessions.kill", (req) => ctx.sessions.kill(req.id));
+  ctx.ipc.handle("sessions.resume", (req) => ctx.sessions.resume(req.id));
+  ctx.ipc.handle("sessions.archive", (req) => ctx.sessions.archive(req.id));
+  ctx.ipc.handle("sessions.rename", (req) => ctx.sessions.rename(req.id, req.title));
+  ctx.ipc.handle("layout.get", (req) => getLayout(ctx.db, req.key));
+  ctx.ipc.handle("layout.set", (req) => setLayout(ctx.db, req.key, req.layout));
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

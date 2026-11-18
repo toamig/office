@@ -2,10 +2,14 @@ import { z } from "zod";
 import {
   HealthView,
   Inventory,
+  Layout,
   NotificationFilter,
   NotificationRow,
   ProjectNote,
   ProviderStatus,
+  PtyHistory,
+  SessionRow,
+  StartSession,
   OpenItemsView,
   ProjectDetail,
   ProjectSummary,
@@ -98,6 +102,27 @@ export const channels = {
     res: z.string().nullable(),
   },
   "providers.list": { req: z.void(), res: z.array(ProviderStatus) },
+  "sessions.list": {
+    req: z.object({ projectId: z.string().optional(), includeArchived: z.boolean().optional() }),
+    res: z.array(SessionRow),
+  },
+  "sessions.start": { req: StartSession, res: SessionRow },
+  "sessions.startCommand": {
+    req: z.object({
+      title: z.string(),
+      cmd: z.string(),
+      args: z.array(z.string()),
+      cwd: z.string().optional(),
+    }),
+    res: SessionRow,
+  },
+  "sessions.history": { req: z.object({ id: z.string() }), res: PtyHistory },
+  "sessions.kill": { req: z.object({ id: z.string() }), res: z.void() },
+  "sessions.resume": { req: z.object({ id: z.string() }), res: SessionRow },
+  "sessions.archive": { req: z.object({ id: z.string() }), res: z.void() },
+  "sessions.rename": { req: z.object({ id: z.string(), title: z.string() }), res: z.void() },
+  "layout.get": { req: z.object({ key: z.string() }), res: Layout.nullable() },
+  "layout.set": { req: z.object({ key: z.string(), layout: Layout }), res: z.void() },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),
@@ -132,7 +157,8 @@ export interface OfficeApi {
   ): Promise<ChannelRes<C>>;
   on(type: EventType | "*", cb: (event: OfficeEvent) => void): () => void;
   pty: {
-    onData(id: string, cb: (data: string) => void): () => void;
+    /** `end` is the running total of characters after this chunk, to line up with history. */
+    onData(id: string, cb: (data: string, end: number) => void): () => void;
     write(id: string, data: string): void;
     resize(id: string, cols: number, rows: number): void;
   };

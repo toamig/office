@@ -5,13 +5,14 @@ import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
 import { IpcRegistry } from "./core/ipc";
 import { Notifier } from "./core/notifier";
-import { dataDir, dbPath } from "./core/paths";
+import { dataDir, dbPath, sessionsDir, userHome } from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
 import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
+import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
 import { VaultService } from "./modules/vault/service";
 import { VaultWriter } from "./modules/vault/writer";
@@ -26,6 +27,7 @@ export interface AppContext {
   ipc: IpcRegistry;
   notifier: Notifier;
   providers: ProviderRegistry;
+  sessions: SessionService;
   projects: ProjectService;
   vault: VaultService;
   ops: VaultOps;
@@ -75,6 +77,22 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     projectsRoot: () => current.projectsRoot,
     waiting: (id) => vault.waitingCount(id),
   });
+  const providers = new ProviderRegistry();
+  const sessions = new SessionService({
+    db,
+    bus,
+    providers,
+    notifier,
+    workspace: () => store.state.workspace,
+    projectPath: (id) => {
+      const project = projects.find(id);
+      return project ? projects.absPath(project) : undefined;
+    },
+    logsDir: sessionsDir(),
+  });
+  providers.setTerminalOpener((spec, title) => {
+    sessions.startCommand(spec, title, userHome());
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -91,6 +109,7 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
   };
 
   const stop = async (): Promise<void> => {
+    sessions.stopTimer();
     projects.stopAuto();
     await vault.unwatch();
     await store.close();
@@ -103,6 +122,7 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     await vault.watch();
     projects.startAuto();
     void projects.refreshAll();
+    sessions.startTimer();
   };
 
   return {
@@ -113,7 +133,8 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     bus,
     ipc: new IpcRegistry(checkResponses),
     notifier,
-    providers: new ProviderRegistry(),
+    providers,
+    sessions,
     projects,
     vault,
     ops,
