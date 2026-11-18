@@ -379,3 +379,17 @@ export type AuditEntry = z.infer<typeof AuditEntry>;
 
 export const VaultFile = z.object({ path: z.string(), markdown: z.string() });
 export type VaultFile = z.infer<typeof VaultFile>;
+
+export const BriefItem = z.object({
+  projectId: z.string(),
+  projectName: z.string(),
+  markdown: z.string(),
+});
+export type BriefItem = z.infer<typeof BriefItem>;
+
+export const BriefView = z.object({
+  /** Local date (YYYY-MM-DD) of the newest brief, or null when none was written yet. */
+  date: z.string().nullable(),
+  items: z.array(BriefItem),
+});
+export type BriefView = z.infer<typeof BriefView>;

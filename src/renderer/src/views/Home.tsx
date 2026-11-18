@@ -1,6 +1,7 @@
 import { Check, ExternalLink } from "lucide-react";
 import { useState } from "react";
 import type { WaitingEntry } from "@shared/models";
+import { Markdown } from "../components/Markdown";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
 import { office } from "../lib/ipc";
 import { useQuery } from "../lib/hooks";
@@ -82,6 +83,49 @@ function AgentsPanel() {
   );
 }
 
+function BriefPanel() {
+  const brief = useQuery("brief.latest", undefined, ["notification.new"]);
+  const [busy, setBusy] = useState(false);
+  const write = async (): Promise<void> => {
+    setBusy(true);
+    try {
+      await office.invoke("brief.run");
+      brief.reload();
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <Panel
+      title={brief.data?.date ? `Morning brief, ${brief.data.date}` : "Morning brief"}
+      action={
+        <Button
+          variant="ghost"
+          disabled={busy}
+          onClick={() => void write()}
+          data-testid="brief-run"
+        >
+          {busy ? "Writing..." : "Write it now"}
+        </Button>
+      }
+    >
+      <div data-testid="brief">
+        {brief.data?.items.length === 0 && (
+          <EmptyState>
+            No brief yet. It is written each morning from what changed the day before.
+          </EmptyState>
+        )}
+        {brief.data?.items.map((item) => (
+          <div key={item.projectId} className="mb-2" data-testid="brief-item">
+            <div className="font-semibold">{item.projectName}</div>
+            <Markdown>{item.markdown}</Markdown>
+          </div>
+        ))}
+      </div>
+    </Panel>
+  );
+}
+
 function HealthPanel() {
   const navigate = useUi((s) => s.navigate);
   const projects = useQuery("projects.list", undefined, ["project.status"]);
@@ -99,9 +143,6 @@ function HealthPanel() {
     warnings.length === 0;
   return (
     <Panel title="Health">
-      <div className="mb-2 text-[12px]" style={{ color: "var(--muted)" }}>
-        Morning brief: it appears here once agents are running (coming with the Workbench).
-      </div>
       {allGood && <Chip tone="good">Everything is in sync</Chip>}
       {outOfSync.map((p) => (
         <div key={p.id} className="flex items-center gap-2 py-0.5">
@@ -143,7 +184,10 @@ export function Home() {
   return (
     <div className="grid gap-4 p-4 lg:grid-cols-3" data-testid="home">
       <WaitingPanel />
-      <AgentsPanel />
+      <div className="grid content-start gap-4">
+        <AgentsPanel />
+        <BriefPanel />
+      </div>
       <HealthPanel />
     </div>
   );

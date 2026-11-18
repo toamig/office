@@ -23,6 +23,7 @@ import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
 import { HooksManager } from "./modules/setup/install-hooks";
+import { BriefService } from "./modules/brief/brief";
 import { AskService } from "./modules/ask/ask";
 import { RunService } from "./modules/runs/service";
 import { SessionService } from "./modules/sessions/service";
@@ -43,6 +44,7 @@ export interface AppContext {
   sessions: SessionService;
   runs: RunService;
   ask: AskService;
+  brief: BriefService;
   hooks: HooksManager;
   relay: RelayServer;
   projects: ProjectService;
@@ -104,6 +106,14 @@ export async function createContext(
     workspace: () => store.state.workspace,
     workspaceRoot: () => current.workspaceRoot,
   });
+  const brief = new BriefService({
+    db,
+    runs,
+    notifier,
+    workspace: () => store.state.workspace,
+    projectsRoot: () => current.projectsRoot,
+    workspaceRoot: () => current.workspaceRoot,
+  });
   const sessions = new SessionService({
     db,
     bus,
@@ -145,8 +155,10 @@ export async function createContext(
   };
 
   let archiveTimer: NodeJS.Timeout | undefined;
+  let briefTimer: NodeJS.Timeout | undefined;
   const stop = async (): Promise<void> => {
     clearInterval(archiveTimer);
+    clearInterval(briefTimer);
     sessions.stopTimer();
     await relay.stop();
     projects.stopAuto();
@@ -170,6 +182,9 @@ export async function createContext(
     };
     archive();
     archiveTimer = setInterval(archive, 3_600_000);
+    const due = (): void => void brief.runIfDue().catch(() => undefined);
+    due();
+    briefTimer = setInterval(due, 60_000);
   };
 
   return {
@@ -184,6 +199,7 @@ export async function createContext(
     sessions,
     runs,
     ask,
+    brief,
     hooks,
     relay,
     projects,

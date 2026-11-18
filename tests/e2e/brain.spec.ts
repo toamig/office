@@ -43,3 +43,16 @@ test("a scoped question and a quick note both work", async () => {
   );
   await app.close();
 });
+
+test("Home writes a morning brief on demand and lists only projects with news", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  await expect(win.getByTestId("brief")).toContainText("No brief yet");
+  await win.getByTestId("brief-run").click();
+  const items = win.getByTestId("brief-item");
+  await expect(items.first()).toContainText("Fake brief for");
+  await expect(win.getByTestId("brief")).not.toContainText("No brief yet");
+  await win.getByTestId("rail-inbox").click();
+  await expect(win.getByTestId("notification").first()).toContainText("morning brief");
+  await app.close();
+});

@@ -100,7 +100,10 @@ function respond(text) {
   if (/Answer from this vault/.test(text)) {
     return "Alpha is a fixture game, and its notes say so.\n\nSources: Alpha/Overview.md, Alpha/OpenItems.md";
   }
-  if (/morning brief/i.test(text)) return "Yesterday: the fake agent changed things.";
+  if (/morning brief/i.test(text)) {
+    const names = [...text.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
+    return names.map((n) => `## ${n}\n\nFake brief for ${n}: things changed.`).join("\n\n");
+  }
   if (/SUMMARY_OF_EXPLORATION/.test(text)) return "## Positioning and vision\n\nA fake exploration summary.";
   if (/FAIL_RUN/.test(text)) throw new Error("the fake agent was told to fail");
   return `FAKE: ${text.slice(0, 60)}`;

@@ -2,6 +2,7 @@ import { z } from "zod";
 import {
   AskResult,
   AuditEntry,
+  BriefView,
   CaptureCommit,
   CaptureResult,
   HealthView,
@@ -160,6 +161,8 @@ export const channels = {
   "ask.cancel": { req: z.object({ runId: z.string() }), res: z.void() },
   "vault.readFile": { req: z.object({ path: z.string() }), res: VaultFile },
   "vault.audit": { req: z.void(), res: z.array(AuditEntry) },
+  "brief.latest": { req: z.void(), res: BriefView },
+  "brief.run": { req: z.void(), res: z.object({ date: z.string(), count: z.number() }) },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

@@ -123,6 +123,8 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("ask.cancel", (req) => ctx.ask.cancel(req.runId));
   ctx.ipc.handle("vault.readFile", (req) => readVaultFile(ctx.settings().workspaceRoot, req.path));
   ctx.ipc.handle("vault.audit", () => readAudit(ctx.settings().workspaceRoot));
+  ctx.ipc.handle("brief.latest", () => ctx.brief.latest());
+  ctx.ipc.handle("brief.run", () => ctx.brief.run());
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({
