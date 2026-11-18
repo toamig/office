@@ -63,7 +63,14 @@ describe("the flags of each kind of run", () => {
       role: role({ readOnly: true }),
       permission: { kind: "readonly" },
     });
-    expect(flags).toEqual(["--allowedTools", "Read Grep Glob", "--permission-prompts", "none"]);
+    expect(flags).toEqual([
+      "--allowedTools",
+      "Read",
+      "Grep",
+      "Glob",
+      "--permission-prompts",
+      "none",
+    ]);
   });
 
   it("a builder stage gets its allowed commands, Office's MCP config and the permission tool", () => {
@@ -74,7 +81,8 @@ describe("the flags of each kind of run", () => {
     });
     expect(flags).toEqual([
       "--allowedTools",
-      "Bash(git status:*) Bash(npm test:*)",
+      "Bash(git status:*)",
+      "Bash(npm test:*)",
       "--mcp-config",
       "/runs/r1/mcp-permission.json",
       "--permission-prompts",
@@ -482,5 +490,33 @@ describe("a task waits for the owner and then goes on", () => {
     await until(() => broker.list().length === 0);
     expect(view(engine, t.id).status).toBe("cancelled");
     await relay.stop();
+  });
+});
+
+describe("allowed tools are one argument per rule", () => {
+  it("never joins rules, and the next argument after the list is always a flag", () => {
+    for (const kind of ["readonly", "ask", "allowlist"] as const) {
+      const args = claudeHeadlessArgs(
+        {
+          ...base,
+          role: role({ allowedCommands: ["Bash(git status:*)", "Bash(git commit:*)"] }),
+          permission: { kind, mcpConfig: "m.json" },
+        },
+        ["--model", "sonnet", "--add-dir", "/extra"],
+      );
+      const at = args.indexOf("--allowedTools");
+      expect(at).toBeGreaterThan(1); // the prompt comes first, after -p
+      expect(args.filter((a) => a.includes(") Bash("))).toEqual([]);
+      let end = at + 1;
+      while (end < args.length && !args[end]!.startsWith("--")) end++;
+      const list = args.slice(at + 1, end);
+      expect(list.length).toBeGreaterThan(0);
+      expect(end).toBeLessThan(args.length); // a flag follows the list
+      expect(list).toEqual(
+        kind === "readonly"
+          ? ["Read", "Grep", "Glob"]
+          : ["Bash(git status:*)", "Bash(git commit:*)"],
+      );
+    }
   });
 });

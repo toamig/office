@@ -13,7 +13,15 @@ import type {
 } from "./types";
 
 export const CLAUDE_MODELS = ["opus", "sonnet", "haiku"];
-const READ_ONLY_TOOLS = "Read Grep Glob";
+const READ_ONLY_TOOLS = ["Read", "Grep", "Glob"];
+
+/**
+ * `--allowedTools` with one argument per rule, as the CLI documents it. A rule such as "Bash(git status:*)"
+ * has a space inside its parentheses, so rules are never joined into one string. The option is variadic, so
+ * whatever follows it in the argument list must be another `--` flag.
+ */
+const allowedTools = (rules: string[]): string[] =>
+  rules.length > 0 ? ["--allowedTools", ...rules] : [];
 /** The name Claude Code gives Office's permission tool: mcp__<server>__<tool>. */
 export const PERMISSION_TOOL = "mcp__office__office_permission";
 
@@ -22,15 +30,14 @@ export const PERMISSION_TOOL = "mcp__office__office_permission";
  * `--permission-prompts` explicitly, so the default of the installed Claude Code never decides.
  */
 export function permissionFlags(o: RunOptions): string[] {
-  const allowed = (o.role?.allowedCommands ?? []).join(" ");
+  const allowed = o.role?.allowedCommands ?? [];
   const kind = o.permission?.kind;
   if (kind === "readonly")
-    return ["--allowedTools", READ_ONLY_TOOLS, "--permission-prompts", "none"];
-  if (kind === "allowlist")
-    return [...(allowed ? ["--allowedTools", allowed] : []), "--permission-prompts", "none"];
+    return [...allowedTools(READ_ONLY_TOOLS), "--permission-prompts", "none"];
+  if (kind === "allowlist") return [...allowedTools(allowed), "--permission-prompts", "none"];
   if (kind === "ask") {
     return [
-      ...(allowed ? ["--allowedTools", allowed] : []),
+      ...allowedTools(allowed),
       ...(o.permission?.mcpConfig ? ["--mcp-config", o.permission.mcpConfig] : []),
       "--permission-prompts",
       "host",
@@ -39,7 +46,7 @@ export function permissionFlags(o: RunOptions): string[] {
     ];
   }
   // No kind given: the older behaviour, read-only roles get read tools.
-  return o.role?.readOnly ? ["--allowedTools", READ_ONLY_TOOLS] : [];
+  return o.role?.readOnly ? allowedTools(READ_ONLY_TOOLS) : [];
 }
 
 /** The arguments of `claude -p` for one headless run. */

@@ -155,7 +155,10 @@ async function askPermissionTool(toolRef, command) {
 /** NEEDS_PERMISSION: <command> makes the run want to run a shell command. Returns [text, denials]. */
 async function needsPermission(text) {
   const command = /NEEDS_PERMISSION: (.+)$/m.exec(text)[1].trim();
-  const rules = (flag("--allowedTools") ?? "").split(/\s(?=Bash\()/).filter(Boolean);
+  // One argument per rule, up to the next flag (the option is variadic).
+  const at = args.indexOf("--allowedTools");
+  const rules = [];
+  for (let i = at + 1; at >= 0 && i < args.length && !args[i].startsWith("--"); i++) rules.push(args[i]);
   if (listed(command, rules)) return [`Ran ${command}`, []];
   const tool = flag("--permission-prompt-tool");
   if (tool && flag("--permission-prompts") !== "none") {
