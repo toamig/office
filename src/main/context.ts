@@ -224,6 +224,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     writer,
     workspaceFile: () => store.filePath,
     reload: () => void store.reload(),
+    adopt: (workspace) => store.adopt(workspace),
   });
   const resolveRole = (roleId: string, projectId: string) =>
     sessions.resolveRole(roleId, projectId);

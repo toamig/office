@@ -92,6 +92,16 @@ export class WorkspaceStore {
     return () => this.listeners.delete(listener);
   }
 
+  /**
+   * Takes a validated config as the current one right away, without waiting for the watcher or a reload.
+   * The editor calls it as it writes, so anything that reads the store sees the change at once.
+   */
+  adopt(next: Workspace): void {
+    this.good = next;
+    this.error = null;
+    for (const listener of this.listeners) listener(this.state);
+  }
+
   /** Validates and writes a new config. Used by editing UIs; the watcher then reloads. */
   save(next: Workspace): void {
     const parsed = WorkspaceSchema.parse(next);

@@ -372,6 +372,9 @@ function registerConfigHandlers(ctx: AppContext): void {
   });
   ctx.ipc.handle("notifications.setRules", (req) => ctx.editor.setNotifications(req));
   ctx.ipc.handle("notifications.testPing", async () => {
+    if (!ctx.store.state.workspace?.notifications.ntfyTopicUrl) {
+      throw new IpcFailure("no-topic", "Set and save a ntfy topic URL first.");
+    }
     try {
       await ctx.ntfy.post("Office test ping", "If you can read this, phone pings work.");
     } catch (err) {

@@ -1,5 +1,5 @@
 import { Role as RoleSchema, Workspace as WorkspaceSchema } from "../../../shared/schemas";
-import type { Automation, Role } from "../../../shared/types";
+import type { Automation, Role, Workspace } from "../../../shared/types";
 import { validCron } from "../../core/scheduler";
 import { IpcFailure } from "../../core/ipc";
 import type { VaultWriter } from "../vault/writer";
@@ -8,6 +8,8 @@ export interface EditorDeps {
   writer: VaultWriter;
   workspaceFile: () => string;
   reload: () => void;
+  /** Makes the validated config the in-memory one as soon as it is written. */
+  adopt: (workspace: Workspace) => void;
 }
 
 type Json = Record<string, unknown>;
@@ -30,6 +32,9 @@ export class WorkspaceEditor {
           `That change is not valid: ${issue?.path.join(".") ?? ""} ${issue?.message ?? ""}`.trim(),
         );
       }
+      // The file is written right after this returns, but the commit and push come later; whoever reads
+      // the workspace in between (the ntfy channel, for one) must already see the new config.
+      this.deps.adopt(checked.data);
       return `${JSON.stringify(json, null, 2)}\n`;
     });
     this.deps.reload();

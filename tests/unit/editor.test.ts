@@ -16,6 +16,7 @@ async function setup() {
     writer,
     workspaceFile: () => store.filePath,
     reload: () => void store.reload(),
+    adopt: (workspace) => store.adopt(workspace),
   });
   const file = join(world.hub, world.workspaceConfigPath);
   return { world, store, editor, file };
@@ -118,5 +119,31 @@ describe("project editing", () => {
       "Workspace: update project alpha",
     );
     await expect(editor.updateProject("nope", { pinned: true })).rejects.toThrow(/No project/);
+  });
+});
+
+describe("the in-memory workspace after an edit", () => {
+  it("has the change before the commit exists, so a reader right after the file write sees it", async () => {
+    const world = makeWorld();
+    const store = new WorkspaceStore();
+    await store.open(world.hub, world.workspaceConfigPath);
+    const writer = new VaultWriter({ hubRoot: () => world.hub, onWarning: () => undefined });
+    const repo = join(world.hub, "Office");
+    const headAtAdopt: string[] = [];
+    const editor = new WorkspaceEditor({
+      writer,
+      workspaceFile: () => store.filePath,
+      reload: () => void store.reload(),
+      adopt: (workspace) => {
+        headAtAdopt.push(sh(repo, "rev-parse", "HEAD").trim());
+        store.adopt(workspace);
+      },
+    });
+    const before = sh(repo, "rev-parse", "HEAD").trim();
+    await editor.setNotifications({ ntfyTopicUrl: "https://ntfy.example/topic" });
+    expect(headAtAdopt).toEqual([before]);
+    expect(sh(repo, "rev-parse", "HEAD").trim()).not.toBe(before);
+    expect(store.state.workspace?.notifications.ntfyTopicUrl).toBe("https://ntfy.example/topic");
+    await store.close();
   });
 });
