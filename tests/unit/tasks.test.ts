@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync } from "node:fs";
+import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -176,6 +176,82 @@ describe("task engine with fake providers", () => {
         .map((n) => n.kind)
         .sort(),
     ).toEqual(["task.done", "task.gate", "task.gate"]);
+
+    // The final approval merged the task branch into main and removed its worktree and branch.
+    expect(sh(alpha, "log", "--format=%s", "-5")).toContain("Fake builder change");
+    expect(sh(alpha, "log", "--format=%s", "-1").trim()).toMatch(
+      /^Merge office\/add-sheep-.*: Add sheep$/,
+    );
+    expect(existsSync(atReview.worktree as string)).toBe(false);
+    expect(sh(alpha, "branch", "--list", "office/*").trim()).toBe("");
+    expect(done.worktree).toBeNull();
+    expect(sh(alpha, "status", "--porcelain", "--untracked-files=no").trim()).toBe("");
+    expect(h.notifier.list().find((n) => n.kind === "task.done")?.body).toBeFalsy();
+  });
+
+  /** Runs a Feature task to its last gate and returns what the tests need to interfere with it. */
+  async function toLastGate(h: Harness, title: string) {
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "feature",
+      title,
+      description: "Do the thing.",
+    });
+    await waitFor(h.engine, t.id, "waiting-gate");
+    h.engine.approve(t.id);
+    const at = await until2(h, t.id);
+    return { id: t.id, branch: at.branch as string, worktree: at.worktree as string };
+  }
+  async function until2(h: Harness, id: string): Promise<TaskView> {
+    await until(() => {
+      const v = h.engine.list().find((x) => x.id === id);
+      return v?.status === "waiting-gate" && v.stageIndex === 2;
+    });
+    return h.engine.list().find((x) => x.id === id) as TaskView;
+  }
+
+  it("does not merge when the project is on another branch, and says so, keeping the worktree", async () => {
+    const h = harness();
+    const alpha = h.world.code["alpha"]?.work as string;
+    const task = await toLastGate(h, "Stay put");
+    sh(alpha, "checkout", "-q", "-b", "elsewhere");
+    h.engine.approve(task.id);
+    const done = await waitFor(h.engine, task.id, "done");
+    expect(done.worktree).toBe(task.worktree);
+    expect(existsSync(task.worktree)).toBe(true);
+    expect(sh(alpha, "branch", "--list", task.branch).trim()).not.toBe("");
+    const note = h.notifier.list().find((n) => n.kind === "task.done");
+    expect(note?.body).toContain("was not merged");
+    expect(note?.body).toContain("not on main");
+  });
+
+  it("does not merge over a conflict, leaves main as it was and keeps the branch", async () => {
+    const h = harness();
+    const alpha = h.world.code["alpha"]?.work as string;
+    const task = await toLastGate(h, "Collide");
+    const built = sh(task.worktree, "show", "--name-only", "--format=", "HEAD").trim();
+    writeFileSync(join(alpha, built), "written on main instead\n");
+    sh(alpha, "add", "--", built);
+    sh(alpha, "commit", "-q", "-m", "main wrote it first");
+    const head = sh(alpha, "rev-parse", "HEAD");
+    h.engine.approve(task.id);
+    await waitFor(h.engine, task.id, "done");
+    expect(sh(alpha, "rev-parse", "HEAD")).toBe(head);
+    expect(sh(alpha, "status", "--porcelain").trim()).toBe("");
+    expect(existsSync(task.worktree)).toBe(true);
+    expect(h.notifier.list().find((n) => n.kind === "task.done")?.body).toMatch(
+      /conflicts with main/,
+    );
+  });
+
+  it("commits what the builder left uncommitted before merging it", async () => {
+    const h = harness();
+    const alpha = h.world.code["alpha"]?.work as string;
+    const task = await toLastGate(h, "Leftovers");
+    writeFileSync(join(task.worktree, "left-over.txt"), "not committed\n");
+    h.engine.approve(task.id);
+    await waitFor(h.engine, task.id, "done");
+    expect(readFileSync(join(alpha, "left-over.txt"), "utf8")).toBe("not committed\n");
   });
 
   it("a rejection re-runs the stage with the comment appended to its prompt", async () => {

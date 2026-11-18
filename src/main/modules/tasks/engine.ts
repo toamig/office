@@ -9,9 +9,11 @@ import { IpcFailure } from "../../core/ipc";
 import type { Notifier } from "../../core/notifier";
 import { writeTextFile } from "../../core/settings";
 import { nowIso } from "../../core/util";
+import { git } from "../git/run";
 import { createWorktree } from "../git/worktrees";
 import type { RunService } from "../runs/service";
 import { FanOut } from "./fanout";
+import { integrateTask } from "./integrate";
 import { renderTemplate } from "./templates";
 
 export interface TaskEngineDeps {
@@ -37,6 +39,8 @@ interface TaskRow {
   description: string;
   branch: string | null;
   worktree: string | null;
+  /** The branch the project was on when the worktree was made, where the task is merged at the end. */
+  base_branch: string | null;
   stage_index: number;
   fanout: number;
   recorded_at: string | null;
@@ -92,7 +96,7 @@ export class TaskEngine {
 
   private setTask(
     id: string,
-    patch: Partial<Pick<TaskRow, "status" | "stage_index" | "branch" | "worktree">>,
+    patch: Partial<Pick<TaskRow, "status" | "stage_index" | "branch" | "worktree" | "base_branch">>,
   ): void {
     const keys = Object.keys(patch) as Array<keyof typeof patch>;
     const sets = keys.map((k) => `${k} = ?`).join(", ");
@@ -363,11 +367,13 @@ export class TaskEngine {
       if (t.status !== "running") return;
       const pipeline = this.deps.workspace()?.pipelines[t.pipeline];
       if (!pipeline || t.stage_index >= pipeline.stages.length) {
+        const note = await this.integrate(t);
         this.setTask(id, { status: "done" });
         this.deps.notifier.notify({
           kind: "task.done",
           projectId: t.project_id,
           title: `Task finished: ${t.title}`,
+          ...(note ? { body: note } : {}),
           link: { view: "board" },
         });
         return;
@@ -377,6 +383,21 @@ export class TaskEngine {
       if (outcome !== "continue") return;
       this.setTask(id, { stage_index: t.stage_index + 1 });
     }
+  }
+
+  /** After the final approval: merge the task branch and remove its worktree. Returns a note when something was left. */
+  private async integrate(t: TaskRow): Promise<string | null> {
+    const repo = this.deps.projectPath(t.project_id);
+    if (!repo || !t.worktree || !t.branch) return null;
+    const result = await integrateTask({
+      repo,
+      branch: t.branch,
+      worktree: t.worktree,
+      baseBranch: t.base_branch,
+      title: t.title,
+    });
+    if (result.merged && !result.note) this.setTask(t.id, { worktree: null });
+    return result.note;
   }
 
   private fail(t: TaskRow, idx: number, message: string): "stop" {
@@ -446,8 +467,13 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
       if (!repo) return this.fail(t, idx, "The project folder is missing");
       let current = this.task(t.id);
       if (stage.worktree && !current.worktree) {
+        const head = (await git(repo, ["rev-parse", "--abbrev-ref", "HEAD"])).stdout.trim();
         const made = await createWorktree(repo, `${current.title} ${t.id.slice(0, 4)}`);
-        this.setTask(t.id, { branch: made.branch, worktree: made.path });
+        this.setTask(t.id, {
+          branch: made.branch,
+          worktree: made.path,
+          base_branch: head && head !== "HEAD" ? head : null,
+        });
         current = this.task(t.id);
       }
       const outputPath = slash(resolve(this.deps.tasksDir, t.id, `${stage.id}.md`));
