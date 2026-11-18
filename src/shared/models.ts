@@ -482,3 +482,36 @@ export type WorktreeInfo = z.infer<typeof WorktreeInfo>;
 
 export const WorktreeRow = WorktreeInfo.extend({ projectId: z.string(), projectName: z.string() });
 export type WorktreeRow = z.infer<typeof WorktreeRow>;
+
+export const DiffLine = z.object({
+  kind: z.enum(["ctx", "add", "del"]),
+  oldNo: z.number().nullable(),
+  newNo: z.number().nullable(),
+  text: z.string(),
+});
+export type DiffLine = z.infer<typeof DiffLine>;
+
+export const DiffHunk = z.object({ header: z.string(), lines: z.array(DiffLine) });
+export type DiffHunk = z.infer<typeof DiffHunk>;
+
+export const DiffFile = z.object({
+  path: z.string(),
+  oldPath: z.string().nullable(),
+  status: z.enum(["modified", "added", "deleted", "renamed"]),
+  binary: z.boolean(),
+  additions: z.number(),
+  deletions: z.number(),
+  truncated: z.boolean(),
+  hunks: z.array(DiffHunk),
+});
+export type DiffFile = z.infer<typeof DiffFile>;
+
+export const DiffResult = z.object({ files: z.array(DiffFile) });
+export type DiffResult = z.infer<typeof DiffResult>;
+
+export const ReviewComment = z.object({
+  file: z.string(),
+  line: z.number(),
+  text: z.string().min(1),
+});
+export type ReviewComment = z.infer<typeof ReviewComment>;

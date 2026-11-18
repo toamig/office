@@ -1,7 +1,8 @@
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve } from "node:path";
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
+import { normPath } from "./core/util";
 import { IpcFailure } from "./core/ipc";
 import {
   cleanMergedBranches,
@@ -17,6 +18,8 @@ import {
   listWorktrees,
   removeWorktree,
 } from "./modules/git/worktrees";
+import { getDiff } from "./modules/git/diff";
+import { sendReviewToAgent } from "./modules/sessions/review";
 import { readVaultFile } from "./modules/ask/ask";
 import { readAudit } from "./modules/vault/audit";
 import { captureSession } from "./modules/sessions/capture";
@@ -218,6 +221,27 @@ export function registerHandlers(ctx: AppContext): void {
     changed(req.projectId);
     return removed;
   });
+  /** The repo folder, or one of its worktrees; anything else is refused. */
+  const checkoutOf = async (projectId: string, dir?: string): Promise<string> => {
+    const root = repoOf(projectId);
+    if (!dir) return root;
+    const norm = (p: string): string => normPath(resolve(p));
+    if (norm(dir) === norm(root)) return root;
+    const found = (await listWorktrees(root)).find((w) => norm(w.path) === norm(dir));
+    if (!found) throw new IpcFailure("bad-path", "That folder is not a worktree of this project");
+    return found.path;
+  };
+  ctx.ipc.handle("diff.get", async (req) =>
+    getDiff(await checkoutOf(req.projectId, req.dir), req.mode, req.base),
+  );
+  ctx.ipc.handle("diff.sendComments", async (req) =>
+    sendReviewToAgent(
+      { sessions: ctx.sessions, workspace: () => ctx.store.state.workspace },
+      req.projectId,
+      await checkoutOf(req.projectId, req.dir),
+      req.comments,
+    ),
+  );
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

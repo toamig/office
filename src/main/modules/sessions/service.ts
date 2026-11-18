@@ -55,6 +55,11 @@ interface Runtime extends LiveState {
   quietTimer?: NodeJS.Timeout;
 }
 
+const ESC = String.fromCharCode(27);
+const PASTE_START = `${ESC}[200~`;
+const PASTE_END = `${ESC}[201~`;
+const ENTER = String.fromCharCode(13);
+
 const normalize = (p: string): string => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
 /** Starts, tracks and ends interactive agent sessions and plain terminals. */
@@ -291,6 +296,13 @@ export class SessionService {
   /** Sends a whole line, as if typed (used for review comments and first prompts). */
   sendLine(id: string, text: string): void {
     this.write(id, `${text}\r`);
+  }
+
+  /** Sends a multi-line message as one paste (bracketed paste), then Enter, so TUIs take it as one prompt. */
+  sendMessage(id: string, text: string): void {
+    // Terminals send pasted line breaks as carriage returns, which is what a TUI in paste mode expects.
+    const body = text.split(/\r?\n/).join(ENTER);
+    this.write(id, `${PASTE_START}${body}${PASTE_END}${ENTER}`);
   }
 
   resize(id: string, cols: number, rows: number): void {

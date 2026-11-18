@@ -29,3 +29,11 @@ export function debounce<A extends unknown[]>(
 }
 
 export const nowIso = (): string => new Date().toISOString();
+
+/** A path in a form that compares equal across slash styles and letter case (for folder identity). */
+export function normPath(p: string): string {
+  return p
+    .replace(/[\\/]+/g, "/")
+    .replace(/\/$/, "")
+    .toLowerCase();
+}

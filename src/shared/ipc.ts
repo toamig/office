@@ -7,10 +7,12 @@ import {
   BriefView,
   CaptureCommit,
   CaptureResult,
+  DiffResult,
   HealthView,
   HookStatus,
   Inventory,
   Layout,
+  ReviewComment,
   NotificationFilter,
   NotificationRow,
   ProjectNote,
@@ -218,6 +220,23 @@ export const channels = {
     res: z.void(),
   },
   "worktrees.cleanMerged": { req: z.object({ projectId: z.string() }), res: z.array(z.string()) },
+  "diff.get": {
+    req: z.object({
+      projectId: z.string(),
+      dir: z.string().optional(),
+      mode: z.enum(["working", "staged", "branch"]),
+      base: z.string().optional(),
+    }),
+    res: DiffResult,
+  },
+  "diff.sendComments": {
+    req: z.object({
+      projectId: z.string(),
+      dir: z.string().optional(),
+      comments: z.array(ReviewComment).min(1),
+    }),
+    res: z.object({ sessionId: z.string(), started: z.boolean() }),
+  },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

@@ -141,7 +141,8 @@ function end(code) {
   process.exit(code);
 }
 rl.on("line", (line) => {
-  const text = line.trim();
+  // A bracketed paste (how Office sends multi-line messages) arrives wrapped in ESC [200~ ... ESC [201~.
+  const text = line.replace(/\x1b\[20[01]~/g, "").trim();
   if (!text) return;
   if (text === "quit") return end(0);
   if (text === "crash") return end(3);

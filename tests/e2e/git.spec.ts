@@ -85,3 +85,59 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
   expect(existsSync(wtPath)).toBe(false);
   await app.close();
 });
+
+test("diff review: two line comments go to the agent that owns the worktree as one message", async () => {
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  const win = await app.firstWindow();
+  const made = await win.evaluate(() =>
+    window.office.invoke("worktrees.create", { projectId: "alpha", name: "review task" }),
+  );
+  writeFileSync(join(made.path, "README.md"), "# alpha\nsecond line\n");
+  writeFileSync(join(made.path, "fresh.txt"), "brand new file\n");
+  await win.evaluate(
+    (cwd) =>
+      window.office.invoke("sessions.start", {
+        providerId: "fake",
+        projectId: "alpha",
+        cwd,
+        title: "Reviewed",
+      }),
+    made.path,
+  );
+
+  await win.getByTestId("rail-git").click();
+  await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+  await win.getByTestId("git-tab-changes").click();
+  await win.getByTestId("diff-dir").selectOption({ label: "Worktree: office/review-task" });
+  await expect(win.getByTestId("diff-file")).toHaveCount(2);
+
+  await win.getByTestId("diff-file").filter({ hasText: "README.md" }).click();
+  await win
+    .getByTestId("diff-line")
+    .filter({ hasText: "second line" })
+    .getByTestId("comment-line")
+    .click();
+  await win.getByTestId("comment-text").fill("rename this line");
+  await win.getByTestId("comment-save").click();
+  await win.getByTestId("diff-file").filter({ hasText: "fresh.txt" }).click();
+  await win
+    .getByTestId("diff-line")
+    .filter({ hasText: "brand new file" })
+    .getByTestId("comment-line")
+    .click();
+  await win.getByTestId("comment-text").fill("why is this here");
+  await win.getByTestId("comment-save").click();
+  await expect(win.getByTestId("comment-item")).toHaveCount(2);
+
+  await win.getByTestId("send-to-agent").click();
+  await expect(win.getByTestId("review-sent")).toContainText(
+    "Sent your comments to the running agent",
+  );
+
+  await win.getByTestId("rail-agents").click();
+  await win.getByTestId("session-row").filter({ hasText: "Reviewed" }).click();
+  await expect(win.locator(".xterm-rows")).toContainText("echo: README.md:2: rename this line");
+  await expect(win.locator(".xterm-rows")).toContainText("echo: fresh.txt:1: why is this here");
+  await app.close();
+});
