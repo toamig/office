@@ -124,6 +124,8 @@ export function planClaudeUninstall(current: string): string {
   const settings = JSON.parse(current) as Settings;
   const hooks = settings.hooks;
   if (hooks) {
+    // An empty "hooks": {} the owner already had is theirs to keep.
+    const hadEntries = Object.keys(hooks).length > 0;
     for (const event of Object.keys(hooks)) {
       const groups = (hooks[event] ?? [])
         .map((g) => ({
@@ -134,7 +136,7 @@ export function planClaudeUninstall(current: string): string {
       if (groups.length > 0) hooks[event] = groups;
       else delete hooks[event];
     }
-    if (Object.keys(hooks).length === 0) delete settings.hooks;
+    if (hadEntries && Object.keys(hooks).length === 0) delete settings.hooks;
   }
   return serializeJson(settings, current);
 }
@@ -151,43 +153,113 @@ export function claudeInstalled(text: string | null): boolean {
 // ---------- Codex: config.toml notify ----------
 
 interface NotifyStatement {
+  /** Start of the key (after any indentation). */
   start: number;
+  /** Index of the `[` that opens the array. */
+  open: number;
   end: number;
   array: string[];
 }
 
-/** Finds the top-level `notify = [...]` statement, scanning past strings and comments. */
-export function findNotify(text: string): NotifyStatement | null {
-  const tableAt = /^\s*\[/m.exec(text);
-  const limit = tableAt ? tableAt.index : text.length;
-  const key = /^notify\s*=\s*\[/m.exec(text);
-  if (!key || key.index >= limit) return null;
-  const open = key.index + key[0].length - 1;
+const BOM = "﻿";
+
+/** Index just past the string that starts at `i` (basic, literal, or either multi-line form). */
+function skipString(text: string, i: number): number {
+  const quote = text[i] as string;
+  const n = text.length;
+  if (text.startsWith(quote.repeat(3), i)) {
+    let j = i + 3;
+    while (j < n) {
+      if (quote === '"' && text[j] === "\\") j += 2;
+      else if (text.startsWith(quote.repeat(3), j)) {
+        j += 3;
+        while (text[j] === quote) j++;
+        return j;
+      } else j++;
+    }
+    return n;
+  }
+  let j = i + 1;
+  while (j < n && text[j] !== quote && text[j] !== "\n") {
+    if (quote === '"' && text[j] === "\\") j++;
+    j++;
+  }
+  return text[j] === quote ? j + 1 : j;
+}
+
+/**
+ * Walks a TOML file understanding strings, comments and brackets. Returns where the first table header
+ * starts (the end of the top-level keys) and where each top-level statement starts.
+ */
+function scanTopLevel(text: string): { tableStart: number; statements: number[] } {
+  const n = text.length;
+  const statements: number[] = [];
+  let depth = 0;
+  let lineStart = true;
+  let i = 0;
+  while (i < n) {
+    if (lineStart && depth === 0) {
+      while (text[i] === " " || text[i] === "\t") i++;
+      if (i >= n) break;
+      const ch = text[i];
+      if (ch === "[") return { tableStart: i, statements };
+      if (ch !== "\n" && ch !== "\r" && ch !== "#") statements.push(i);
+    }
+    lineStart = false;
+    const c = text[i];
+    if (c === "\n") {
+      lineStart = true;
+      i++;
+    } else if (c === "#") {
+      while (i < n && text[i] !== "\n") i++;
+    } else if (c === '"' || c === "'") i = skipString(text, i);
+    else {
+      if (c === "[" || c === "{") depth++;
+      else if (c === "]" || c === "}") depth = Math.max(0, depth - 1);
+      i++;
+    }
+  }
+  return { tableStart: n, statements };
+}
+
+/** The end of the bracket that opens at `open`, or -1. */
+function matchBracket(text: string, open: number): number {
   let depth = 0;
   for (let i = open; i < text.length; i++) {
     const c = text[i];
-    if (c === '"' || c === "'") {
-      const quote = c;
-      i++;
-      while (i < text.length && text[i] !== quote && text[i] !== "\n") {
-        if (quote === '"' && text[i] === "\\") i++;
-        i++;
-      }
-    } else if (c === "#") {
+    if (c === '"' || c === "'") i = skipString(text, i) - 1;
+    else if (c === "#") {
       while (i < text.length && text[i] !== "\n") i++;
     } else if (c === "[") depth++;
-    else if (c === "]" && --depth === 0) {
-      const end = i + 1;
-      const parsed = parseToml(`notify = ${text.slice(open, end)}`) as { notify?: unknown };
-      const array = Array.isArray(parsed.notify) ? parsed.notify.map(String) : [];
-      return { start: key.index, end, array };
-    }
+    else if (c === "]" && --depth === 0) return i + 1;
+  }
+  return -1;
+}
+
+/**
+ * Finds the top-level `notify = [...]` statement. A leading byte order mark, indentation and a quoted key
+ * are all accepted; a notify inside a table does not count.
+ */
+export function findNotify(text: string): NotifyStatement | null {
+  // The mark becomes a space so every offset stays valid for the original text.
+  const flat = text.startsWith(BOM) ? ` ${text.slice(1)}` : text;
+  const { statements } = scanTopLevel(flat);
+  for (const start of statements) {
+    const key = /^(?:"notify"|'notify'|notify)[ \t]*=[ \t]*\[/.exec(flat.slice(start, start + 40));
+    if (!key) continue;
+    const open = start + key[0].length - 1;
+    const end = matchBracket(flat, open);
+    if (end < 0) return null;
+    const parsed = parseToml(`notify = ${flat.slice(open, end)}`) as { notify?: unknown };
+    const array = Array.isArray(parsed.notify) ? parsed.notify.map(String) : [];
+    return { start, open, end, array };
   }
   return null;
 }
 
 const tomlArray = (items: string[]): string =>
-  `notify = [${items.map((s) => JSON.stringify(s)).join(", ")}]`;
+  `[${items.map((x) => JSON.stringify(x)).join(", ")}]`;
+const notifyLine = (items: string[]): string => `notify = ${tomlArray(items)}`;
 
 export function isOfficeNotify(array: string[]): boolean {
   return array[2] === "codex" && array[3] === "--chain" && (array[1] ?? "").includes(RELAY_MARK);
@@ -206,18 +278,20 @@ export function planCodexInstall(original: string | null, relayScript: string): 
   ];
   if (found) {
     const rest = isOfficeNotify(found.array) ? found.array.slice(4) : found.array;
-    return text.slice(0, found.start) + tomlArray(wrap(rest)) + text.slice(found.end);
+    // Only the array is replaced, so the key's own spelling, spacing and indentation stay as they were.
+    return text.slice(0, found.open) + tomlArray(wrap(rest)) + text.slice(found.end);
   }
-  const line = tomlArray(wrap([]));
+  const line = notifyLine(wrap([]));
   const eol = text.includes("\r\n") ? "\r\n" : "\n";
-  const tableAt = /^\s*\[/m.exec(text);
-  const region = tableAt ? text.slice(0, tableAt.index) : text;
+  const bom = text.startsWith(BOM) ? BOM : "";
+  const { tableStart } = scanTopLevel(bom ? ` ${text.slice(1)}` : text);
+  const region = text.slice(0, tableStart);
   const lines = region.split("\n");
   let lastKey = -1;
   lines.forEach((l, index) => {
     if (l.trim() && !l.trim().startsWith("#")) lastKey = index;
   });
-  if (lastKey < 0) return `${line}${eol}${text}`;
+  if (lastKey < 0) return `${bom}${line}${eol}${text.slice(bom.length)}`;
   // Cut after the last key, without its line ending, so the new line gets the file's own ending.
   const before = lines
     .slice(0, lastKey + 1)
@@ -232,10 +306,15 @@ export function planCodexUninstall(current: string): string {
   if (!found || !isOfficeNotify(found.array)) return current;
   const rest = found.array.slice(4);
   if (rest.length > 0)
-    return current.slice(0, found.start) + tomlArray(rest) + current.slice(found.end);
+    return current.slice(0, found.open) + tomlArray(rest) + current.slice(found.end);
+  // Remove the whole line, indentation included, but never the byte order mark at the top of the file.
+  const lineStart = Math.max(
+    found.start > 0 ? current.lastIndexOf("\n", found.start - 1) + 1 : 0,
+    current.startsWith(BOM) ? 1 : 0,
+  );
   const lineEnd = current.indexOf("\n", found.end);
   const stop = lineEnd < 0 ? current.length : lineEnd + 1;
-  return current.slice(0, found.start) + current.slice(stop);
+  return current.slice(0, lineStart) + current.slice(stop);
 }
 
 export function codexInstalled(text: string | null): boolean {
@@ -311,25 +390,26 @@ export class HooksManager {
   private plan(
     target: HookTarget,
     action: HookAction,
-  ): { before: string | null; after: string | null } {
+  ): { before: string | null; after: string | null; restoreFrom: string | null } {
     const before = this.read(this.fileOf(target));
     const script = this.paths().relayScript;
     if (action === "install") {
       const after =
         target === "claude" ? planClaudeInstall(before, script) : planCodexInstall(before, script);
-      return { before, after };
+      return { before, after, restoreFrom: null };
     }
-    if (before === null) return { before, after: null };
+    if (before === null) return { before, after: null, restoreFrom: null };
     const rec = this.record()[target];
     // Untouched since install: put the original bytes back exactly (or remove a file we created).
     if (rec && sha(before) === rec.installedSha) {
-      if (rec.originalSha === null) return { before, after: null };
+      if (rec.originalSha === null) return { before, after: null, restoreFrom: null };
       if (rec.backup && existsSync(rec.backup))
-        return { before, after: readFileSync(rec.backup, "utf8") };
+        return { before, after: readFileSync(rec.backup, "utf8"), restoreFrom: rec.backup };
     }
     return {
       before,
       after: target === "claude" ? planClaudeUninstall(before) : planCodexUninstall(before),
+      restoreFrom: null,
     };
   }
 
@@ -353,15 +433,24 @@ export class HooksManager {
   /** Applies the change after the owner agreed. Writes a timestamped backup first. */
   apply(target: HookTarget, action: HookAction): { backup: string | null } {
     const path = this.fileOf(target);
-    const { before, after } = this.plan(target, action);
+    const { before, after, restoreFrom } = this.plan(target, action);
     const record = this.record();
     if (action === "uninstall") {
       if (before === null) return { backup: null };
+      let backup: string | null = null;
       if (after === null) unlinkSync(path);
-      else writeRawFile(path, after);
+      else if (restoreFrom) {
+        // A byte copy, so a file that is not valid UTF-8 comes back exactly as it was.
+        copyFileSync(restoreFrom, path);
+      } else {
+        // The file changed after install, so it is edited in place; keep what it was just before.
+        backup = `${path}.office-backup-${stamp()}`;
+        copyFileSync(path, backup);
+        writeRawFile(path, after);
+      }
       delete record[target];
       this.saveRecord(record);
-      return { backup: null };
+      return { backup };
     }
     if (after === null) throw new Error("Nothing to install");
     const existing = record[target];

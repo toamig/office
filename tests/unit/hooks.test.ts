@@ -2,6 +2,7 @@ import { cpSync, existsSync, mkdtempSync, readdirSync, readFileSync, writeFileSy
 import http from "node:http";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
+import { parse as parseToml, type TomlTable } from "smol-toml";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import { run } from "../../src/main/core/exec";
 import { RelayServer } from "../../src/main/core/relay-server";
@@ -145,6 +146,55 @@ describe("Codex config", () => {
     const bare = planCodexInstall('model = "m"\r\n[t]\r\n', relayScript);
     expect(bare.replace(/\r\n/g, "")).not.toContain("\n");
   });
+
+  /** Installs, checks the result is valid TOML with exactly one notify that chains `chain`, and uninstalls. */
+  function roundTrip(text: string, chain: string[]): { next: string; parsed: TomlTable } {
+    const next = planCodexInstall(text, relayScript);
+    const parsed = parseToml(next) as TomlTable;
+    expect(parsed["notify"]).toEqual([
+      "node",
+      relayScript.replace(/\\/g, "/"),
+      "codex",
+      "--chain",
+      ...chain,
+    ]);
+    expect(planCodexUninstall(next)).toBe(text);
+    return { next, parsed };
+  }
+
+  it("handles a notify key after a byte order mark", () => {
+    const { next } = roundTrip('﻿notify = ["a"]\nmodel = "m"\n', ["a"]);
+    expect(next.startsWith("﻿notify")).toBe(true);
+    expect(next.indexOf("﻿", 1)).toBe(-1);
+    // With no notify yet, the new line goes after the mark, never before it.
+    const bare = roundTrip('﻿model = "m"\n', []);
+    expect(bare.next.startsWith('﻿model = "m"')).toBe(true);
+    expect(roundTrip("﻿", []).next.startsWith("﻿notify")).toBe(true);
+  });
+
+  it("handles an indented or a quoted notify key without writing a second one", () => {
+    roundTrip('model = "m"\n  notify = ["a"]\n', ["a"]);
+    roundTrip('"notify" = ["a"]\nmodel = "m"\n', ["a"]);
+    roundTrip(`'notify' = ["a", "b"]\n`, ["a", "b"]);
+    roundTrip('model = "m"\n\tnotify=["a"]  # keep\n[t]\nx = 1\n', ["a"]);
+    expect(findNotify('  "notify" = ["x"]')?.array).toEqual(["x"]);
+  });
+
+  it("does not take an array of arrays or a multi-line string for a table header", () => {
+    const matrix = 'matrix = [\n  [1, 2],\n  [3, 4],\n]\nmodel = "m"\n[t]\nx = 1\n';
+    const { next, parsed } = roundTrip(matrix, []);
+    expect(parsed["matrix"]).toEqual([
+      [1, 2],
+      [3, 4],
+    ]);
+    expect(next.indexOf("notify")).toBeLessThan(next.indexOf("[t]"));
+    const after = 'matrix = [\n  [1, 2],\n]\nnotify = ["a"]\n';
+    roundTrip(after, ["a"]);
+    const doc = 'doc = """\n[not a table]\nnotify = ["fake"]\n"""\nnotify = ["a"]\n';
+    roundTrip(doc, ["a"]);
+    expect(findNotify('[t]\nnotify = ["a"]\n')).toBeNull();
+    expect(findNotify('a = [\n  [1],\n]\n[t]\nnotify = ["a"]\n')).toBeNull();
+  });
 });
 
 describe("HooksManager round trip on a fake home", () => {
@@ -202,6 +252,71 @@ describe("HooksManager round trip on a fake home", () => {
     expect(after.model).toBe("sonnet");
     expect(JSON.stringify(after.hooks)).not.toContain("office-relay");
     expect(after.hooks.Stop).toHaveLength(1);
+  });
+});
+
+describe("Codex uninstall after the file was edited", () => {
+  it("restores the original notify and keeps the owner's edit", () => {
+    const h = fakeHome();
+    h.manager.apply("codex", "install");
+    const installed = readFileSync(h.paths.codexConfig, "utf8");
+    writeFileSync(
+      h.paths.codexConfig,
+      installed.replace('model = "gpt-5-codex"', 'model = "gpt-6"'),
+    );
+    expect(readFileSync(h.paths.codexConfig, "utf8")).toContain("gpt-6");
+    h.manager.apply("codex", "uninstall");
+    const after = readFileSync(h.paths.codexConfig, "utf8");
+    expect(after).toContain("gpt-6");
+    expect(after).not.toContain("office-relay");
+    expect((parseToml(after) as TomlTable)["notify"]).toEqual(["node", "C:/fake/codex-notify.js"]);
+    expect(h.manager.status().codex.installed).toBe(false);
+  });
+
+  it("works for a file with a byte order mark and an indented notify", () => {
+    const h = fakeHome();
+    writeFileSync(h.paths.codexConfig, '\uFEFFmodel = "m"\n  notify = ["a"]\n');
+    h.manager.apply("codex", "install");
+    writeFileSync(
+      h.paths.codexConfig,
+      `${readFileSync(h.paths.codexConfig, "utf8")}# added later\n`,
+    );
+    h.manager.apply("codex", "uninstall");
+    const after = readFileSync(h.paths.codexConfig, "utf8");
+    expect(after.startsWith("\uFEFFmodel")).toBe(true);
+    expect((parseToml(after) as TomlTable)["notify"]).toEqual(["a"]);
+    expect(after).toContain("# added later");
+  });
+});
+
+describe("Uninstall keeps what it must", () => {
+  it("writes a backup of the edited file before it edits it in place", () => {
+    const h = fakeHome();
+    h.manager.apply("claude", "install");
+    writeFileSync(
+      h.paths.claudeSettings,
+      readFileSync(h.paths.claudeSettings, "utf8").replace('"model": "opus"', '"model": "sonnet"'),
+    );
+    const edited = readFileSync(h.paths.claudeSettings);
+    const { backup } = h.manager.apply("claude", "uninstall");
+    expect(backup && readFileSync(backup)).toEqual(edited);
+  });
+
+  it("restores the original bytes exactly, even when they are not valid UTF-8", () => {
+    const h = fakeHome();
+    const original = Buffer.concat([
+      readFileSync(h.paths.codexConfig),
+      Buffer.from([0x23, 0x20, 0xe9, 0xff, 0x0a]),
+    ]);
+    writeFileSync(h.paths.codexConfig, original);
+    h.manager.apply("codex", "install");
+    h.manager.apply("codex", "uninstall");
+    expect(readFileSync(h.paths.codexConfig)).toEqual(original);
+  });
+
+  it("keeps an empty hooks object that the owner already had", () => {
+    const text = '{\n  "model": "opus",\n  "hooks": {}\n}\n';
+    expect(planClaudeUninstall(text)).toBe(text);
   });
 });
 
