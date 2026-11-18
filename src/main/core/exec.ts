@@ -7,6 +7,8 @@ export interface RunOptions {
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
   input?: string;
+  /** Keep the process's stdin open, so lines can be written to it while it runs (see spawnStream). */
+  keepStdin?: boolean;
 }
 
 export interface RunResult {
@@ -173,6 +175,8 @@ export interface StreamHandle {
   /** Resolves when the process exits. */
   exit: Promise<{ code: number; stderr: string }>;
   kill(): void;
+  /** Writes one line to the process (only when started with keepStdin). */
+  write(line: string): void;
 }
 
 /** Starts a command and yields its stdout line by line (for JSON-lines output). */
@@ -211,7 +215,7 @@ export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}):
   });
   child.stdin?.on("error", () => undefined);
   if (opts.input !== undefined) child.stdin?.end(opts.input);
-  else child.stdin?.end();
+  else if (!opts.keepStdin) child.stdin?.end();
   async function* iterate(): AsyncGenerator<string> {
     for (;;) {
       const next = queue.shift();
@@ -224,5 +228,12 @@ export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}):
       wake = null;
     }
   }
-  return { lines: iterate(), exit, kill: () => killTree(child) };
+  return {
+    lines: iterate(),
+    exit,
+    kill: () => killTree(child),
+    write: (line) => {
+      if (child.stdin && !child.stdin.destroyed) child.stdin.write(`${line}\n`);
+    },
+  };
 }

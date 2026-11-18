@@ -5,6 +5,7 @@ import { claudeInventory } from "../setup/inventory";
 import { parseClaudeLine, startAgentRun } from "./stream";
 import type {
   AgentRun,
+  ChatCommandOptions,
   CommandSpec,
   Detection,
   Provider,
@@ -137,6 +138,51 @@ export class ClaudeCodeProvider implements Provider {
       ...(spec.env ? { env: spec.env } : {}),
     });
     return startAgentRun(stream, parseClaudeLine);
+  }
+
+  readonly chatKind = "claude" as const;
+
+  /**
+   * One long-lived `claude -p` per chat: each message is a JSON line on stdin, the answer streams out as
+   * JSON lines with partial messages. `--session-id` makes the Office id the Claude id; `--resume` reopens
+   * the conversation after a stop. Approvals use the permission flags of plan 9.5.
+   */
+  chatCommand(o: ChatCommandOptions): CommandSpec {
+    const role = o.role
+      ? {
+          ...o.role,
+          ...(o.model ? { model: o.model } : {}),
+          ...(o.permissionMode ? { permissionMode: o.permissionMode } : {}),
+        }
+      : {
+          provider: this.id,
+          instructions: "",
+          readOnly: false,
+          allowedCommands: [],
+          ...(o.model ? { model: o.model } : {}),
+          ...(o.permissionMode ? { permissionMode: o.permissionMode } : {}),
+        };
+    const runOptions: RunOptions = {
+      cwd: o.cwd,
+      officeSessionId: o.officeSessionId,
+      role,
+      permission: o.permission,
+      ...(o.addDirs ? { addDirs: o.addDirs } : {}),
+    };
+    const args = [
+      "-p",
+      "--input-format",
+      "stream-json",
+      "--output-format",
+      "stream-json",
+      "--verbose",
+      "--include-partial-messages",
+      o.resume ? "--resume" : "--session-id",
+      o.officeSessionId,
+      ...this.roleFlags(runOptions),
+      ...permissionFlags(runOptions),
+    ];
+    return this.command(args);
   }
 
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec {

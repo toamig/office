@@ -7,7 +7,14 @@ import { useQuery } from "../lib/hooks";
  * Questions from headless builders ("may I run this?"), each with Allow and Deny. Allow is for this one
  * request; to allow a command for good, add it to the role's allowed commands.
  */
-export function PermissionRequests({ compact = false }: { compact?: boolean }) {
+export function PermissionRequests({
+  compact = false,
+  runId,
+}: {
+  compact?: boolean;
+  /** Only the questions of this run or chat (an inline card in a conversation). */
+  runId?: string;
+}) {
   const requests = useQuery("permissions.list", undefined, [
     "permission.changed",
     "notification.new",
@@ -28,7 +35,7 @@ export function PermissionRequests({ compact = false }: { compact?: boolean }) {
       requests.reload();
     }
   };
-  const list = requests.data ?? [];
+  const list = (requests.data ?? []).filter((r) => !runId || r.runId === runId);
   if (list.length === 0 && !error) return null;
   return (
     <div data-testid="permission-requests" className={compact ? "" : "mb-4"}>

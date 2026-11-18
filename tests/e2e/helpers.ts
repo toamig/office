@@ -98,6 +98,8 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
           projectsRoot: world.projectsRoot,
           editorCommand: "code",
           relay: { port: 47999, token: "e2e-token" },
+          // The older specs drive terminals; the chat specs ask for a chat.
+          sessionMode: "terminal",
           ...before,
           ...options.settings,
         }),

@@ -37,6 +37,10 @@ export function StartAgentDialog({
   const [prompt, setPrompt] = useState("");
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // Chat or terminal: the machine's last choice, remembered when it is changed here.
+  const settings = useQuery("settings.get");
+  const [picked, setPicked] = useState<"chat" | "terminal" | null>(null);
+  const sessionMode = picked ?? settings.data?.sessionMode ?? "chat";
 
   const roles = Object.keys(workspace.data?.workspace?.roles ?? {});
   const provider = providers.data?.find((p) => p.id === providerId);
@@ -58,6 +62,7 @@ export function StartAgentDialog({
         ...(where ? { cwd: where } : {}),
         ...(mode === "role" ? { roleId } : { providerId, ...(model ? { model } : {}) }),
         ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
+        mode: sessionMode,
       });
       onStarted(session);
     } catch (err) {
@@ -83,6 +88,24 @@ export function StartAgentDialog({
         </header>
         <div className="grid gap-3 p-4">
           {error && <ErrorBanner message={error} />}
+          <div className="flex items-center gap-4" data-testid="agent-mode">
+            <span className="w-28">Open as</span>
+            {(["chat", "terminal"] as const).map((m) => (
+              <label key={m} className="flex items-center gap-1">
+                <input
+                  type="radio"
+                  name="session-mode"
+                  checked={sessionMode === m}
+                  onChange={() => {
+                    setPicked(m);
+                    void office.invoke("settings.set", { sessionMode: m });
+                  }}
+                  data-testid={`mode-${m}`}
+                />{" "}
+                {m === "chat" ? "Chat" : "Terminal"}
+              </label>
+            ))}
+          </div>
           <label className="grid grid-cols-[110px_1fr] items-center gap-2">
             Project
             <select

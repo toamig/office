@@ -1,5 +1,11 @@
 import { randomUUID } from "node:crypto";
-import type { PtyHistory, SessionRow, SessionStatus, StartSession } from "../../../shared/models";
+import type {
+  PtyHistory,
+  SessionMode,
+  SessionRow,
+  SessionStatus,
+  StartSession,
+} from "../../../shared/models";
 import type { Role, Workspace } from "../../../shared/types";
 import type { Bus } from "../../core/bus";
 import type { Db } from "../../core/db";
@@ -27,6 +33,8 @@ export interface SessionServiceDeps {
   /** Absolute folder of a project, or undefined. */
   projectPath: (projectId: string) => string | undefined;
   logsDir: string;
+  /** How a session opens when the caller does not say: the machine setting. Terminal when absent. */
+  defaultMode?: () => SessionMode;
 }
 
 interface DbSession {
@@ -46,6 +54,7 @@ interface DbSession {
   archived_at: string | null;
   last_output_at: string | null;
   captured_at: string | null;
+  mode: string;
 }
 
 interface Runtime extends LiveState {
@@ -69,6 +78,14 @@ export class SessionService {
   sink: ((id: string, data: string, end: number) => void) | null = null;
   private readonly runtime = new Map<string, Runtime>();
   private timer: NodeJS.Timeout | undefined;
+  /** The chat side of a session, set by the app: sending a message, stopping, and whether it is alive. */
+  chat: {
+    send: (id: string, text: string) => void;
+    /** Folders the chat's program may read besides its own (Explore reads the brain). */
+    configure: (id: string, extra: { addDirs?: string[] }) => void;
+    stop: (id: string) => void;
+    running: (id: string) => boolean;
+  } | null = null;
 
   constructor(private readonly deps: SessionServiceDeps) {
     this.pty = new PtyManager(deps.logsDir, {
@@ -114,7 +131,8 @@ export class SessionService {
       archivedAt: r.archived_at,
       lastOutputAt: r.last_output_at,
       capturedAt: r.captured_at,
-      running: this.pty.isRunning(r.id),
+      running: r.mode === "chat" ? (this.chat?.running(r.id) ?? false) : this.pty.isRunning(r.id),
+      mode: r.mode === "chat" ? "chat" : "terminal",
     };
   }
 
@@ -180,6 +198,24 @@ export class SessionService {
       ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
     });
     const title = input.title ?? (input.roleId ? `${input.roleId}` : provider.label);
+    const mode = input.mode ?? this.deps.defaultMode?.() ?? "terminal";
+    if (mode === "chat" && provider.chatCommand) {
+      const chat = this.createChat({
+        id,
+        provider: providerId,
+        cwd,
+        projectId: input.projectId ?? null,
+        roleId: extra.roleLabel ?? input.roleId ?? null,
+        title,
+      });
+      void readStatus(cwd).then((status) => {
+        if (status.ok) this.setBranch(id, status.status.branch);
+      });
+      if (extra.addDirs) this.chat?.configure(id, { addDirs: extra.addDirs });
+      // The first prompt is the first message of the conversation.
+      if (input.prompt) this.chat?.send(id, input.prompt);
+      return chat;
+    }
     const row = this.launch({
       id,
       provider: providerId,
@@ -195,6 +231,52 @@ export class SessionService {
       if (status.ok) this.setBranch(id, status.status.branch);
     });
     return row;
+  }
+
+  /** A chat session: a row, no terminal. The program starts with the first message. */
+  private createChat(o: {
+    id: string;
+    provider: string;
+    cwd: string;
+    projectId: string | null;
+    roleId: string | null;
+    title: string;
+  }): SessionRow {
+    const now = nowIso();
+    this.deps.db
+      .prepare(
+        `INSERT INTO sessions (id, provider, provider_session_id, project_id, cwd, branch, role, title, status,
+           interactive, created_at, updated_at, mode) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'idle', 1, ?, ?, 'chat')`,
+      )
+      .run(
+        o.id,
+        o.provider,
+        o.provider === "claude-code" || o.provider === "fake" ? o.id : null,
+        o.projectId,
+        o.cwd,
+        o.roleId,
+        o.title,
+        now,
+        now,
+      );
+    this.deps.bus.emit("session.status", { id: o.id, status: "idle" }, o.projectId ?? undefined);
+    return this.get(o.id);
+  }
+
+  /** Moves a session between chat and terminal. The provider conversation stays the same. */
+  setMode(id: string, mode: SessionMode): SessionRow {
+    this.deps.db
+      .prepare("UPDATE sessions SET mode = ?, updated_at = ? WHERE id = ?")
+      .run(mode, nowIso(), id);
+    this.emitStatus(id);
+    return this.get(id);
+  }
+
+  /** Remembers the provider's own conversation id (a Codex thread), which resuming needs. */
+  setProviderSessionId(id: string, providerSessionId: string): void {
+    this.deps.db
+      .prepare("UPDATE sessions SET provider_session_id = ? WHERE id = ?")
+      .run(providerSessionId, id);
   }
 
   /** Starts any command in a terminal tab (logins, and tests). */
@@ -272,7 +354,8 @@ export class SessionService {
   /** Reopens a past session with the tool's own resume command, keeping the same Office row. */
   resume(id: string): SessionRow {
     const row = this.get(id);
-    if (row.running) return row;
+    // A chat carries on with its next message; there is no terminal to reopen.
+    if (row.running || row.mode === "chat") return row;
     const provider = this.deps.providers.get(row.provider);
     if (!provider) throw new IpcFailure("no-provider", `The ${row.provider} tool is not available`);
     // Claude-style sessions use the Office id as the tool's id. Codex only learns its thread id from the
@@ -308,6 +391,7 @@ export class SessionService {
 
   /** Sends a multi-line message as one paste (bracketed paste), then Enter, so TUIs take it as one prompt. */
   sendMessage(id: string, text: string): void {
+    if (this.find(id)?.mode === "chat") return this.chat?.send(id, text);
     // Terminals send pasted line breaks as carriage returns, which is what a TUI in paste mode expects.
     const body = text.split(/\r?\n/).join(ENTER);
     this.write(id, `${PASTE_START}${body}${PASTE_END}${ENTER}`);
@@ -323,6 +407,7 @@ export class SessionService {
 
   /** Ends the terminal process. The session is marked exited, not failed. */
   kill(id: string): void {
+    if (this.find(id)?.mode === "chat") return this.chat?.stop(id);
     const rt = this.runtime.get(id);
     if (rt) rt.killedByUser = true;
     this.pty.kill(id);
@@ -485,6 +570,8 @@ export class SessionService {
       rt.hookSeen = true;
       rt.promptHook = true;
     }
+    // A chat takes its status from its own stream, so the hooks of the same conversation do not move it.
+    if (this.find(row.id)?.mode === "chat") return true;
     const status = statusForClaudeHook(event);
     if (!status) return true;
     const detail = typeof payload["message"] === "string" ? payload["message"] : undefined;
@@ -503,7 +590,7 @@ export class SessionService {
     const cwd = typeof payload["cwd"] === "string" ? payload["cwd"] : "";
     const rows = this.deps.db
       .prepare(
-        "SELECT * FROM sessions WHERE provider = 'codex' AND status != 'exited' AND status != 'failed' ORDER BY created_at DESC",
+        "SELECT * FROM sessions WHERE provider = 'codex' AND mode = 'terminal' AND status != 'exited' AND status != 'failed' ORDER BY created_at DESC",
       )
       .all() as DbSession[];
     let match = thread ? rows.find((r) => r.provider_session_id === thread) : undefined;

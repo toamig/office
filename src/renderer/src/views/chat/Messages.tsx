@@ -1,0 +1,74 @@
+import { ChevronRight } from "lucide-react";
+import { useState } from "react";
+import { formatDuration, type ChatItem } from "@shared/chat";
+import { Markdown } from "../../components/Markdown";
+import { ToolCard } from "./ToolCard";
+
+/** Thinking is folded away under a toggle. */
+function Thinking({ text }: { text: string }) {
+  const [shown, setShown] = useState(false);
+  return (
+    <div className="thinking" data-testid="thinking">
+      <button className="tool-head" onClick={() => setShown(!shown)} aria-expanded={shown}>
+        <ChevronRight size={13} className={shown ? "tool-chevron open" : "tool-chevron"} />
+        <span className="tool-name">Thinking</span>
+      </button>
+      {shown && <div className="thinking-text text-selectable">{text}</div>}
+    </div>
+  );
+}
+
+/** One thing in the conversation: a bubble, an answer, a tool card, a quiet error, a turn footer. */
+export function ChatMessage({ item }: { item: ChatItem }) {
+  switch (item.kind) {
+    case "user":
+      return (
+        <div className="bubble-row user" data-testid="chat-user">
+          <div className="bubble text-selectable">
+            {item.text}
+            {item.images > 0 && (
+              <div className="bubble-note">
+                {item.images} image{item.images > 1 ? "s" : ""} attached
+              </div>
+            )}
+          </div>
+        </div>
+      );
+    case "assistant":
+      // A message that has not said anything yet is not drawn; the working dots stand in for it.
+      if (!item.text && !item.thinking) return null;
+      return (
+        <div
+          className="assistant text-selectable"
+          data-testid="chat-assistant"
+          data-streaming={item.streaming}
+        >
+          {item.thinking && <Thinking text={item.thinking} />}
+          {item.text && <Markdown>{item.text}</Markdown>}
+          {item.streaming && <span className="caret" aria-hidden />}
+        </div>
+      );
+    case "tool":
+      return <ToolCard tool={item} />;
+    case "error":
+      return (
+        <div className="chat-error text-selectable" data-testid="chat-error">
+          {item.message}
+        </div>
+      );
+    case "turn":
+      return (
+        <div className="turn-footer" data-testid="chat-turn" data-ok={item.ok}>
+          {item.ok ? "Done" : "The turn failed"}
+          {item.durationMs !== null && ` in ${formatDuration(item.durationMs)}`}
+          {item.error ? `: ${item.error}` : ""}
+        </div>
+      );
+    case "stopped":
+      return (
+        <div className="turn-footer" data-testid="chat-stopped">
+          Stopped
+        </div>
+      );
+  }
+}

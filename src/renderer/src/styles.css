@@ -400,3 +400,339 @@ button,
   gap: 4px;
   color: var(--muted);
 }
+
+/* ---- chat ---- */
+.chat {
+  display: flex;
+  height: 100%;
+  min-height: 0;
+  flex-direction: column;
+  background: var(--panel);
+}
+.chat-header {
+  display: flex;
+  height: 38px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 10px 0 14px;
+  border-bottom: 1px solid var(--line);
+}
+.chat-select {
+  max-width: 150px;
+  padding: 2px 6px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  font-size: 12px;
+}
+.chat-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--muted);
+}
+.chat-link:hover {
+  background: var(--hover);
+  color: var(--text);
+}
+.chat-scroll {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+.chat-column {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+  padding: 0 18px;
+  box-sizing: border-box;
+}
+.chat-scroll .chat-column {
+  padding-top: 18px;
+  padding-bottom: 18px;
+}
+.chat-empty {
+  padding: 60px 0;
+  color: var(--muted);
+  text-align: center;
+}
+.bubble-row {
+  display: flex;
+  margin: 14px 0 8px;
+}
+.bubble-row.user {
+  justify-content: flex-end;
+}
+.bubble {
+  max-width: 82%;
+  padding: 8px 13px;
+  border-radius: 16px 16px 4px 16px;
+  background: var(--hover);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.bubble-note {
+  margin-top: 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.assistant {
+  margin: 6px 0;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+.assistant .markdown > :first-child {
+  margin-top: 0;
+}
+.caret {
+  display: inline-block;
+  width: 7px;
+  height: 14px;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  background: var(--muted);
+  animation: blink 1s steps(2, start) infinite;
+}
+@keyframes blink {
+  to {
+    visibility: hidden;
+  }
+}
+.thinking {
+  margin-bottom: 6px;
+  color: var(--muted);
+}
+.thinking-text {
+  margin: 2px 0 6px 18px;
+  padding-left: 10px;
+  border-left: 2px solid var(--line);
+  white-space: pre-wrap;
+}
+.tool-card {
+  margin: 6px 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  overflow: hidden;
+}
+.tool-head {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  text-align: left;
+}
+.tool-head.static {
+  cursor: default;
+}
+.tool-name {
+  color: var(--text);
+  font-weight: 600;
+}
+.tool-summary {
+  min-width: 0;
+  overflow: hidden;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.tool-chevron {
+  transition: transform var(--ease);
+}
+.tool-chevron.open {
+  transform: rotate(90deg);
+}
+.tool-body {
+  border-top: 1px solid var(--line);
+}
+.tool-output {
+  max-height: 260px;
+  margin: 0;
+  padding: 8px 12px;
+  overflow: auto;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  white-space: pre-wrap;
+}
+.chat-diff {
+  margin: 0;
+  padding: 6px 0;
+  border-top: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+.chat-diff div {
+  padding: 0 12px;
+  white-space: pre-wrap;
+}
+.chat-diff-add {
+  background: color-mix(in srgb, var(--good) 16%, transparent);
+}
+.chat-diff-del {
+  background: color-mix(in srgb, var(--bad) 16%, transparent);
+}
+.todo-list {
+  margin: 0;
+  padding: 8px 12px;
+  list-style: none;
+}
+.todo-list li {
+  display: flex;
+  gap: 8px;
+  padding: 1px 0;
+}
+.todo-list li[data-status="completed"] {
+  color: var(--muted);
+  text-decoration: line-through;
+}
+.todo-box {
+  width: 14px;
+  color: var(--accent);
+}
+.chat-error {
+  margin: 8px 0;
+  padding: 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--bad) 45%, var(--line));
+  border-radius: 8px;
+  background: color-mix(in srgb, var(--bad) 9%, transparent);
+  color: var(--bad);
+}
+.turn-footer {
+  margin: 4px 0 10px;
+  color: var(--muted);
+  font-size: 12px;
+}
+.turn-footer[data-ok="false"] {
+  color: var(--bad);
+}
+.working-dots {
+  display: flex;
+  gap: 4px;
+  padding: 8px 2px;
+}
+.working-dots span {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  background: var(--muted);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+.working-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.working-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.25;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+/* The composer. */
+.composer {
+  position: relative;
+}
+.composer-box {
+  display: flex;
+  align-items: flex-end;
+  gap: 8px;
+  padding: 8px 8px 8px 14px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
+}
+.composer-box:focus-within {
+  border-color: var(--accent);
+}
+.composer-box textarea {
+  max-height: 200px;
+  min-height: 24px;
+  flex: 1;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  field-sizing: content;
+  resize: none;
+}
+.composer-box textarea:focus-visible {
+  outline: none;
+}
+.send-button {
+  display: inline-flex;
+  width: 30px;
+  height: 30px;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--on-accent);
+}
+.send-button:disabled {
+  opacity: 0.35;
+}
+.composer-images {
+  display: flex;
+  gap: 6px;
+  padding: 0 0 6px;
+}
+.composer-image {
+  padding: 0;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  overflow: hidden;
+}
+.composer-image img {
+  display: block;
+  height: 56px;
+}
+.mention-list {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 6px);
+  left: 0;
+  z-index: 10;
+  max-height: 220px;
+  margin: 0;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  list-style: none;
+}
+.mention-item {
+  display: block;
+  width: 100%;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--text);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  text-align: left;
+}
+.mention-item[data-active="true"],
+.mention-item:hover {
+  background: var(--hover);
+}

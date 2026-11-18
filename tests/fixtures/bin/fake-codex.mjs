@@ -41,6 +41,10 @@ const threadId = "019fakefake-0000-4000-8000-000000000042";
 
 if (args[0] === "exec") {
   const prompt = args[args.length - 1];
+  if (process.env["FAKE_ARGS_LOG"]) {
+    writeFileSync(process.env["FAKE_ARGS_LOG"], `${JSON.stringify({ tool: "codex", args })}
+`, { flag: "a" });
+  }
   const outFile = flag("-o");
   out({ type: "thread.started", thread_id: threadId });
   out({ type: "turn.started" });

@@ -391,6 +391,16 @@ function registerConfigHandlers(ctx: AppContext): void {
 
 /** The task board and the inbox. */
 function registerTaskHandlers(ctx: AppContext): void {
+  ctx.ipc.handle("chat.state", (req) => ctx.chat.state(req.id));
+  ctx.ipc.handle("chat.history", (req) => ctx.chat.history(req.id));
+  ctx.ipc.handle("chat.send", (req) =>
+    ctx.chat.send(req.id, req.text, req.images ?? [], req.options),
+  );
+  ctx.ipc.handle("chat.stop", (req) => ctx.chat.stop(req.id));
+  ctx.ipc.handle("chat.setOptions", (req) => ctx.chat.setOptions(req.id, req.options));
+  ctx.ipc.handle("chat.files", (req) => ctx.chat.files(req.id, req.query));
+  ctx.ipc.handle("chat.toTerminal", (req) => ctx.chat.toTerminal(req.id));
+  ctx.ipc.handle("chat.toChat", (req) => ctx.chat.toChat(req.id));
   ctx.ipc.handle("permissions.list", () => ctx.permissions.list());
   ctx.ipc.handle("permissions.answer", (req) => {
     try {

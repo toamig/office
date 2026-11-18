@@ -320,6 +320,94 @@ export const SessionStatus = z.enum([
 ]);
 export type SessionStatus = z.infer<typeof SessionStatus>;
 
+/** How a session is shown: as a chat, or as a terminal running the real program. */
+export const SessionMode = z.enum(["chat", "terminal"]);
+export type SessionMode = z.infer<typeof SessionMode>;
+
+/** An image pasted into the composer, sent with the message. */
+export const ChatImage = z.object({
+  /** For example image/png. */
+  mediaType: z.string(),
+  /** The image bytes, base64 encoded. */
+  data: z.string(),
+});
+export type ChatImage = z.infer<typeof ChatImage>;
+
+/**
+ * What a chat shows, one event at a time, whichever program is underneath. The main process turns the
+ * provider's stream into these, stores them as JSON lines in the session's folder, and sends them to the
+ * chat view; the view builds its messages from them with the reducer in shared/chat.ts.
+ */
+export const ChatEvent = z.discriminatedUnion("t", [
+  z.object({
+    t: z.literal("user"),
+    id: z.string(),
+    text: z.string(),
+    images: z.number().default(0),
+  }),
+  z.object({ t: z.literal("turn-start") }),
+  /** A new assistant message begins (its text streams in as text-delta events). */
+  z.object({ t: z.literal("assistant-start"), id: z.string() }),
+  z.object({ t: z.literal("text-delta"), id: z.string(), text: z.string() }),
+  z.object({ t: z.literal("thinking-delta"), id: z.string(), text: z.string() }),
+  /** The finished assistant message: its text, its thinking and its tool calls, replacing what streamed. */
+  z.object({
+    t: z.literal("assistant"),
+    id: z.string(),
+    text: z.string(),
+    thinking: z.string().default(""),
+  }),
+  z.object({
+    t: z.literal("tool-use"),
+    id: z.string(),
+    name: z.string(),
+    input: z.record(z.string(), z.unknown()),
+  }),
+  z.object({
+    t: z.literal("tool-result"),
+    toolUseId: z.string(),
+    output: z.string(),
+    isError: z.boolean().default(false),
+  }),
+  /** The end of a turn. */
+  z.object({
+    t: z.literal("result"),
+    ok: z.boolean(),
+    durationMs: z.number().nullable().default(null),
+    error: z.string().optional(),
+  }),
+  z.object({ t: z.literal("error"), message: z.string() }),
+  /** The owner stopped the turn, or the process went away. */
+  z.object({ t: z.literal("stopped") }),
+]);
+export type ChatEvent = z.infer<typeof ChatEvent>;
+
+/** A stored or live chat event with its place in the conversation. */
+export const ChatLine = z.object({ seq: z.number(), at: z.string(), event: ChatEvent });
+export type ChatLine = z.infer<typeof ChatLine>;
+
+/** What the chat's header lets the owner choose. */
+export const ChatOptions = z.object({
+  model: z.string().optional(),
+  /** Claude Code's permission mode; for Codex the sandbox is shown instead. */
+  permissionMode: z.string().optional(),
+});
+export type ChatOptions = z.infer<typeof ChatOptions>;
+
+export const ChatState = z.object({
+  mode: SessionMode,
+  /** "claude" runs one process per chat; "codex" runs one per turn in a sandbox. */
+  kind: z.enum(["claude", "codex"]),
+  /** True while a turn runs. */
+  working: z.boolean(),
+  /** The sandbox of a Codex chat (shown in the header); empty for Claude Code. */
+  sandbox: z.string(),
+  models: z.array(z.string()),
+  permissionModes: z.array(z.string()),
+  options: ChatOptions,
+});
+export type ChatState = z.infer<typeof ChatState>;
+
 export const SessionRow = z.object({
   id: z.string(),
   provider: z.string(),
@@ -337,8 +425,10 @@ export const SessionRow = z.object({
   archivedAt: z.string().nullable(),
   lastOutputAt: z.string().nullable(),
   capturedAt: z.string().nullable(),
-  /** True while the terminal process is alive. */
+  /** True while the terminal process is alive (or, for a chat, while its program is). */
   running: z.boolean(),
+  /** Whether the session is a chat or a terminal. Sessions made before chats existed are terminals. */
+  mode: SessionMode,
 });
 export type SessionRow = z.infer<typeof SessionRow>;
 
@@ -353,6 +443,8 @@ export const StartSession = z.object({
   cwd: z.string().optional(),
   title: z.string().optional(),
   prompt: z.string().optional(),
+  /** Chat or terminal; the machine setting decides when this is left out. */
+  mode: SessionMode.optional(),
 });
 export type StartSession = z.infer<typeof StartSession>;
 

@@ -51,6 +51,10 @@ import {
   WriteResult,
   RunSummary,
   PermissionRequest,
+  ChatImage,
+  ChatLine,
+  ChatOptions,
+  ChatState,
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
@@ -78,6 +82,8 @@ export const eventTypes = [
   "settings.changed",
   "app.history",
   "app.terminal-action",
+  "chat.event",
+  "chat.state",
   "app.update",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
@@ -305,6 +311,24 @@ export const channels = {
   "github.overview": { req: z.object({ projectId: z.string() }), res: GithubOverview },
   "roles.save": { req: z.object({ id: z.string(), role: Role }), res: z.void() },
   "roles.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "chat.state": { req: z.object({ id: z.string() }), res: ChatState },
+  "chat.history": { req: z.object({ id: z.string() }), res: z.array(ChatLine) },
+  "chat.send": {
+    req: z.object({
+      id: z.string(),
+      text: z.string(),
+      images: z.array(ChatImage).optional(),
+      options: ChatOptions.optional(),
+    }),
+    res: z.void(),
+  },
+  /** The model and permission mode picked in the chat header; they apply from the next message. */
+  "chat.setOptions": { req: z.object({ id: z.string(), options: ChatOptions }), res: z.void() },
+  "chat.stop": { req: z.object({ id: z.string() }), res: z.void() },
+  /** Project files that match what the owner typed after @ in the composer. */
+  "chat.files": { req: z.object({ id: z.string(), query: z.string() }), res: z.array(z.string()) },
+  "chat.toTerminal": { req: z.object({ id: z.string() }), res: SessionRow },
+  "chat.toChat": { req: z.object({ id: z.string() }), res: SessionRow },
   "permissions.list": { req: z.void(), res: z.array(PermissionRequest) },
   /** Answers one waiting request: allow it once, or deny it with an optional reason. */
   "permissions.answer": {

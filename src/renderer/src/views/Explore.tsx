@@ -4,7 +4,7 @@ import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { SpawnWizard } from "./explore/SpawnWizard";
-import { TerminalView } from "./agents/TerminalView";
+import { SessionSurface } from "./agents/SessionSurface";
 
 /** A general chat for exploring ideas, not tied to any project; one action turns an idea into a project. */
 export function Explore() {
@@ -95,7 +95,13 @@ export function Explore() {
           ))}
         </div>
         <div className="min-w-0 flex-1" style={{ background: "var(--panel)" }}>
-          {current ? <TerminalView key={current.id} id={current.id} /> : null}
+          {current ? (
+            <SessionSurface
+              key={current.id}
+              session={current}
+              onChanged={() => sessions.reload()}
+            />
+          ) : null}
         </div>
       </div>
       {wizard && current && (

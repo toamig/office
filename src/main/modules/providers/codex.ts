@@ -12,6 +12,7 @@ import { codexInventory } from "../setup/inventory";
 import { parseCodexLine, startAgentRun } from "./stream";
 import type {
   AgentRun,
+  ChatCommandOptions,
   CommandSpec,
   Detection,
   Provider,
@@ -158,6 +159,29 @@ export class CodexProvider implements Provider {
     return startAgentRun(stream, parseCodexLine, () =>
       existsSync(resultFile) ? readFileSync(resultFile, "utf8").trim() : null,
     );
+  }
+
+  readonly chatKind = "codex" as const;
+
+  /** One `codex exec` per turn: the first starts the thread, later ones resume it (plan 7.3). */
+  chatCommand(o: ChatCommandOptions): CommandSpec {
+    const role = o.role ?? {
+      provider: this.id,
+      instructions: "",
+      readOnly: false,
+      allowedCommands: [],
+    };
+    const args = codexHeadlessArgs(
+      {
+        cwd: o.cwd,
+        officeSessionId: o.officeSessionId,
+        prompt: o.message ?? "",
+        role: { ...role, ...(o.model ? { model: o.model } : {}) },
+        ...(o.resume && o.threadId ? { resumeId: o.threadId } : {}),
+      },
+      join(o.runDir, "turn-result.md"),
+    );
+    return this.command(args);
   }
 
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec {

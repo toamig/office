@@ -55,14 +55,19 @@ export class PermissionBroker {
       .prepare("SELECT kind, task_id, project_id FROM runs WHERE id = ?")
       .get(runId) as
       { kind: string; task_id: string | null; project_id: string | null } | undefined;
+    // A chat's questions use the chat session's id as the run id.
+    const chat = run
+      ? undefined
+      : (this.deps.db.prepare("SELECT title, project_id FROM sessions WHERE id = ?").get(runId) as
+          { title: string | null; project_id: string | null } | undefined);
     const task = run?.task_id
       ? (this.deps.db.prepare("SELECT title FROM tasks WHERE id = ?").get(run.task_id) as
           { title: string } | undefined)
       : undefined;
     return {
       taskId: run?.task_id ?? null,
-      projectId: run?.project_id ?? null,
-      subject: task?.title ?? run?.kind ?? "A run",
+      projectId: run?.project_id ?? chat?.project_id ?? null,
+      subject: task?.title ?? chat?.title ?? run?.kind ?? "A run",
     };
   }
 

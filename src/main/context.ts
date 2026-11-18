@@ -35,6 +35,7 @@ import { HooksManager } from "./modules/setup/install-hooks";
 import { BriefService } from "./modules/brief/brief";
 import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
+import { ChatService } from "./modules/chat/service";
 import { RunService } from "./modules/runs/service";
 import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
@@ -71,6 +72,8 @@ export interface AppContext {
   ops: VaultOps;
   /** Questions from headless builders waiting for the owner (plan 9.5). */
   permissions: PermissionBroker;
+  /** Agent conversations shown as chats (M6.5). */
+  chat: ChatService;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
   /** Sync all repos and raise notifications for what needs the owner. */
@@ -162,12 +165,14 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
   const { writer, projects } = notes;
   const providers = new ProviderRegistry();
   // The task engine is built later; the broker reaches it through this hook.
-  const permissionHook: { onWaiting?: (runId: string, waiting: boolean) => void } = {};
+  const permissionHook: { listeners: Array<(runId: string, waiting: boolean) => void> } = {
+    listeners: [],
+  };
   const broker = new PermissionBroker({
     db,
     bus,
     notifier,
-    onWaiting: (runId, waiting) => permissionHook.onWaiting?.(runId, waiting),
+    onWaiting: (runId, waiting) => permissionHook.listeners.forEach((fn) => fn(runId, waiting)),
   });
   const bridgeScript = join(dirname(relayScript), "office-permission-mcp.mjs");
   const runs = new RunService({
@@ -202,7 +207,23 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     workspace: () => store.state.workspace,
     projectPath: folderOf(projects),
     logsDir: sessionsDir(),
+    defaultMode: () => box.current.sessionMode,
   });
+  const chat = new ChatService({
+    bus,
+    providers,
+    sessions,
+    chatsDir: join(dataDir(), "chats"),
+    broker,
+    writeMcpConfig: (id, dir) => writePermissionMcpConfig(dir, id, bridgeScript),
+  });
+  sessions.chat = {
+    send: (id, text) => chat.send(id, text),
+    configure: (id, extra) => chat.configure(id, extra),
+    stop: (id) => chat.stop(id),
+    running: (id) => chat.running(id),
+  };
+  permissionHook.listeners.push((runId, waiting) => chat.permissionWaiting(runId, waiting));
   providers.setTerminalOpener((spec, title) => {
     sessions.startCommand(spec, title, userHome());
   });
@@ -245,6 +266,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     explore,
     broker,
     permissionHook,
+    chat,
   };
 }
 
@@ -300,7 +322,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     },
     log: (m) => console.log(m),
   });
-  agents.permissionHook.onWaiting = (runId, waiting) => tasks.permissionWaiting(runId, waiting);
+  agents.permissionHook.listeners.push((runId, waiting) => tasks.permissionWaiting(runId, waiting));
   return { editor, tasks, scheduler, modules };
 }
 

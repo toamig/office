@@ -8,7 +8,7 @@ import { useUi } from "../stores/ui";
 import { CaptureDialog } from "./agents/CaptureDialog";
 import { PaneHeader } from "./agents/PaneHeader";
 import { StartAgentDialog } from "./agents/StartAgentDialog";
-import { TerminalView } from "./agents/TerminalView";
+import { SessionSurface } from "./agents/SessionSurface";
 
 const EMPTY: Layout = { open: [], active: null, split: "single", panes: [] };
 const CAPACITY: Record<Layout["split"], number> = { single: 1, columns: 2, rows: 2, grid: 4 };
@@ -65,7 +65,7 @@ function SessionList({
             <span>{timeAgo(s.updatedAt)}</span>
           </div>
           <div className="mt-1 flex gap-1.5">
-            {!s.running && (
+            {!s.running && s.mode !== "chat" && (
               <Button
                 onClick={(e) => {
                   e.stopPropagation();
@@ -284,14 +284,22 @@ export function Agents() {
                 style={{ borderColor: "var(--line)" }}
                 data-testid="pane"
               >
-                <PaneHeader
-                  session={byId.get(id)}
-                  options={openIds.map((o) => ({ id: o, title: byId.get(o)?.title ?? o }))}
-                  split={layout.split !== "single"}
-                  onPick={(next) => setPane(index, next)}
-                />
+                {(layout.split !== "single" || byId.get(id)?.mode !== "chat") && (
+                  <PaneHeader
+                    session={byId.get(id)}
+                    options={openIds.map((o) => ({ id: o, title: byId.get(o)?.title ?? o }))}
+                    split={layout.split !== "single"}
+                    onPick={(next) => setPane(index, next)}
+                    onChanged={() => sessions.reload()}
+                  />
+                )}
                 <div className="min-h-0 flex-1" style={{ background: "var(--panel)" }}>
-                  <TerminalView id={id} />
+                  {byId.get(id) && (
+                    <SessionSurface
+                      session={byId.get(id) as SessionRow}
+                      onChanged={() => sessions.reload()}
+                    />
+                  )}
                 </div>
               </div>
             ))}

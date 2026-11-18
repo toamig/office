@@ -60,6 +60,37 @@ test("every view in light and dark", async () => {
   );
   await expect(win.getByTestId("permission-request")).toBeVisible({ timeout: 60000 });
 
+  // A chat with a tool call, an edit, a checklist and an open approval.
+  const chat = await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Chat design",
+      mode: "chat",
+    }),
+  );
+  await win.evaluate(
+    (id) =>
+      window.office.invoke("chat.send", {
+        id,
+        text: "THINK READ src/sheep.ts EDIT TODO RUN npm test",
+      }),
+    chat.id,
+  );
+  await expect
+    .poll(
+      async () =>
+        (await win.evaluate((id) => window.office.invoke("chat.history", { id }), chat.id)).some(
+          (l) => l.event.t === "result",
+        ),
+      { timeout: 30000 },
+    )
+    .toBe(true);
+  await win.evaluate(
+    (id) => window.office.invoke("chat.send", { id, text: "NEEDS_PERMISSION: rm -rf build" }),
+    chat.id,
+  );
+
   for (const theme of ["dark", "light"] as const) {
     await win.evaluate((t) => window.office.invoke("settings.set", { theme: t }), theme);
     await expect
@@ -68,12 +99,17 @@ test("every view in light and dark", async () => {
     for (const view of VIEWS) {
       await win.getByTestId(`rail-${view}`).click();
       if (view === "agents") {
-        await win.getByTestId("session-row").first().click();
+        await win.getByTestId("session-row").filter({ hasText: "Level work" }).click();
         await expect(win.locator('[data-testid="terminal"]')).toBeVisible();
         await win.waitForTimeout(600);
       }
       await shoot(win, view, theme);
     }
+    await win.getByTestId("rail-agents").click();
+    await win.getByTestId("session-row").filter({ hasText: "Chat design" }).click();
+    await expect(win.getByTestId("chat")).toBeVisible();
+    await win.waitForTimeout(700);
+    await shoot(win, "chat", theme);
     // A project page, the quick switcher, the shortcuts sheet and a collapsed sidebar.
     await win.getByTestId("rail-projects").click();
     await win.getByTestId("project-card").first().click();

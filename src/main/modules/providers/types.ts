@@ -65,6 +65,26 @@ export interface Detection {
   problem?: string;
 }
 
+/** What a provider needs to start (or continue) a chat (plan 7.2 and 7.3). */
+export interface ChatCommandOptions {
+  cwd: string;
+  officeSessionId: string;
+  /** True to continue a conversation that already exists. */
+  resume: boolean;
+  role?: Role;
+  permission: RunPermission;
+  /** The owner's picks in the chat header. */
+  model?: string;
+  permissionMode?: string;
+  /** Codex runs one process per turn, so each carries its message and the thread to continue. */
+  message?: string;
+  threadId?: string;
+  /** A folder for the turn's output file (Codex). */
+  runDir: string;
+  /** Extra folders the program may read (Explore adds the brain). */
+  addDirs?: string[];
+}
+
 /** What every agent tool answers, so adding a vendor is one module (plan 7.1). */
 export interface Provider {
   id: string;
@@ -81,6 +101,12 @@ export interface Provider {
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun;
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec;
   inventory(projectPath?: string): Promise<Inventory>;
+  /**
+   * How this provider runs a chat: "claude" is one long-lived process per chat that takes messages on stdin,
+   * "codex" is one process per turn. Absent when the provider has no chat.
+   */
+  chatKind?: "claude" | "codex";
+  chatCommand?(o: ChatCommandOptions): CommandSpec;
 }
 
 /** Set by the sessions module so providers can open their login in a terminal tab. */

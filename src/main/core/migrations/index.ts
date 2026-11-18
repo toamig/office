@@ -3,6 +3,7 @@ import { migration002 } from "./002_session_capture";
 import { migration003 } from "./003_fanout";
 import { migration004 } from "./004_task_record";
 import { migration005 } from "./005_task_base_branch";
+import { migration006 } from "./006_session_mode";
 
 export interface Migration {
   id: number;
@@ -17,4 +18,5 @@ export const migrations: Migration[] = [
   migration003,
   migration004,
   migration005,
+  migration006,
 ];

@@ -1,4 +1,4 @@
-import { GitBranch, Square } from "lucide-react";
+import { GitBranch, MessageSquare, Square } from "lucide-react";
 import type { SessionRow } from "@shared/models";
 import { Chip } from "../../components/ui";
 import { office } from "../../lib/ipc";
@@ -15,11 +15,13 @@ export function PaneHeader({
   options,
   split,
   onPick,
+  onChanged,
 }: {
   session: SessionRow | undefined;
   options: Array<{ id: string; title: string }>;
   split: boolean;
   onPick: (id: string) => void;
+  onChanged: () => void;
 }) {
   if (!session) return null;
   return (
@@ -48,6 +50,15 @@ export function PaneHeader({
         </span>
       )}
       <div className="flex-1" />
+      {session.provider !== "terminal" && session.mode === "terminal" && (
+        <button
+          className="chat-link"
+          onClick={() => void office.invoke("chat.toChat", { id: session.id }).then(onChanged)}
+          data-testid="back-to-chat"
+        >
+          <MessageSquare size={13} /> Back to chat
+        </button>
+      )}
       {session.running && (
         <button
           className="bar-button"

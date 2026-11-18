@@ -170,6 +170,79 @@ async function needsPermission(text) {
   return [`Refused ${command}`, [{ tool_name: "Bash", tool_input: { command } }]];
 }
 
+// ---------- chat: a long-lived `claude -p --input-format stream-json`, as Claude Code does it ----------
+// Each stdin line is a user message; the answer streams out as stream_event partials, the finished assistant
+// message, tool calls and results, and a result line. The text of the message picks what happens:
+//   THINK, READ <path>, EDIT, RUN <cmd>, TODO, NEEDS_PERMISSION: <cmd>, SLOW, anything else is echoed.
+async function chatLoop() {
+  const log = process.env["FAKE_ARGS_LOG"];
+  if (log) {
+    const { appendFileSync } = await import("node:fs");
+    appendFileSync(log, `${JSON.stringify({ tool: "claude", args })}\n`);
+  }
+  out({ type: "system", subtype: "init", session_id: sessionId, model: flag("--model") ?? "fake" });
+  let turn = 0;
+  const lines = createInterface({ input: process.stdin });
+  const stream = (event) => out({ type: "stream_event", event, session_id: sessionId });
+  const say = async (id, text) => {
+    for (const chunk of text.match(/.{1,6}/gs) ?? []) {
+      stream({ type: "content_block_delta", index: 0, delta: { type: "text_delta", text: chunk } });
+      await new Promise((r) => setTimeout(r, 15));
+    }
+    out({ type: "assistant", message: { id, role: "assistant", content: [{ type: "text", text }] }, session_id: sessionId });
+  };
+  const tool = async (id, name, input, run) => {
+    out({ type: "assistant", message: { id, role: "assistant", content: [{ type: "tool_use", id: `toolu_${id}`, name, input }] }, session_id: sessionId });
+    const [content, isError] = await run();
+    out({ type: "user", message: { role: "user", content: [{ type: "tool_result", tool_use_id: `toolu_${id}`, content, is_error: isError }] }, session_id: sessionId });
+  };
+  for await (const raw of lines) {
+    if (!raw.trim()) continue;
+    const msg = JSON.parse(raw);
+    const blocks = Array.isArray(msg.message?.content) ? msg.message.content : [{ type: "text", text: String(msg.message?.content ?? "") }];
+    const text = blocks.filter((b) => b.type === "text").map((b) => b.text).join("\n");
+    const images = blocks.filter((b) => b.type === "image").length;
+    const started = Date.now();
+    turn += 1;
+    const id = `msg_${turn}`;
+    stream({ type: "message_start", message: { id, role: "assistant" } });
+    if (/THINK/.test(text)) {
+      stream({ type: "content_block_delta", index: 0, delta: { type: "thinking_delta", thinking: "Let me think about it." } });
+      out({ type: "assistant", message: { id, role: "assistant", content: [{ type: "thinking", thinking: "Let me think about it." }] }, session_id: sessionId });
+    }
+    const read = /READ (\S+)/.exec(text);
+    const run = /RUN (.+)$/m.exec(text);
+    const ask = /NEEDS_PERMISSION: (.+)$/m.exec(text);
+    if (/SLOW/.test(text)) await new Promise((r) => setTimeout(r, 20000));
+    if (read) await tool(`${id}r`, "Read", { file_path: read[1] }, async () => ["line one\nline two", false]);
+    if (/EDIT/.test(text)) {
+      await tool(`${id}e`, "Edit", { file_path: "notes.txt", old_string: "one", new_string: "two" }, async () => ["The file notes.txt has been updated.", false]);
+    }
+    if (run) await tool(`${id}b`, "Bash", { command: run[1].trim() }, async () => [`ran: ${run[1].trim()}`, false]);
+    if (/TODO/.test(text)) {
+      await tool(`${id}t`, "TodoWrite", { todos: [{ content: "Write the test", status: "completed" }, { content: "Run it", status: "in_progress" }, { content: "Ship", status: "pending" }] }, async () => ["Todos updated", false]);
+    }
+    let answer = `echo: ${text}${images ? ` (${images} image${images > 1 ? "s" : ""})` : ""}`;
+    if (ask) {
+      const command = ask[1].trim();
+      let outcome = "";
+      await tool(`${id}p`, "Bash", { command }, async () => {
+        const [reply] = await needsPermission(`NEEDS_PERMISSION: ${command}`);
+        outcome = reply;
+        return [reply, /Could not run|Refused/.test(reply)];
+      });
+      answer = outcome;
+    }
+    await say(id, answer);
+    out({ type: "result", subtype: "success", is_error: false, result: answer, duration_ms: Date.now() - started, session_id: sessionId });
+  }
+}
+
+if (flag("--input-format") === "stream-json") {
+  await chatLoop();
+  process.exit(0);
+}
+
 if (prompt !== null) {
   out({ type: "system", subtype: "init", session_id: sessionId, model: flag("--model") ?? "fake" });
   try {
