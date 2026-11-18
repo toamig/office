@@ -11,16 +11,34 @@
   --accent: #3b6fd4;
 }
 
+/* Dark follows the system unless the owner forced light. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --bg: #1b1d20;
     --panel: #232629;
     --rail: #17191b;
     --line: #34383d;
     --text: #e6e8ea;
     --muted: #9aa1a8;
-    --accent: #6c9bf0;
   }
+}
+
+:root[data-theme="light"] {
+  color-scheme: light;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --bg: #1b1d20;
+  --panel: #232629;
+  --rail: #17191b;
+  --line: #34383d;
+  --text: #e6e8ea;
+  --muted: #9aa1a8;
+}
+
+:root[data-density="compact"] body {
+  font-size: 12.5px;
 }
 
 html,

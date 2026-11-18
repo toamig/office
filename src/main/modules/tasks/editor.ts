@@ -52,6 +52,23 @@ export class WorkspaceEditor {
     });
   }
 
+  /** Changes which notification kinds are urgent, which projects are muted, and the ntfy topic. */
+  async setNotifications(patch: {
+    urgent?: string[];
+    mutedProjects?: string[];
+    ntfyTopicUrl?: string;
+  }): Promise<void> {
+    await this.edit("Workspace: notification rules", (json) => {
+      const n = (json["notifications"] ??= {}) as Json;
+      if (patch.urgent) n["urgent"] = patch.urgent;
+      if (patch.mutedProjects) n["mutedProjects"] = patch.mutedProjects;
+      if (patch.ntfyTopicUrl !== undefined) {
+        if (patch.ntfyTopicUrl.trim() === "") delete n["ntfyTopicUrl"];
+        else n["ntfyTopicUrl"] = patch.ntfyTopicUrl.trim();
+      }
+    });
+  }
+
   /** Adds or replaces an automation (a scheduled prompt on a project). */
   async saveAutomation(automation: Automation): Promise<void> {
     if (!ID_RE.test(automation.id))

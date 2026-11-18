@@ -18,6 +18,7 @@ import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
 import { useQuery } from "./lib/hooks";
 import { QuickSwitcher } from "./components/QuickSwitcher";
+import { ThemeApplier } from "./components/ThemeApplier";
 import { Agents } from "./views/Agents";
 import { Board } from "./views/Board";
 import { Brain } from "./views/Brain";
@@ -169,6 +170,7 @@ export default function App() {
       </div>
       <SyncReportDialog />
       <QuickSwitcher />
+      <ThemeApplier />
     </div>
   );
 }

@@ -3,6 +3,7 @@ import { Button, Panel } from "../components/ui";
 import { useQuery } from "../lib/hooks";
 import { AutomationsPanel } from "./setup/AutomationsPanel";
 import { HooksPanel } from "./setup/HooksPanel";
+import { PreferencesPanel } from "./setup/PreferencesPanel";
 import { InventoryPanel } from "./setup/InventoryPanel";
 import { ToolsPanel } from "./setup/ToolsPanel";
 import { WorkspaceWizard } from "./setup/WorkspaceWizard";
@@ -40,6 +41,7 @@ export function Setup() {
       )}
       <ToolsPanel />
       <HooksPanel />
+      <PreferencesPanel />
       {w?.configured && <AutomationsPanel />}
       {w?.configured && <InventoryPanel />}
     </div>

@@ -1,5 +1,6 @@
 import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
+import type { AppSettings } from "../shared/models";
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { normPath } from "./core/util";
@@ -275,6 +276,33 @@ export function registerHandlers(ctx: AppContext): void {
     const automation = ctx.store.state.workspace?.automations.find((a) => a.id === req.id);
     if (!automation) throw new IpcFailure("not-found", `No automation ${req.id}`);
     void ctx.scheduler.fire(automation);
+  });
+  const appSettings = (): AppSettings => {
+    const s = ctx.settings();
+    return {
+      theme: s.theme,
+      accent: s.accent,
+      density: s.density,
+      quietHours: s.quietHours ?? null,
+      editorCommand: s.editorCommand,
+    };
+  };
+  ctx.ipc.handle("settings.get", () => appSettings());
+  ctx.ipc.handle("settings.set", (req) => {
+    const { quietHours, ...rest } = req;
+    ctx.patchSettings({
+      ...rest,
+      ...(quietHours === undefined ? {} : { quietHours: quietHours ?? undefined }),
+    });
+    return appSettings();
+  });
+  ctx.ipc.handle("notifications.setRules", (req) => ctx.editor.setNotifications(req));
+  ctx.ipc.handle("notifications.testPing", async () => {
+    try {
+      await ctx.ntfy.post("Office test ping", "If you can read this, phone pings work.");
+    } catch (err) {
+      throw new IpcFailure("ping-failed", `The test ping failed: ${(err as Error).message}`);
+    }
   });
   ctx.ipc.handle("tasks.list", (req) => ctx.tasks.list(req.projectId));
   ctx.ipc.handle("tasks.get", (req) => ctx.tasks.get(req.id));

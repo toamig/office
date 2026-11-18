@@ -631,3 +631,38 @@ export const AutomationView = z.object({
   nextRun: z.string().nullable(),
 });
 export type AutomationView = z.infer<typeof AutomationView>;
+
+export const AppSettings = z.object({
+  theme: z.enum(["system", "light", "dark"]),
+  accent: z.string(),
+  density: z.enum(["compact", "comfortable"]),
+  quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
+  editorCommand: z.string(),
+});
+export type AppSettings = z.infer<typeof AppSettings>;
+
+export const AppSettingsPatch = z.object({
+  theme: z.enum(["system", "light", "dark"]).optional(),
+  accent: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/, "Use a colour like #3b6fd4")
+    .optional(),
+  density: z.enum(["compact", "comfortable"]).optional(),
+  quietHours: z
+    .object({
+      from: z.string().regex(/^\d{2}:\d{2}$/),
+      to: z.string().regex(/^\d{2}:\d{2}$/),
+    })
+    .nullable()
+    .optional(),
+  editorCommand: z.string().min(1).optional(),
+});
+export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
+
+export const NotificationRules = z.object({
+  urgent: z.array(z.string()).optional(),
+  mutedProjects: z.array(z.string()).optional(),
+  /** An empty string clears the topic. */
+  ntfyTopicUrl: z.string().optional(),
+});
+export type NotificationRules = z.infer<typeof NotificationRules>;

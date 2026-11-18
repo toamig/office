@@ -5,6 +5,7 @@ import type { MachineSettings } from "../shared/types";
 import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
 import { IpcRegistry } from "./core/ipc";
+import { NtfyChannel } from "./core/channels/ntfy";
 import { Notifier } from "./core/notifier";
 import { Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
@@ -57,6 +58,7 @@ export interface AppContext {
   editor: WorkspaceEditor;
   tasks: TaskEngine;
   scheduler: Scheduler;
+  ntfy: NtfyChannel;
   relay: RelayServer;
   projects: ProjectService;
   github: GithubService;
@@ -89,6 +91,8 @@ export async function createContext(
     workspace: () => store.state.workspace,
     quietHours: () => current.quietHours,
   });
+  const ntfy = new NtfyChannel(() => store.state.workspace?.notifications.ntfyTopicUrl);
+  notifier.addChannel(ntfy);
   const vault = new VaultService({
     bus,
     workspace: () => store.state.workspace,
@@ -270,6 +274,7 @@ export async function createContext(
     editor,
     tasks,
     scheduler,
+    ntfy,
     relay,
     projects,
     github,

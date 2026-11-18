@@ -1,6 +1,8 @@
 import { z } from "zod";
 import { Automation, Role } from "./schemas";
 import {
+  AppSettings,
+  AppSettingsPatch,
   AskResult,
   AutomationView,
   BranchCompare,
@@ -21,6 +23,7 @@ import {
   Layout,
   ReviewComment,
   NotificationFilter,
+  NotificationRules,
   NotificationRow,
   ProjectNote,
   ProviderStatus,
@@ -273,6 +276,10 @@ export const channels = {
   "automations.save": { req: Automation, res: z.void() },
   "automations.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "automations.runNow": { req: z.object({ id: z.string() }), res: z.void() },
+  "settings.get": { req: z.void(), res: AppSettings },
+  "settings.set": { req: AppSettingsPatch, res: AppSettings },
+  "notifications.setRules": { req: NotificationRules, res: z.void() },
+  "notifications.testPing": { req: z.void(), res: z.void() },
   "tasks.list": { req: z.object({ projectId: z.string().optional() }), res: z.array(TaskView) },
   "tasks.get": { req: z.object({ id: z.string() }), res: TaskDetail },
   "tasks.create": { req: CreateTask, res: TaskView },
