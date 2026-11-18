@@ -6,6 +6,7 @@ import { clearToolCache } from "../../src/main/core/exec";
 import { ClaudeCodeProvider } from "../../src/main/modules/providers/claude-code";
 import {
   CodexProvider,
+  codexHeadlessArgs,
   knownCodexModels,
   rememberCodexModel,
 } from "../../src/main/modules/providers/codex";
@@ -175,6 +176,63 @@ describe("headless runs against the fake CLIs", () => {
     const done = await run.done;
     expect(done.ok).toBe(false);
     expect(done.error).toBe("cancelled");
+  });
+});
+
+describe("codex exec arguments", () => {
+  const base = { cwd: "/w", officeSessionId: "x", prompt: "Do it" };
+
+  it("gives a writable role the workspace-write sandbox, effort and its instructions", () => {
+    const args = codexHeadlessArgs(
+      {
+        ...base,
+        role: role({
+          provider: "codex",
+          model: "m1",
+          effort: "high",
+          instructions: "Produce the art.",
+        }),
+      },
+      "/r/result.md",
+    );
+    expect(args.slice(0, 2)).toEqual(["exec", "--json"]);
+    expect(args).toContain("workspace-write");
+    expect(args[args.indexOf("-s") + 1]).toBe("workspace-write");
+    expect(args[args.indexOf("-c") + 1]).toBe('model_reasoning_effort="high"');
+    expect(args[args.indexOf("-m") + 1]).toBe("m1");
+    expect(args.at(-1)).toBe("Produce the art.\n\nDo it");
+  });
+
+  it("keeps a read-only role read-only, and maps max effort to xhigh", () => {
+    const args = codexHeadlessArgs(
+      { ...base, role: role({ provider: "codex", readOnly: true, effort: "max" }) },
+      "/r/result.md",
+    );
+    expect(args[args.indexOf("-s") + 1]).toBe("read-only");
+    expect(args).toContain('model_reasoning_effort="xhigh"');
+    expect(args.at(-1)).toBe("Do it");
+  });
+
+  it("does not widen the sandbox of a run with no role", () => {
+    const args = codexHeadlessArgs(base, "/r/result.md");
+    expect(args).not.toContain("-s");
+    expect(args).not.toContain("-c");
+  });
+
+  it("uses only flags that `codex exec resume` accepts", () => {
+    const args = codexHeadlessArgs(
+      {
+        ...base,
+        resumeId: "thread-1",
+        role: role({ provider: "codex", effort: "low", instructions: "Hi." }),
+      },
+      "/r/result.md",
+    );
+    expect(args.slice(0, 3)).toEqual(["exec", "resume", "--json"]);
+    expect(args).not.toContain("-C");
+    expect(args).not.toContain("-s");
+    expect(args).toContain('sandbox_mode="workspace-write"');
+    expect(args.slice(-2)).toEqual(["thread-1", "Hi.\n\nDo it"]);
   });
 });
 

@@ -21,6 +21,7 @@
       "provider": "claude-code",
       "model": "sonnet",
       "effort": "medium",
+      "permissionMode": "acceptEdits",
       "instructions": "Implement the approved plan exactly. Commit per step. Run the project's checks."
     },
     "reviewer": {

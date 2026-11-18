@@ -115,3 +115,13 @@ async function waitFor(cond: () => boolean, ms = 5000): Promise<void> {
   }
   throw new Error("timed out waiting for condition");
 }
+
+describe("the example workspace", () => {
+  it("lets the builder role edit files in a headless run, and keeps the planner read only by mode", () => {
+    const loaded = loadWorkspaceFile(example);
+    if (!loaded.ok) throw new Error(loaded.error);
+    expect(loaded.workspace.roles["builder"]?.permissionMode).toBe("acceptEdits");
+    expect(loaded.workspace.roles["builder"]?.readOnly).toBe(false);
+    expect(loaded.workspace.roles["planner"]?.permissionMode).toBe("plan");
+  });
+});

@@ -3,6 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import type { Inventory } from "../../../shared/models";
+import type { Role } from "../../../shared/types";
 import { resolveCommand, resolveTool, spawnStream } from "../../core/exec";
 import { codexConfigPath, dataDir } from "../../core/paths";
 import { writeTextFile } from "../../core/settings";
@@ -61,6 +62,39 @@ export function rememberCodexModel(model: string): void {
   );
 }
 
+/**
+ * The `-c model_reasoning_effort` value for a role's effort. Codex has no "max"; its highest is "xhigh".
+ * (Checked with `codex --version` 0.117.0: the key exists in the binary and `-c` takes any config key.)
+ */
+export const codexEffort = (effort: NonNullable<Role["effort"]>): string =>
+  effort === "max" ? "xhigh" : effort;
+
+/**
+ * The arguments of `codex exec`. A role with a writable job gets the workspace-write sandbox, because
+ * `exec` runs read-only otherwise; Codex has no system-prompt flag, so the role's instructions go
+ * in front of the prompt.
+ */
+export function codexHeadlessArgs(
+  o: RunOptions & { prompt: string; resumeId?: string },
+  resultFile: string,
+): string[] {
+  const flags = ["--json"];
+  if (o.role?.model) flags.push("-m", o.role.model);
+  if (o.role?.effort) flags.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
+  const sandbox = o.role ? (o.role.readOnly ? "read-only" : "workspace-write") : null;
+  if (o.resumeId) {
+    // `codex exec resume` takes neither -C nor -s (checked with --help); the process already runs in cwd.
+    if (sandbox) flags.push("-c", `sandbox_mode="${sandbox}"`);
+  } else {
+    flags.push("-C", o.cwd);
+    if (sandbox) flags.push("-s", sandbox);
+  }
+  flags.push("--skip-git-repo-check", "-o", resultFile);
+  const instructions = o.role?.instructions.trim();
+  const prompt = instructions ? `${instructions}\n\n${o.prompt}` : o.prompt;
+  return o.resumeId ? ["exec", "resume", ...flags, o.resumeId, prompt] : ["exec", ...flags, prompt];
+}
+
 /** Codex through its official CLI (plan 7.3). */
 export class CodexProvider implements Provider {
   readonly id: string;
@@ -115,15 +149,7 @@ export class CodexProvider implements Provider {
     const runDir = o.runDir ?? mkdtempSync(join(tmpdir(), "office-codex-"));
     mkdirSync(runDir, { recursive: true });
     const resultFile = join(runDir, "result.md");
-    const flags = ["--json"];
-    if (o.role?.model) flags.push("-m", o.role.model);
-    flags.push("-C", o.cwd);
-    if (o.role?.readOnly) flags.push("-s", "read-only");
-    flags.push("--skip-git-repo-check", "-o", resultFile);
-    const args = o.resumeId
-      ? ["exec", "resume", ...flags, o.resumeId, o.prompt]
-      : ["exec", ...flags, o.prompt];
-    const spec = this.command(args, o.env);
+    const spec = this.command(codexHeadlessArgs(o, resultFile), o.env);
     const stream = spawnStream(spec.cmd, spec.args, {
       cwd: o.cwd,
       ...(spec.env ? { env: spec.env } : {}),
