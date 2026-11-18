@@ -617,3 +617,17 @@ export const CreateTask = z.object({
   fanout: z.number().int().min(1).max(4).default(1),
 });
 export type CreateTask = z.infer<typeof CreateTask>;
+
+export const AutomationView = z.object({
+  id: z.string(),
+  cron: z.string(),
+  project: z.string(),
+  role: z.string(),
+  prompt: z.string(),
+  enabled: z.boolean(),
+  /** False when the cron expression cannot be parsed. */
+  valid: z.boolean(),
+  lastFiredAt: z.string().nullable(),
+  nextRun: z.string().nullable(),
+});
+export type AutomationView = z.infer<typeof AutomationView>;

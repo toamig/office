@@ -6,6 +6,7 @@ import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
 import { IpcRegistry } from "./core/ipc";
 import { Notifier } from "./core/notifier";
+import { Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
 import {
   claudeSettingsPath,
@@ -55,6 +56,7 @@ export interface AppContext {
   hooks: HooksManager;
   editor: WorkspaceEditor;
   tasks: TaskEngine;
+  scheduler: Scheduler;
   relay: RelayServer;
   projects: ProjectService;
   github: GithubService;
@@ -187,6 +189,17 @@ export async function createContext(
       await ops.addTodo(projectId, text, undefined, "Implementation notes");
     },
   });
+  const scheduler = new Scheduler({
+    db,
+    runs,
+    notifier,
+    workspace: () => store.state.workspace,
+    projectPath: (id) => {
+      const project = projects.find(id);
+      return project ? projects.absPath(project) : undefined;
+    },
+    resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -208,6 +221,7 @@ export async function createContext(
     clearInterval(archiveTimer);
     clearInterval(briefTimer);
     github.stop();
+    scheduler.stop();
     sessions.stopTimer();
     await relay.stop();
     projects.stopAuto();
@@ -225,6 +239,7 @@ export async function createContext(
     await vault.watch();
     projects.startAuto();
     github.start();
+    scheduler.start();
     void projects.refreshAll();
     sessions.startTimer();
     const archive = (): void => {
@@ -254,6 +269,7 @@ export async function createContext(
     hooks,
     editor,
     tasks,
+    scheduler,
     relay,
     projects,
     github,

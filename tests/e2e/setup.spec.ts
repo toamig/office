@@ -67,3 +67,45 @@ test("a bad folder shows a clear error and keeps the wizard open", async () => {
   await expect(win.getByTestId("wizard-error")).toContainText("is not a folder");
   await app.close();
 });
+
+test("automations: add one, run it now, and see it finish", async () => {
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  const win = await app.firstWindow();
+  await win.getByTestId("rail-setup").click();
+  await win.getByTestId("automation-id").fill("nightly-brief");
+  await win.getByTestId("automation-cron").fill("0 3 * * *");
+  await win.getByTestId("automation-project").selectOption({ label: "Alpha" });
+  await win.getByTestId("automation-role").selectOption("researcher");
+  await win.getByTestId("automation-prompt").fill("Summarise yesterday");
+  await win.getByTestId("automation-save").click();
+  const row = win.getByTestId("automation-row").filter({ hasText: "nightly-brief" });
+  await expect(row).toContainText("last run never");
+  const config = JSON.parse(readFileSync(join(world.hub, world.workspaceConfigPath), "utf8"));
+  expect(config.automations).toEqual([
+    {
+      id: "nightly-brief",
+      cron: "0 3 * * *",
+      project: "alpha",
+      role: "researcher",
+      prompt: "Summarise yesterday",
+      enabled: true,
+    },
+  ]);
+
+  await row.getByTestId("automation-run").click();
+  await expect(row).toContainText("last run just now", { timeout: 60000 });
+  await win.getByTestId("rail-inbox").click();
+  await expect(win.getByTestId("notification").first()).toContainText(
+    "Automation finished: nightly-brief",
+  );
+
+  await win.getByTestId("rail-setup").click();
+  await win.getByTestId("automation-cron").fill("every day");
+  await win.getByTestId("automation-id").fill("bad-one");
+  await win.getByTestId("automation-project").selectOption({ label: "Alpha" });
+  await win.getByTestId("automation-prompt").fill("x");
+  await win.getByTestId("automation-save").click();
+  await expect(win.getByTestId("automation-error")).toContainText("not a valid cron expression");
+  await app.close();
+});

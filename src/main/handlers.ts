@@ -268,6 +268,14 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("roles.setOverride", (req) =>
     ctx.editor.setOverride(req.projectId, req.role, req.target),
   );
+  ctx.ipc.handle("automations.list", () => ctx.scheduler.list());
+  ctx.ipc.handle("automations.save", (req) => ctx.editor.saveAutomation(req));
+  ctx.ipc.handle("automations.remove", (req) => ctx.editor.removeAutomation(req.id));
+  ctx.ipc.handle("automations.runNow", async (req) => {
+    const automation = ctx.store.state.workspace?.automations.find((a) => a.id === req.id);
+    if (!automation) throw new IpcFailure("not-found", `No automation ${req.id}`);
+    void ctx.scheduler.fire(automation);
+  });
   ctx.ipc.handle("tasks.list", (req) => ctx.tasks.list(req.projectId));
   ctx.ipc.handle("tasks.get", (req) => ctx.tasks.get(req.id));
   ctx.ipc.handle("tasks.create", (req) => ctx.tasks.create(req));

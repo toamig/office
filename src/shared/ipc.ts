@@ -1,7 +1,8 @@
 import { z } from "zod";
-import { Role } from "./schemas";
+import { Automation, Role } from "./schemas";
 import {
   AskResult,
+  AutomationView,
   BranchCompare,
   BranchList,
   AuditEntry,
@@ -268,6 +269,10 @@ export const channels = {
     req: z.object({ projectId: z.string(), role: z.string(), target: z.string().nullable() }),
     res: z.void(),
   },
+  "automations.list": { req: z.void(), res: z.array(AutomationView) },
+  "automations.save": { req: Automation, res: z.void() },
+  "automations.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "automations.runNow": { req: z.object({ id: z.string() }), res: z.void() },
   "tasks.list": { req: z.object({ projectId: z.string().optional() }), res: z.array(TaskView) },
   "tasks.get": { req: z.object({ id: z.string() }), res: TaskDetail },
   "tasks.create": { req: CreateTask, res: TaskView },

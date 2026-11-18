@@ -1,5 +1,6 @@
 import { Role as RoleSchema, Workspace as WorkspaceSchema } from "../../../shared/schemas";
-import type { Role } from "../../../shared/types";
+import type { Automation, Role } from "../../../shared/types";
+import { validCron } from "../../core/scheduler";
 import { IpcFailure } from "../../core/ipc";
 import type { VaultWriter } from "../vault/writer";
 
@@ -48,6 +49,29 @@ export class WorkspaceEditor {
     await this.edit(`Workspace: update role ${id}`, (json) => {
       const roles = (json["roles"] ??= {}) as Json;
       roles[id] = parsed.data;
+    });
+  }
+
+  /** Adds or replaces an automation (a scheduled prompt on a project). */
+  async saveAutomation(automation: Automation): Promise<void> {
+    if (!ID_RE.test(automation.id))
+      throw new IpcFailure("bad-id", "An automation id uses lowercase letters, digits and dashes");
+    if (!validCron(automation.cron))
+      throw new IpcFailure("bad-cron", `"${automation.cron}" is not a valid cron expression`);
+    await this.edit(`Workspace: automation ${automation.id}`, (json) => {
+      const list = ((json["automations"] ??= []) as Array<{ id?: string }>).filter(
+        (a) => a.id !== automation.id,
+      );
+      list.push(automation as unknown as { id?: string });
+      json["automations"] = list;
+    });
+  }
+
+  async removeAutomation(id: string): Promise<void> {
+    await this.edit(`Workspace: remove automation ${id}`, (json) => {
+      json["automations"] = ((json["automations"] ?? []) as Array<{ id?: string }>).filter(
+        (a) => a.id !== id,
+      );
     });
   }
 
