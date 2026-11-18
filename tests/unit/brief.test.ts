@@ -44,7 +44,7 @@ function backdate(repo: string): void {
   });
 }
 
-function setup(now = new Date(2026, 10, 19, 9, 0)) {
+function setup(now = new Date(2026, 10, 19, 23, 59)) {
   const world = makeWorld();
   const loaded = loadWorkspaceFile(join(world.hub, world.workspaceConfigPath));
   if (!loaded.ok) throw new Error(loaded.error);
@@ -133,7 +133,7 @@ describe("BriefService with the fake agent", () => {
     const early = setup(new Date(2026, 10, 19, 7, 0));
     expect(await early.service.runIfDue()).toBe(false);
 
-    const { service, db } = setup(new Date(2026, 10, 19, 9, 0));
+    const { service, db } = setup(new Date(2026, 10, 19, 23, 59));
     expect(await service.runIfDue()).toBe(true);
     expect(await service.runIfDue()).toBe(false);
     expect(db.prepare("SELECT COUNT(*) AS n FROM runs WHERE kind = 'brief'").get()).toEqual({
