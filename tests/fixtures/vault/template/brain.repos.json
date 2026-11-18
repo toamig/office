@@ -1,0 +1,10 @@
+{
+  "owner": "fixture",
+  "description": "Fixture brain hub for Office tests.",
+  "repos": [
+    { "folder": "Common", "repo": "brain-common" },
+    { "folder": "Alpha", "repo": "brain-alpha" },
+    { "folder": "Beta", "repo": "brain-beta" },
+    { "folder": "Office", "repo": "brain-office" }
+  ]
+}

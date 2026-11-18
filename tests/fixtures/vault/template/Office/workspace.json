@@ -1,0 +1,58 @@
+{
+  "version": 1,
+  "vault": {
+    "kind": "brain-hub",
+    "openItemsFile": "OpenItems.md",
+    "waitingHeading": "Waiting on you"
+  },
+  "projects": [
+    {
+      "id": "alpha",
+      "name": "Alpha",
+      "path": "Alpha",
+      "vault": "Alpha",
+      "group": "Games",
+      "pinned": true
+    },
+    { "id": "beta", "name": "Beta", "path": "Beta", "vault": "Beta", "group": "Products" }
+  ],
+  "roles": {
+    "planner": { "provider": "fake", "model": "opus", "instructions": "Plan only." },
+    "builder": { "provider": "fake", "model": "sonnet", "instructions": "Build." },
+    "reviewer": { "provider": "fake", "readOnly": true, "instructions": "Review." },
+    "researcher": { "provider": "fake", "readOnly": true, "instructions": "Research." },
+    "brief": { "provider": "fake", "readOnly": true, "instructions": "" }
+  },
+  "pipelines": {
+    "feature": {
+      "name": "Feature",
+      "stages": [
+        {
+          "id": "plan",
+          "role": "planner",
+          "gate": true,
+          "prompt": "{{task.description}}\n\nWrite the plan to {{stage.outputPath}}."
+        },
+        {
+          "id": "build",
+          "role": "builder",
+          "worktree": true,
+          "prompt": "Implement the plan in {{stages.plan.outputPath}}."
+        },
+        {
+          "id": "review",
+          "role": "reviewer",
+          "gate": true,
+          "prompt": "Review branch {{task.branch}} against {{stages.plan.outputPath}}. Write findings to {{stage.outputPath}}."
+        }
+      ]
+    }
+  },
+  "notifications": {
+    "urgent": ["agent.needs-you", "git.conflict", "ci.failed", "task.gate"],
+    "mutedProjects": []
+  },
+  "automations": [],
+  "archiveAfterDays": 7,
+  "briefTime": "08:00"
+}

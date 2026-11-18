@@ -11,7 +11,7 @@ export default tseslint.config(
       "release/**",
       "node_modules/**",
       ".dev/**",
-      "resources/relay/**",
+      "tests/fixtures/**/template/**",
       "test-results/**",
     ],
   },
@@ -24,7 +24,7 @@ export default tseslint.config(
     rules: { ...reactHooks.configs.recommended.rules },
   },
   {
-    files: ["src/main/**/*.ts", "src/preload/**/*.ts", "scripts/**/*.mjs", "tests/**/*.ts"],
+    files: ["src/main/**/*.ts", "src/preload/**/*.ts", "scripts/**/*.mjs", "tests/**/*.ts", "resources/relay/**/*.mjs"],
     languageOptions: { globals: globals.node },
   },
   {

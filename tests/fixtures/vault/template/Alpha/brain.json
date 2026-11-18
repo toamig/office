@@ -1,0 +1,6 @@
+{
+  "repo": "brain-alpha",
+  "folder": "Alpha",
+  "description": "Fixture repo Alpha.",
+  "depends": [{ "folder": "Common", "repo": "brain-common" }]
+}

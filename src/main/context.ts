@@ -10,6 +10,7 @@ import { WorkspaceStore } from "./core/workspace";
 import type { SyncReport } from "../shared/models";
 import { ProjectService } from "./modules/git/service";
 import { syncAll } from "./modules/git/syncall";
+import { VaultService } from "./modules/vault/service";
 
 /** Everything the main process shares: settings, workspace, database, bus and the IPC registry. */
 export interface AppContext {
@@ -20,6 +21,7 @@ export interface AppContext {
   bus: Bus;
   ipc: IpcRegistry;
   projects: ProjectService;
+  vault: VaultService;
   /** Sync all repos; the notifier hooks in through reportHooks. */
   sync: () => Promise<SyncReport>;
   reportHooks: Array<(report: SyncReport) => void | Promise<void>>;
@@ -32,10 +34,16 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
   const store = new WorkspaceStore();
   store.subscribe((state) => bus.emit("workspace.changed", { error: state.error }));
   if (isConfigured(current)) await store.open(current.workspaceRoot, current.workspaceConfigPath);
+  const vault = new VaultService({
+    bus,
+    workspace: () => store.state.workspace,
+    workspaceRoot: () => current.workspaceRoot,
+  });
   const projects = new ProjectService({
     bus,
     projects: () => store.state.workspace?.projects ?? [],
     projectsRoot: () => current.projectsRoot,
+    waiting: (id) => vault.waitingCount(id),
   });
   const reportHooks: AppContext["reportHooks"] = [];
   const sync = (): Promise<SyncReport> =>
@@ -58,6 +66,7 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     bus,
     ipc: new IpcRegistry(checkResponses),
     projects,
+    vault,
   };
 }
 

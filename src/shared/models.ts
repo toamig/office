@@ -102,3 +102,61 @@ export const SyncReport = z.object({
   repos: z.array(SyncRepoResult),
 });
 export type SyncReport = z.infer<typeof SyncReport>;
+
+export const WaitingItem = z.object({
+  date: z.string(),
+  text: z.string(),
+  source: z.string().optional(),
+  /** The exact line as it is in the file, used to remove it again. */
+  raw: z.string(),
+  line: z.number(),
+});
+export type WaitingItem = z.infer<typeof WaitingItem>;
+
+export const TodoItem = z.object({
+  text: z.string(),
+  checked: z.boolean().nullable(),
+  line: z.number(),
+});
+export type TodoItem = z.infer<typeof TodoItem>;
+
+export const TodoGroup = z.object({ heading: z.string(), items: z.array(TodoItem) });
+export type TodoGroup = z.infer<typeof TodoGroup>;
+
+export const OpenItemsView = z.object({
+  projectId: z.string(),
+  /** Absolute path of the OpenItems file, or null when the project has no vault folder. */
+  file: z.string().nullable(),
+  exists: z.boolean(),
+  waiting: z.array(WaitingItem),
+  unparsed: z.array(z.object({ line: z.number(), text: z.string() })),
+  groups: z.array(TodoGroup),
+});
+export type OpenItemsView = z.infer<typeof OpenItemsView>;
+
+export const WaitingEntry = WaitingItem.extend({ projectId: z.string(), projectName: z.string() });
+export type WaitingEntry = z.infer<typeof WaitingEntry>;
+
+export const HubRepoRow = z.object({
+  folder: z.string(),
+  last: z.string(),
+  state: z.string(),
+  uncommitted: z.number(),
+  ahead: z.number(),
+  behind: z.number(),
+  attention: z.boolean(),
+});
+export type HubRepoRow = z.infer<typeof HubRepoRow>;
+
+export const HealthView = z.object({
+  validate: z.object({
+    ran: z.boolean(),
+    ok: z.boolean(),
+    errors: z.array(z.string()),
+    warnings: z.number(),
+    summary: z.string().nullable(),
+  }),
+  repos: z.array(HubRepoRow),
+  warnings: z.array(z.object({ at: z.string(), message: z.string() })),
+});
+export type HealthView = z.infer<typeof HealthView>;
