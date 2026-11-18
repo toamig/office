@@ -13,6 +13,18 @@ export const WorkspaceView = z.object({
 });
 export type WorkspaceView = z.infer<typeof WorkspaceView>;
 
+export const RunSummary = z.object({
+  id: z.string(),
+  kind: z.string(),
+  provider: z.string(),
+  model: z.string().nullable(),
+  status: z.string(),
+  startedAt: z.string(),
+  endedAt: z.string().nullable(),
+  error: z.string().nullable(),
+});
+export type RunSummary = z.infer<typeof RunSummary>;
+
 export const GitFile = z.object({
   path: z.string(),
   origPath: z.string().optional(),
@@ -145,6 +157,8 @@ export const HubRepoRow = z.object({
   ahead: z.number(),
   behind: z.number(),
   attention: z.boolean(),
+  /** The checked-out branch, read from the repo itself; absent when the folder is not a repo here. */
+  branch: z.string().optional(),
 });
 export type HubRepoRow = z.infer<typeof HubRepoRow>;
 

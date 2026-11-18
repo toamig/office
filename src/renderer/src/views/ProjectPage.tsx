@@ -8,6 +8,7 @@ import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { PreviewTab } from "./PreviewTab";
 import { ProjectManage } from "./project/Manage";
+import { RecentRuns } from "./project/RecentRuns";
 
 type Tab = "overview" | "todos" | "agents" | "notes" | "preview";
 
@@ -61,6 +62,7 @@ function Overview({ id }: { id: string }) {
         </ul>
       </Panel>
       <PrsPanel projectId={id} />
+      <RecentRuns id={id} />
     </div>
   );
 }
@@ -254,6 +256,7 @@ export function ProjectPage({
   const [tab, setTab] = useState<Tab>((initialTab as Tab | undefined) ?? "overview");
   const [message, setMessage] = useState<string | null>(null);
   const [syncing, setSyncing] = useState(false);
+  const unreal = useQuery("projects.unrealFile", { id }).data;
 
   const run = async (work: () => Promise<unknown>): Promise<void> => {
     setMessage(null);
@@ -308,6 +311,14 @@ export function ProjectPage({
         <Button onClick={() => void run(() => office.invoke("projects.openEditor", { id }))}>
           <Code size={13} /> Open in editor
         </Button>
+        {unreal && (
+          <Button
+            onClick={() => void run(() => office.invoke("projects.openUnreal", { id }))}
+            data-testid="open-unreal"
+          >
+            <Code size={13} /> Open in Unreal
+          </Button>
+        )}
         <Button onClick={() => void run(() => office.invoke("projects.openFolder", { id }))}>
           <FolderOpen size={13} /> Open folder
         </Button>

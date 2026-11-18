@@ -5,6 +5,8 @@ import type { PreviewPane } from "./preview";
 import { detectDevServer } from "./core/dev-server";
 import { run } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
+import { findUproject } from "./modules/projects/unreal";
+import type { RunSummary } from "../shared/models";
 
 /** Handlers that need Electron itself (opening folders and editors). Registered by the app only. */
 export function registerShellHandlers(
@@ -48,6 +50,24 @@ export function registerShellHandlers(
     const error = await shell.openPath(folderOf(req.id));
     if (error) throw new IpcFailure("open-failed", error);
   });
+  ctx.ipc.handle("projects.unrealFile", (req) => findUproject(folderOf(req.id)));
+  ctx.ipc.handle("projects.openUnreal", async (req) => {
+    const file = findUproject(folderOf(req.id));
+    if (!file) throw new IpcFailure("not-unreal", "This project has no .uproject file");
+    // The file is opened with whatever the owner's PC has registered for it (the Unreal launcher).
+    const error = await shell.openPath(file);
+    if (error) throw new IpcFailure("open-failed", error);
+  });
+  ctx.ipc.handle(
+    "projects.runs",
+    (req) =>
+      ctx.db
+        .prepare(
+          `SELECT id, kind, provider, model, status, started_at AS startedAt, ended_at AS endedAt, error
+         FROM runs WHERE project_id = ? ORDER BY started_at DESC LIMIT 10`,
+        )
+        .all(req.id) as RunSummary[],
+  );
   ctx.ipc.handle("projects.openEditor", async (req) => {
     const result = await run(ctx.settings().editorCommand, [folderOf(req.id)], {
       timeoutMs: 15_000,

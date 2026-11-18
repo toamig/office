@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { join } from "node:path";
 import type { HealthView, HubRepoRow } from "../../../shared/models";
 import { run } from "../../core/exec";
+import { git } from "../git/run";
 
 /** Runs `node Common/tools/brain.mjs validate` from the hub root and parses its report. */
 export async function runValidate(root: string): Promise<HealthView["validate"]> {
@@ -57,5 +58,15 @@ export async function readHubStatus(root: string): Promise<HubRepoRow[]> {
   const tool = join(root, "tools", "hub.mjs");
   if (!existsSync(tool)) return [];
   const result = await run("node", [tool, "status"], { cwd: root, timeoutMs: 60_000 });
-  return parseHubStatus(result.stdout);
+  const rows = parseHubStatus(result.stdout);
+  // The tool's table has no branch; each repo is asked directly.
+  return Promise.all(
+    rows.map(async (row) => {
+      const dir = row.folder === "." ? root : join(root, row.folder);
+      if (!existsSync(dir)) return row;
+      const head = await git(dir, ["rev-parse", "--abbrev-ref", "HEAD"]);
+      const branch = head.stdout.trim();
+      return head.code === 0 && branch ? { ...row, branch } : row;
+    }),
+  );
 }

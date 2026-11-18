@@ -1,3 +1,4 @@
+import { GitBranch } from "lucide-react";
 import { useState } from "react";
 import { PrsPanel } from "../components/PrsPanel";
 import { Chip, EmptyState } from "../components/ui";
@@ -71,13 +72,29 @@ export function Git() {
                 style={{ borderColor: "var(--line)" }}
                 data-testid="brain-repo"
               >
-                {r.folder}
-                <span
-                  className="ml-2 text-[12px]"
-                  style={{ color: r.attention ? "#c98a12" : "var(--muted)" }}
-                >
-                  {r.state}
-                </span>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span>{r.folder === "." ? "Hub" : r.folder}</span>
+                  {r.branch && (
+                    <span
+                      className="flex items-center gap-1 text-[12px]"
+                      style={{ color: "var(--muted)" }}
+                    >
+                      <GitBranch size={12} />
+                      {r.branch}
+                    </span>
+                  )}
+                  {r.uncommitted > 0 && <Chip tone="warn">{r.uncommitted} changed</Chip>}
+                  {r.ahead > 0 && <Chip>{r.ahead} ahead</Chip>}
+                  {r.behind > 0 && <Chip>{r.behind} behind</Chip>}
+                  {r.uncommitted === 0 && r.ahead === 0 && r.behind === 0 && (
+                    <span
+                      className="text-[12px]"
+                      style={{ color: r.attention ? "#c98a12" : "var(--muted)" }}
+                    >
+                      {r.state}
+                    </span>
+                  )}
+                </div>
               </div>
             ))}
           </>

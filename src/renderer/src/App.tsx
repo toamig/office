@@ -65,7 +65,7 @@ function CurrentView({ configured }: { configured: boolean }) {
       />
     );
   if (view === "git") return <Git key={params["project"] ?? ""} />;
-  if (view === "board") return <Board />;
+  if (view === "board") return <Board key={params["task"] ?? ""} />;
   if (view === "brain") return <Brain />;
   if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;

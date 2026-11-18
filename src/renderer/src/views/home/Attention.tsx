@@ -39,7 +39,7 @@ export function GatesAndReviews() {
             </div>
             <Button
               variant="ghost"
-              onClick={() => navigate("board")}
+              onClick={() => navigate("board", { task: t.id })}
               data-testid="open-waiting-gate"
             >
               <ExternalLink size={13} /> Open

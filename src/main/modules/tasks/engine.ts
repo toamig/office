@@ -361,7 +361,7 @@ export class TaskEngine {
         projectId: t.project_id,
         title: `Builder kept, but some builders were not removed: ${t.title}`,
         body: left.join("; "),
-        link: { view: "board" },
+        link: { view: "board", params: { task: t.id } },
       });
     }
     this.setStage(id, t.stage_index, { status: "approved", approved_at: nowIso() });
@@ -395,7 +395,7 @@ export class TaskEngine {
           projectId: t.project_id,
           title: `Task finished: ${t.title}`,
           ...(note ? { body: note } : {}),
-          link: { view: "board" },
+          link: { view: "board", params: { task: t.id } },
         });
         return;
       }
@@ -449,7 +449,7 @@ export class TaskEngine {
       projectId: t.project_id,
       title: `Task stage failed: ${t.title}`,
       body: message,
-      link: { view: "board" },
+      link: { view: "board", params: { task: t.id } },
     });
     return "stop";
   }
@@ -494,7 +494,7 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
       projectId: t.project_id,
       title: `Pick a builder result for ${o.current.title}`,
       body: `${succeeded} of ${o.current.fanout} builders finished`,
-      link: { view: "board" },
+      link: { view: "board", params: { task: t.id } },
     });
     return "stop";
   }
@@ -568,7 +568,7 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
           projectId: t.project_id,
           title: `Approve "${stage.id}" for ${t.title}`,
           body: `${current.title}: the ${stage.id} stage is done and waits for you`,
-          link: { view: "board" },
+          link: { view: "board", params: { task: t.id } },
         });
         return "stop";
       }

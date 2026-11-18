@@ -39,6 +39,7 @@ import {
 } from "./modules/setup/workspace-setup";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 import { installTool, loginTool } from "./modules/setup/tool-actions";
+import { rememberCodexModel } from "./modules/providers/codex";
 
 /** Registers every IPC handler. Grows by one block per module. */
 export function registerHandlers(ctx: AppContext): void {
@@ -113,7 +114,12 @@ export function registerHandlers(ctx: AppContext): void {
     ),
   );
   ctx.ipc.handle("sessions.list", (req) => ctx.sessions.list(req));
-  ctx.ipc.handle("sessions.start", (req) => ctx.sessions.start(req));
+  ctx.ipc.handle("sessions.start", (req) => {
+    const row = ctx.sessions.start(req);
+    // Codex has no command that lists models, so a model the owner typed is kept for the next time.
+    if (req.model && row.provider === "codex") rememberCodexModel(req.model);
+    return row;
+  });
   ctx.ipc.handle("sessions.startCommand", (req) => {
     // A raw command channel is for tests and logins only; it is off unless the environment opts in.
     if (process.env["OFFICE_ALLOW_RAW_TERMINAL"] !== "1") {

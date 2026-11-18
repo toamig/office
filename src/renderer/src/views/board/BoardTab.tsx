@@ -181,9 +181,9 @@ function Card({ t, selected, onOpen }: { t: TaskView; selected: boolean; onOpen:
 }
 
 /** Tasks as cards moving through Running, Waiting on you, Done and Failed. */
-export function BoardTab() {
+export function BoardTab({ initialTask }: { initialTask?: string }) {
   const tasks = useQuery("tasks.list", {}, ["task.changed"]);
-  const [open, setOpen] = useState<string | null>(null);
+  const [open, setOpen] = useState<string | null>(initialTask ?? null);
   const [creating, setCreating] = useState(false);
   const list = tasks.data ?? [];
   return (

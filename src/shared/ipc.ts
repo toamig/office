@@ -49,6 +49,7 @@ import {
   WorkspaceInspection,
   WorktreeRow,
   WriteResult,
+  RunSummary,
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
@@ -116,6 +117,11 @@ export const channels = {
   "git.syncProject": { req: z.object({ id: z.string() }), res: SyncReport },
   "projects.openEditor": { req: z.object({ id: z.string() }), res: z.void() },
   "projects.openFolder": { req: z.object({ id: z.string() }), res: z.void() },
+  /** The newest headless agent runs of a project (briefs, captures, task stages). */
+  "projects.runs": { req: z.object({ id: z.string() }), res: z.array(RunSummary) },
+  /** The path of the project's .uproject file, or null when it is not an Unreal project. */
+  "projects.unrealFile": { req: z.object({ id: z.string() }), res: z.string().nullable() },
+  "projects.openUnreal": { req: z.object({ id: z.string() }), res: z.void() },
   "notes.read": { req: z.object({ projectId: z.string(), name: z.string() }), res: ProjectNote },
   "search.items": { req: z.void(), res: z.array(SearchItem) },
   "setup.detectTools": { req: z.void(), res: z.array(ToolStatus) },

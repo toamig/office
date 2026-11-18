@@ -160,7 +160,13 @@ describe("fixture vault", () => {
 
     const rows = await readHubStatus(world.hub);
     expect(rows).toHaveLength(5);
-    expect(rows[0]).toMatchObject({ folder: ".", state: "clean", attention: false });
+    expect(rows[0]).toMatchObject({
+      folder: ".",
+      state: "clean",
+      attention: false,
+      branch: "main",
+    });
+    expect(rows.every((r) => r.branch === "main")).toBe(true);
   });
 });
 

@@ -78,3 +78,22 @@ test("the split layout is saved per project and survives a restart", async () =>
     .toMatchObject({ split: "columns" });
   await second.app.close();
 });
+
+test("a model typed for a Codex session is remembered for the next time", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  const models = async (): Promise<string[]> =>
+    (await win.evaluate(() => window.office.invoke("providers.list"))).find((p) => p.id === "codex")
+      ?.models ?? [];
+  expect(await models()).not.toContain("gpt-typed-test");
+  await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "codex",
+      projectId: "alpha",
+      model: "gpt-typed-test",
+      title: "Codex typed model",
+    }),
+  );
+  await expect.poll(models, { timeout: 20000 }).toContain("gpt-typed-test");
+  await app.close();
+});
