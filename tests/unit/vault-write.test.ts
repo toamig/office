@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { Bus } from "../../src/main/core/bus";
@@ -80,6 +80,32 @@ describe("vault writer", () => {
     const { ops, vault } = setup();
     await ops.addWaiting("beta", "First item");
     expect(vault.read("beta").waiting).toHaveLength(1);
+  });
+
+  it("creates a project's OpenItems file from the starter when it does not exist yet", async () => {
+    const { ops, vault, world } = setup();
+    const betaRepo = join(world.hub, "Beta");
+    sh(betaRepo, "rm", "-q", "OpenItems.md");
+    sh(betaRepo, "commit", "-q", "-m", "remove OpenItems");
+    sh(betaRepo, "push", "-q");
+    expect(existsSync(join(betaRepo, "OpenItems.md"))).toBe(false);
+
+    const result = await ops.addWaiting("beta", "First item");
+    expect(result).toMatchObject({ committed: true, pushed: true });
+    const text = readFileSync(join(betaRepo, "OpenItems.md"), "utf8");
+    expect(text).toContain("type: openitems");
+    expect(text).toContain("## Waiting on you");
+    expect(vault.read("beta").waiting).toHaveLength(1);
+    await ops.addNote("beta", "and a note");
+    expect(readFileSync(join(betaRepo, "OpenItems.md"), "utf8")).toContain("and a note");
+  });
+
+  it("says so, instead of crashing, when a file does not exist and has no starter", async () => {
+    const { world } = setup();
+    const writer = new VaultWriter({ hubRoot: () => null, onWarning: () => undefined });
+    await expect(
+      writer.edit(join(world.hub, "Beta", "Nope.md"), "x", (c) => `${c}z`),
+    ).rejects.toThrow(/does not exist yet/);
   });
 
   it("a push failure keeps the commit and becomes a warning, not a crash", async () => {

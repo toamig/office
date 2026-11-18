@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
 import type { WriteResult } from "../../../shared/models";
 import { writeTextFile } from "../../core/settings";
@@ -51,8 +51,9 @@ export class VaultWriter {
     file: string,
     message: string,
     transform: (content: string) => string | null,
+    initial?: () => string,
   ): Promise<WriteResult> {
-    const next = this.chain.then(() => this.doEdit(file, message, transform));
+    const next = this.chain.then(() => this.doEdit(file, message, transform, initial));
     this.chain = next.catch(() => undefined);
     return next;
   }
@@ -67,19 +68,27 @@ export class VaultWriter {
     text: string,
     source: string | undefined,
     message: string,
+    initial?: () => string,
   ): Promise<WriteResult> {
     const line = formatWaitingLine(this.today(), text, source);
-    return this.edit(file, message, (c) => appendToSection(c, heading, line));
+    return this.edit(file, message, (c) => appendToSection(c, heading, line), initial);
   }
 
-  addToSection(file: string, heading: string, line: string, message: string): Promise<WriteResult> {
-    return this.edit(file, message, (c) => appendToSection(c, heading, line));
+  addToSection(
+    file: string,
+    heading: string,
+    line: string,
+    message: string,
+    initial?: () => string,
+  ): Promise<WriteResult> {
+    return this.edit(file, message, (c) => appendToSection(c, heading, line), initial);
   }
 
   private async doEdit(
     file: string,
     message: string,
     transform: (content: string) => string | null,
+    initial?: () => string,
   ): Promise<WriteResult> {
     if (/co-authored-by/i.test(message)) {
       throw new VaultWriteError(
@@ -124,7 +133,10 @@ export class VaultWriter {
       }
     }
 
-    const before = readFileSync(file, "utf8");
+    let before: string;
+    if (existsSync(file)) before = readFileSync(file, "utf8");
+    else if (initial) before = initial();
+    else throw new VaultWriteError("not-found", `${rel} does not exist yet`);
     const after = transform(before);
     if (after === null)
       throw new VaultWriteError("not-found", "That line is no longer in the file");

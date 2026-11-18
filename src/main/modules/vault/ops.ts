@@ -1,6 +1,9 @@
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
 import type { WriteResult } from "../../../shared/models";
 import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
+import { brainOpenItems } from "../explore/files";
 import { parseWaitingLine } from "./openitems";
 import type { VaultService } from "./service";
 import { VaultWriteError, type VaultWriter } from "./writer";
@@ -17,6 +20,24 @@ const clip = (text: string, n = 60): string =>
 /** The user-facing vault writes: tick an item done, add one, file a quick note. */
 export class VaultOps {
   constructor(private readonly deps: VaultOpsDeps) {}
+
+  /** What a project's OpenItems file starts as when it does not exist yet. */
+  private starter(file: string, name: string): () => string {
+    return () => {
+      let domain = "meta";
+      for (const note of ["Overview.md", "_index.md"]) {
+        const path = join(dirname(file), note);
+        const found = existsSync(path)
+          ? /^domain:[ 	]*(S+)/m.exec(readFileSync(path, "utf8"))?.[1]
+          : undefined;
+        if (found) {
+          domain = found;
+          break;
+        }
+      }
+      return brainOpenItems(name, domain);
+    };
+  }
 
   private target(projectId: string): { file: string; name: string; heading: string } {
     const ws = this.deps.workspace();
@@ -52,7 +73,14 @@ export class VaultOps {
   addWaiting(projectId: string, text: string, source?: string): Promise<WriteResult> {
     const { file, name, heading } = this.target(projectId);
     return this.guard(
-      this.deps.writer.addWaiting(file, heading, text, source, `${name}: waiting: ${clip(text)}`),
+      this.deps.writer.addWaiting(
+        file,
+        heading,
+        text,
+        source,
+        `${name}: waiting: ${clip(text)}`,
+        this.starter(file, name),
+      ),
     );
   }
 
@@ -61,7 +89,13 @@ export class VaultOps {
     const { file, name } = this.target(projectId);
     const line = `- ${this.deps.writer.today()} ${text.replace(/\s+/g, " ").trim()}`;
     return this.guard(
-      this.deps.writer.addToSection(file, "Notes to file", line, `${name}: quick note`),
+      this.deps.writer.addToSection(
+        file,
+        "Notes to file",
+        line,
+        `${name}: quick note`,
+        this.starter(file, name),
+      ),
     );
   }
 
@@ -76,7 +110,13 @@ export class VaultOps {
     const clean = text.replace(/\s+/g, " ").trim();
     const line = `- ${this.today()} ${clean}${source ? ` (${source.replace(/[()]/g, "")})` : ""}`;
     return this.guard(
-      this.deps.writer.addToSection(file, heading, line, `${name}: todo: ${clip(text)}`),
+      this.deps.writer.addToSection(
+        file,
+        heading,
+        line,
+        `${name}: todo: ${clip(text)}`,
+        this.starter(file, name),
+      ),
     );
   }
 
