@@ -77,34 +77,57 @@ export interface AppContext {
   stop: () => Promise<void>;
 }
 
-export async function createContext(
-  checkResponses: boolean,
-  relayScript: string,
-): Promise<AppContext> {
-  mkdirSync(dataDir(), { recursive: true });
-  let current = loadSettings();
+/** The machine settings, which the app replaces whenever they change; every service reads through it. */
+interface SettingsBox {
+  current: MachineSettings;
+}
+
+/** The pieces every other part is built on. */
+interface Base {
+  box: SettingsBox;
+  bus: Bus;
+  db: Db;
+  store: WorkspaceStore;
+  notifier: Notifier;
+  ntfy: NtfyChannel;
+}
+
+/** The notes: the vault, its writer, and the projects that point into it. */
+interface Notes {
+  vault: VaultService;
+  warnings: AppContext["warnings"];
+  writer: VaultWriter;
+  ops: VaultOps;
+  projects: ProjectService;
+}
+
+function createBase(): Base {
+  const box: SettingsBox = { current: loadSettings() };
   const bus = new Bus();
   const db = openDb(dbPath());
   const store = new WorkspaceStore();
   store.subscribe((state) => bus.emit("workspace.changed", { error: state.error }));
-
   const notifier = new Notifier({
     db,
     bus,
     workspace: () => store.state.workspace,
-    quietHours: () => current.quietHours,
+    quietHours: () => box.current.quietHours,
   });
   const ntfy = new NtfyChannel(() => store.state.workspace?.notifications.ntfyTopicUrl);
   notifier.addChannel(ntfy);
+  return { box, bus, db, store, notifier, ntfy };
+}
+
+function createNotes({ box, bus, store, notifier }: Base): Notes {
   const vault = new VaultService({
     bus,
     workspace: () => store.state.workspace,
-    workspaceRoot: () => current.workspaceRoot,
+    workspaceRoot: () => box.current.workspaceRoot,
   });
   const warnings: AppContext["warnings"] = [];
   const writer = new VaultWriter({
     hubRoot: () =>
-      store.state.workspace?.vault.kind === "brain-hub" ? current.workspaceRoot : null,
+      store.state.workspace?.vault.kind === "brain-hub" ? box.current.workspaceRoot : null,
     onWarning: (warning) => {
       warnings.unshift({ at: new Date().toISOString(), message: warning.message });
       warnings.length = Math.min(warnings.length, 20);
@@ -115,15 +138,30 @@ export async function createContext(
   const projects = new ProjectService({
     bus,
     projects: () => store.state.workspace?.projects ?? [],
-    projectsRoot: () => current.projectsRoot,
+    projectsRoot: () => box.current.projectsRoot,
     waiting: (id) => vault.waitingCount(id),
   });
+  return { vault, warnings, writer, ops, projects };
+}
+
+/** The absolute folder of a project, or undefined when it is unknown. */
+const folderOf =
+  (projects: ProjectService) =>
+  (id: string): string | undefined => {
+    const project = projects.find(id);
+    return project ? projects.absPath(project) : undefined;
+  };
+
+/** Agents: providers, headless runs, interactive sessions, hooks, Ask, the brief and Explore. */
+function createAgents(base: Base, notes: Notes, relayScript: string) {
+  const { box, bus, db, store, notifier } = base;
+  const { writer, projects } = notes;
   const providers = new ProviderRegistry();
   const runs = new RunService({ db, bus, providers, runsDir: runsDir() });
   const ask = new AskService({
     runs,
     workspace: () => store.state.workspace,
-    workspaceRoot: () => current.workspaceRoot,
+    workspaceRoot: () => box.current.workspaceRoot,
   });
   const github = new GithubService({ projects, notifier });
   const brief = new BriefService({
@@ -131,8 +169,8 @@ export async function createContext(
     runs,
     notifier,
     workspace: () => store.state.workspace,
-    projectsRoot: () => current.projectsRoot,
-    workspaceRoot: () => current.workspaceRoot,
+    projectsRoot: () => box.current.projectsRoot,
+    workspaceRoot: () => box.current.workspaceRoot,
   });
   const sessions = new SessionService({
     db,
@@ -140,10 +178,7 @@ export async function createContext(
     providers,
     notifier,
     workspace: () => store.state.workspace,
-    projectPath: (id) => {
-      const project = projects.find(id);
-      return project ? projects.absPath(project) : undefined;
-    },
+    projectPath: folderOf(projects),
     logsDir: sessionsDir(),
   });
   providers.setTerminalOpener((spec, title) => {
@@ -155,7 +190,7 @@ export async function createContext(
     recordPath: join(dataDir(), "hooks-install.json"),
     relayScript,
   }));
-  const relay = new RelayServer(current.relay.token, {
+  const relay = new RelayServer(box.current.relay.token, {
     onClaude: (payload) => sessions.onClaudeHook(payload),
     onCodex: (payload) => sessions.onCodexEvent(payload),
   });
@@ -163,11 +198,11 @@ export async function createContext(
     sessions,
     bus,
     exploreDir: exploreDir(),
-    workspaceRoot: () => current.workspaceRoot,
+    workspaceRoot: () => box.current.workspaceRoot,
     spawn: {
       workspace: () => store.state.workspace,
-      workspaceRoot: () => current.workspaceRoot,
-      projectsRoot: () => current.projectsRoot,
+      workspaceRoot: () => box.current.workspaceRoot,
+      projectsRoot: () => box.current.projectsRoot,
       workspaceFile: () => store.filePath,
       reloadWorkspace: () => void store.reload(),
       writer,
@@ -175,24 +210,33 @@ export async function createContext(
       runs,
     },
   });
+  return { providers, runs, ask, github, brief, sessions, hooks, relay, explore };
+}
+
+type Agents = ReturnType<typeof createAgents>;
+
+/** Orchestration: the workspace editor, the task engine, automations and optional modules. */
+function createOrchestration(base: Base, notes: Notes, agents: Agents) {
+  const { box, bus, db, store, notifier } = base;
+  const { writer, ops, projects } = notes;
+  const { providers, runs, sessions } = agents;
   const editor = new WorkspaceEditor({
     writer,
     workspaceFile: () => store.filePath,
     reload: () => void store.reload(),
   });
+  const resolveRole = (roleId: string, projectId: string) =>
+    sessions.resolveRole(roleId, projectId);
   const tasks = new TaskEngine({
     db,
     bus,
     runs,
     notifier,
     workspace: () => store.state.workspace,
-    projectPath: (id) => {
-      const project = projects.find(id);
-      return project ? projects.absPath(project) : undefined;
-    },
-    resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
+    projectPath: folderOf(projects),
+    resolveRole,
     tasksDir: tasksDir(),
-    artVaultRoot: () => current.artVaultRoot,
+    artVaultRoot: () => box.current.artVaultRoot,
     recordNote: async (projectId, text) => {
       await ops.addTodo(projectId, text, undefined, "Implementation notes");
     },
@@ -202,17 +246,14 @@ export async function createContext(
     runs,
     notifier,
     workspace: () => store.state.workspace,
-    projectPath: (id) => {
-      const project = projects.find(id);
-      return project ? projects.absPath(project) : undefined;
-    },
-    resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
+    projectPath: folderOf(projects),
+    resolveRole,
   });
   const modules = new ModuleManager({
     dir: () => modulesDir(),
-    enabled: () => current.modules,
+    enabled: () => box.current.modules,
     setEnabled: (name, on) => {
-      current = updateSettings({ modules: { ...current.modules, [name]: on } });
+      box.current = updateSettings({ modules: { ...box.current.modules, [name]: on } });
     },
     workspace: () => store.state.workspace,
     targets: {
@@ -223,6 +264,22 @@ export async function createContext(
     },
     log: (m) => console.log(m),
   });
+  return { editor, tasks, scheduler, modules };
+}
+
+type Orchestration = ReturnType<typeof createOrchestration>;
+
+/** Starting and stopping everything that watches or ticks, and Sync all. */
+function createLifecycle(
+  base: Base,
+  notes: Notes,
+  agents: Agents,
+  orch: Orchestration,
+): Pick<AppContext, "sync" | "syncProject" | "start" | "stop"> {
+  const { box, bus, store, notifier } = base;
+  const { vault, projects } = notes;
+  const { github, brief, sessions, relay } = agents;
+  const { scheduler, modules } = orch;
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -232,8 +289,8 @@ export async function createContext(
 
   const syncDeps: SyncAllDeps = {
     workspace: () => store.state.workspace,
-    projectsRoot: () => current.projectsRoot,
-    workspaceRoot: () => current.workspaceRoot,
+    projectsRoot: () => box.current.projectsRoot,
+    workspaceRoot: () => box.current.workspaceRoot,
     onRepoDone: (id) => void projects.refresh(id),
     onReport: (report) => notifyFromSyncReport(notifier, report),
   };
@@ -254,11 +311,11 @@ export async function createContext(
   const start = async (): Promise<void> => {
     await stop();
     await modules.loadEnabled();
-    const port = await relay.start(current.relay.port);
-    if (port !== current.relay.port)
-      current = updateSettings({ relay: { ...current.relay, port } });
-    if (!isConfigured(current)) return;
-    await store.open(current.workspaceRoot, current.workspaceConfigPath);
+    const port = await relay.start(box.current.relay.port);
+    if (port !== box.current.relay.port)
+      box.current = updateSettings({ relay: { ...box.current.relay, port } });
+    if (!isConfigured(box.current)) return;
+    await store.open(box.current.workspaceRoot, box.current.workspaceConfigPath);
     waiting.prime();
     await vault.watch();
     projects.startAuto();
@@ -275,37 +332,40 @@ export async function createContext(
     due();
     briefTimer = setInterval(due, 60_000);
   };
-
   return {
-    settings: () => current,
-    patchSettings: (patch) => (current = updateSettings(patch)),
+    sync: () => syncAll(syncDeps),
+    syncProject: (id) => syncProject(syncDeps, id),
+    start,
+    stop,
+  };
+}
+
+export async function createContext(
+  checkResponses: boolean,
+  relayScript: string,
+): Promise<AppContext> {
+  mkdirSync(dataDir(), { recursive: true });
+  const base = createBase();
+  const notes = createNotes(base);
+  const agents = createAgents(base, notes, relayScript);
+  const orch = createOrchestration(base, notes, agents);
+  const { box, store, db, bus, notifier, ntfy } = base;
+  return {
+    settings: () => box.current,
+    patchSettings: (patch) => (box.current = updateSettings(patch)),
     store,
     db,
     bus,
     ipc: new IpcRegistry(checkResponses),
     notifier,
-    providers,
-    sessions,
-    runs,
-    ask,
-    explore,
-    brief,
-    hooks,
-    editor,
-    tasks,
-    scheduler,
-    modules,
     ntfy,
-    relay,
-    projects,
-    github,
-    vault,
-    ops,
-    warnings,
-    sync: () => syncAll(syncDeps),
-    syncProject: (id) => syncProject(syncDeps, id),
-    start,
-    stop,
+    ...agents,
+    ...orch,
+    projects: notes.projects,
+    vault: notes.vault,
+    ops: notes.ops,
+    warnings: notes.warnings,
+    ...createLifecycle(base, notes, agents, orch),
   };
 }
 

@@ -41,8 +41,20 @@ import { readHubStatus, runValidate } from "./modules/vault/health";
 import { installTool, loginTool } from "./modules/setup/tool-actions";
 import { rememberCodexModel } from "./modules/providers/codex";
 
-/** Registers every IPC handler. Grows by one block per module. */
+/** Registers every IPC handler, one group at a time. */
 export function registerHandlers(ctx: AppContext): void {
+  registerProjectHandlers(ctx);
+  registerSetupHandlers(ctx);
+  registerSessionHandlers(ctx);
+  registerBrainHandlers(ctx);
+  registerGitHandlers(ctx);
+  registerConfigHandlers(ctx);
+  registerTaskHandlers(ctx);
+  registerVaultHandlers(ctx);
+}
+
+/** Projects, notes and the quick switcher. */
+function registerProjectHandlers(ctx: AppContext): void {
   ctx.ipc.handle("app.ping", (req) => ({ text: req.text, at: new Date().toISOString() }));
   ctx.ipc.handle("workspace.get", () => workspaceView(ctx));
 
@@ -70,7 +82,10 @@ export function registerHandlers(ctx: AppContext): void {
       extraSources: () => ctx.modules.searchSources(),
     }),
   );
+}
 
+/** Setup: tools, the workspace folder and providers. */
+function registerSetupHandlers(ctx: AppContext): void {
   ctx.ipc.handle("setup.detectTools", () => detectTools());
   ctx.ipc.handle("setup.inspect", (req) => inspectWorkspaceFolder(req.root));
   ctx.ipc.handle("setup.clone", (req) => cloneWorkspaceRepo(req.url, req.dest));
@@ -113,6 +128,10 @@ export function registerHandlers(ctx: AppContext): void {
       }),
     ),
   );
+}
+
+/** Agent sessions, their layout, hooks and end-of-session capture. */
+function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.list", (req) => ctx.sessions.list(req));
   ctx.ipc.handle("sessions.start", (req) => {
     const row = ctx.sessions.start(req);
@@ -163,6 +182,10 @@ export function registerHandlers(ctx: AppContext): void {
     if (req.archive !== false) ctx.sessions.archive(req.id);
     return { saved: kept.length };
   });
+}
+
+/** Ask the brain, the audit, the morning brief and Explore. */
+function registerBrainHandlers(ctx: AppContext): void {
   ctx.ipc.handle("ask.start", (req) => ({ runId: ctx.ask.start(req.question, req.projectId) }));
   ctx.ipc.handle("ask.result", (req) => ctx.ask.result(req.runId));
   ctx.ipc.handle("ask.cancel", (req) => ctx.ask.cancel(req.runId));
@@ -174,12 +197,32 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("explore.list", () => ctx.explore.list());
   ctx.ipc.handle("explore.plan", (req) => ctx.explore.plan(req));
   ctx.ipc.handle("explore.spawn", (req) => ctx.explore.spawn(req));
-  const repoOf = (projectId: string): string => {
-    const project = ctx.projects.find(projectId);
-    if (!project) throw new IpcFailure("not-found", `No project with id ${projectId}`);
-    return ctx.projects.absPath(project);
+}
+
+/** Branches, worktrees, diffs, commits and GitHub. */
+/** The two helpers every git handler uses: a project's repo folder, and a refresh of its status. */
+function gitHelpers(ctx: AppContext): {
+  repoOf: (projectId: string) => string;
+  changed: (projectId: string) => void;
+} {
+  return {
+    repoOf: (projectId) => {
+      const project = ctx.projects.find(projectId);
+      if (!project) throw new IpcFailure("not-found", `No project with id ${projectId}`);
+      return ctx.projects.absPath(project);
+    },
+    changed: (projectId) => void ctx.projects.refresh(projectId),
   };
-  const changed = (projectId: string): void => void ctx.projects.refresh(projectId);
+}
+
+function registerGitHandlers(ctx: AppContext): void {
+  registerBranchHandlers(ctx);
+  registerChangeHandlers(ctx);
+}
+
+/** Branches and worktrees. */
+function registerBranchHandlers(ctx: AppContext): void {
+  const { repoOf, changed } = gitHelpers(ctx);
   ctx.ipc.handle("branches.list", (req) => listBranches(repoOf(req.projectId)));
   ctx.ipc.handle("branches.switch", async (req) => {
     const result = await switchBranch(repoOf(req.projectId), req.name, {
@@ -241,6 +284,11 @@ export function registerHandlers(ctx: AppContext): void {
     changed(req.projectId);
     return removed;
   });
+}
+
+/** Diffs, review comments, commits, pushes and the GitHub overview. */
+function registerChangeHandlers(ctx: AppContext): void {
+  const { repoOf, changed } = gitHelpers(ctx);
   /** The repo folder, or one of its worktrees; anything else is refused. */
   const checkoutOf = async (projectId: string, dir?: string): Promise<string> => {
     const root = repoOf(projectId);
@@ -281,6 +329,10 @@ export function registerHandlers(ctx: AppContext): void {
     return outcome.ok ? { pushed: true } : { pushed: false, error: outcome.error };
   });
   ctx.ipc.handle("github.overview", (req) => ctx.github.overview(req.projectId));
+}
+
+/** Edits to the workspace config, settings, automations and modules. */
+function registerConfigHandlers(ctx: AppContext): void {
   ctx.ipc.handle("roles.save", (req) => ctx.editor.saveRole(req.id, req.role));
   ctx.ipc.handle("roles.remove", (req) => ctx.editor.removeRole(req.id));
   ctx.ipc.handle("projects.update", (req) => {
@@ -328,6 +380,10 @@ export function registerHandlers(ctx: AppContext): void {
   });
   ctx.ipc.handle("modules.list", () => ctx.modules.list());
   ctx.ipc.handle("modules.setEnabled", (req) => ctx.modules.setEnabled(req.name, req.enabled));
+}
+
+/** The task board and the inbox. */
+function registerTaskHandlers(ctx: AppContext): void {
   ctx.ipc.handle("tasks.list", (req) => ctx.tasks.list(req.projectId));
   ctx.ipc.handle("tasks.get", (req) => ctx.tasks.get(req.id));
   ctx.ipc.handle("tasks.create", (req) => ctx.tasks.create(req));
@@ -343,7 +399,10 @@ export function registerHandlers(ctx: AppContext): void {
     unread: ctx.notifier.unreadCount(),
     urgentUnread: ctx.notifier.unreadUrgentCount(),
   }));
+}
 
+/** Vault notes: waiting items, todos, quick notes and health. */
+function registerVaultHandlers(ctx: AppContext): void {
   ctx.ipc.handle("vault.openItems", (req) => ctx.vault.read(req.projectId));
   ctx.ipc.handle("vault.waiting", () => ctx.vault.allWaiting());
   ctx.ipc.handle("vault.tickWaiting", (req) => ctx.ops.tickWaiting(req.projectId, req.raw));
