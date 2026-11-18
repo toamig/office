@@ -47,7 +47,11 @@ export interface LaunchOptions {
   /** Extra machine-settings fields, e.g. a relay port. */
   settings?: Record<string, unknown>;
   base?: string;
+  /** Launch the packaged app from release/win-unpacked instead of the built sources. */
+  packaged?: boolean;
 }
+
+export const packagedExe = join(repoRoot, "release", "win-unpacked", "Office.exe");
 
 /** Launches the built app against a fresh data folder and a fake home. Never touches real data. */
 export async function launch(options: LaunchOptions = {}): Promise<Launched> {
@@ -81,7 +85,8 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
       );
   }
   const app = await electron.launch({
-    args: [repoRoot],
+    ...(options.packaged ? { executablePath: packagedExe } : {}),
+    args: options.packaged ? [] : [repoRoot],
     env: {
       ...process.env,
       OFFICE_DATA: data,
