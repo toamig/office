@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Office: feature map</title>
+<style>
+  :root { --bg:#f7f6f2; --card:#ffffff; --soft:#efede6; --text:#22211f; --muted:#6b6a64; --line:#dcdad2; --accent:#3c3489; --accent-bg:#eeedfe; }
+  @media (prefers-color-scheme: dark) { :root { --bg:#1c1c1a; --card:#262624; --soft:#30302d; --text:#ecebe6; --muted:#a3a29b; --line:#3d3d3a; --accent:#cecbf6; --accent-bg:#3c3489; } }
+  * { box-sizing: border-box; }
+  body { margin:0; background:var(--bg); color:var(--text); font: 15px/1.6 "Segoe UI", system-ui, -apple-system, sans-serif; }
+  main { max-width: 980px; margin: 0 auto; padding: 32px 24px 48px; }
+  h1 { font-size: 26px; font-weight: 600; margin: 0 0 4px; }
+  h2 { font-size: 18px; font-weight: 600; margin: 36px 0 12px; }
+  .lead { color: var(--muted); margin: 0 0 24px; max-width: 720px; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 12px; }
+  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px 18px; }
+  .head { display: flex; align-items: center; gap: 10px; }
+  .num { width: 26px; height: 26px; border-radius: 50%; background: var(--soft); color: var(--muted); font-size: 13px; display: flex; align-items: center; justify-content: center; flex: none; }
+  .title { font-size: 16px; font-weight: 600; flex: 1; }
+  .tag { font-size: 12px; background: var(--accent-bg); color: var(--accent); padding: 2px 9px; border-radius: 8px; white-space: nowrap; }
+  .one { color: var(--muted); font-size: 14px; margin: 6px 0 8px; }
+  ul { margin: 0; padding-left: 18px; font-size: 14px; }
+  li { margin: 2px 0; }
+  .layers { display: grid; gap: 8px; }
+  .layer { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 12px 16px; display: flex; gap: 14px; align-items: baseline; flex-wrap: wrap; }
+  .layer b { min-width: 190px; }
+  .layer span { color: var(--muted); font-size: 14px; }
+  .arrow { text-align: center; color: var(--muted); font-size: 13px; }
+  .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px; }
+  .step { background: var(--soft); border-radius: 10px; padding: 10px 12px; }
+  .step b { display: block; font-size: 14px; }
+  .step span { font-size: 13px; color: var(--muted); }
+  footer { margin-top: 32px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<main>
+  <h1>Office</h1>
+  <p class="lead">Your own desktop workspace: every project, agent, repo, branch, worktree, note and notification in one window, on top of the brain.</p>
+
+  <h2>The nine areas</h2>
+  <div class="grid">
+    <div class="card"><div class="head"><div class="num">1</div><div class="title">Home</div><div class="tag">M1</div></div>
+      <div class="one">Your morning screen</div>
+      <ul><li>What is waiting on you, across all projects</li><li>Live agents: running, needs you, done</li><li>Yesterday's brief per project (M2)</li></ul></div>
+    <div class="card"><div class="head"><div class="num">2</div><div class="title">Projects</div><div class="tag">M1</div></div>
+      <div class="one">Every project in one place</div>
+      <ul><li>Branch, changes, PRs and CI at a glance</li><li>Todos and notes straight from the brain</li><li>Ctrl+K to jump to any project, branch or session</li></ul></div>
+    <div class="card"><div class="head"><div class="num">3</div><div class="title">Agents</div><div class="tag">M2</div></div>
+      <div class="one">Claude Code, Codex and more, side by side</div>
+      <ul><li>The real tools in embedded terminals</li><li>Status for each: working, needs you, done</li><li>Closing a session saves what is left, then archives it</li></ul></div>
+    <div class="card"><div class="head"><div class="num">4</div><div class="title">Git</div><div class="tag">M1 to M3</div></div>
+      <div class="one">Every repo, branch and worktree</div>
+      <ul><li>Sync all; conflicts shown, never auto-merged</li><li>A worktree per task, with an agent inside</li><li>Diff review, with comments sent back to the agent</li></ul></div>
+    <div class="card"><div class="head"><div class="num">5</div><div class="title">Orchestrator</div><div class="tag">M4</div></div>
+      <div class="one">Set who does what once</div>
+      <ul><li>Roles: planner, builder, reviewer, artist</li><li>Pipelines with your approval between steps</li><li>Task board, and fan-out to several agents</li></ul></div>
+    <div class="card"><div class="head"><div class="num">6</div><div class="title">Brain</div><div class="tag">M2</div></div>
+      <div class="one">Your memory, one question away</div>
+      <ul><li>Ask the brain anything</li><li>Quick notes, filed and committed</li><li>Tick todos right from Office</li></ul></div>
+    <div class="card"><div class="head"><div class="num">7</div><div class="title">Inbox</div><div class="tag">M1 and up</div></div>
+      <div class="one">Every notification in one place</div>
+      <ul><li>Agents, git, CI and automations</li><li>Urgent ones as desktop alerts</li><li>Mute, quiet hours, phone pings later</li></ul></div>
+    <div class="card"><div class="head"><div class="num">8</div><div class="title">Setup</div><div class="tag">M1</div></div>
+      <div class="one">Install on any PC in minutes</div>
+      <ul><li>Clone the brain, pick the projects folder</li><li>Connect Claude, Codex and others with your plans</li><li>See every skill, MCP and hook you have</li></ul></div>
+    <div class="card"><div class="head"><div class="num">9</div><div class="title">Explore</div><div class="tag">M2</div></div>
+      <div class="one">Think freely, then spawn a project</div>
+      <ul><li>A general chat not tied to any project</li><li>"Make this a project": folder, git, GitHub, brain notes</li><li>Opens a session there with the exploration as its brief</li></ul></div>
+  </div>
+
+  <h2>How it fits together</h2>
+  <div class="layers">
+    <div class="layer"><b>Office (you build this)</b><span>Projects, roles and pipelines, the brain chat, your setup, the inbox</span></div>
+    <div class="arrow">launches and watches</div>
+    <div class="layer"><b>Agent tools (already exist)</b><span>Claude Code, Codex, any other command-line agent, with your own logins</span></div>
+    <div class="arrow">work on</div>
+    <div class="layer"><b>Your files</b><span>The brain (notes, todos, decisions) and your project repos and worktrees</span></div>
+  </div>
+
+  <h2>Build order</h2>
+  <div class="steps">
+    <div class="step"><b>M0 Groundwork</b><span>Sweep old sessions into the brain; the "Waiting on you" format</span></div>
+    <div class="step"><b>M1 Office board</b><span>Home, Projects, git status and sync, Setup, Inbox</span></div>
+    <div class="step"><b>M2 Workbench</b><span>Agents in terminals, status, Ask the brain, the brief</span></div>
+    <div class="step"><b>M3 Git desk</b><span>Branches, worktrees, diff review, PRs and CI</span></div>
+    <div class="step"><b>M4 Orchestrator</b><span>Roles, pipelines, task board, fan-out</span></div>
+    <div class="step"><b>M5 Comfort</b><span>Automations, phone pings, themes, your own modules</span></div>
+  </div>
+
+  <footer>A visual summary of the spec, drafted 2026-11-18. The spec in the brain (Office/Spec.md) is the source of truth; if they disagree, the spec wins.</footer>
+</main>
+</body>
+</html>
