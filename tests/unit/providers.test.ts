@@ -253,6 +253,12 @@ describe("Codex provider", () => {
       role: role({ provider: "codex", model: "m1" }),
     });
     expect(spec.args.slice(-4)).toEqual(["-m", "m1", "-C", "/w"]);
+    const withEffort = p.interactiveCommand({
+      cwd: "/w",
+      officeSessionId: "x",
+      role: role({ provider: "codex", effort: "xhigh" }),
+    });
+    expect(withEffort.args).toContain('model_reasoning_effort="xhigh"');
     expect(p.resumeCommand("", { cwd: "/w", officeSessionId: "x" }).args.slice(-2)).toEqual([
       "resume",
       "--last",

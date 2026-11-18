@@ -141,6 +141,7 @@ export class CodexProvider implements Provider {
   interactiveCommand(o: RunOptions): CommandSpec {
     const args: string[] = [];
     if (o.role?.model) args.push("-m", o.role.model);
+    if (o.role?.effort) args.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
     args.push("-C", o.cwd);
     return this.command(args, o.env);
   }
