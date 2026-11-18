@@ -253,6 +253,10 @@ describe("Codex provider", () => {
       role: role({ provider: "codex", model: "m1" }),
     });
     expect(spec.args.slice(-4)).toEqual(["-m", "m1", "-C", "/w"]);
+    expect(p.resumeCommand("", { cwd: "/w", officeSessionId: "x" }).args.slice(-2)).toEqual([
+      "resume",
+      "--last",
+    ]);
     expect(p.resumeCommand("t1", { cwd: "/w", officeSessionId: "x" }).args.slice(-2)).toEqual([
       "resume",
       "t1",

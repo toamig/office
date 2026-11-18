@@ -270,7 +270,10 @@ export class SessionService {
     if (row.running) return row;
     const provider = this.deps.providers.get(row.provider);
     if (!provider) throw new IpcFailure("no-provider", `The ${row.provider} tool is not available`);
-    const providerSessionId = row.providerSessionId ?? row.id;
+    // Claude-style sessions use the Office id as the tool's id. Codex only learns its thread id from the
+    // first notify; before that, the tool's own "most recent session in this folder" is the right target.
+    const ownId = row.provider === "claude-code" || row.provider === "fake";
+    const providerSessionId = row.providerSessionId ?? (ownId ? row.id : "");
     const spec = provider.resumeCommand(providerSessionId, { cwd: row.cwd, officeSessionId: id });
     this.pty.release(id);
     return this.launch({
@@ -473,7 +476,10 @@ export class SessionService {
       .get(sessionId, sessionId) as { id: string } | undefined;
     if (!row) return false;
     const rt = this.runtime.get(row.id);
-    if (rt) rt.hookSeen = true;
+    if (rt) {
+      rt.hookSeen = true;
+      rt.promptHook = true;
+    }
     const status = statusForClaudeHook(event);
     if (!status) return true;
     const detail = typeof payload["message"] === "string" ? payload["message"] : undefined;

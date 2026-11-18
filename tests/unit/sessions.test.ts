@@ -104,6 +104,12 @@ describe("status rules", () => {
     const idle = { ...s, status: "idle" as const, lastWriteMs: 5000 };
     expect(statusOnOutput(idle, 5500)).toBeNull();
     expect(statusOnOutput(idle, 9000)).toBe("working");
+    // Codex reports only the end of a turn: output after the owner's next prompt starts a new one.
+    const codexIdle = { ...idle, hookSeen: true };
+    expect(statusOnOutput({ ...codexIdle, lastWriteMs: 5000 }, 5500)).toBeNull();
+    expect(statusOnOutput({ ...codexIdle, lastWriteMs: 5000 }, 9000)).toBe("working");
+    // Claude Code's hooks report the prompt themselves, so output alone changes nothing.
+    expect(statusOnOutput({ ...codexIdle, promptHook: true, lastWriteMs: 5000 }, 9000)).toBeNull();
     // With hooks in charge, silence never flips the status.
     expect(statusOnTick({ ...working, hookSeen: true }, 999_999)).toBeNull();
   });

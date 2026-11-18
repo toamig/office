@@ -32,11 +32,19 @@ export interface LiveState {
   hookSeen: boolean;
   lastOutputMs: number;
   lastWriteMs: number;
+  /** True when the tool's hooks report a submitted prompt (Claude Code); Codex's notify does not. */
+  promptHook?: boolean;
 }
 
 /** Fallback when no hooks report: output starts work; 20 s of silence means idle (plan 9.4). */
 export function statusOnOutput(s: LiveState, nowMs: number): SessionStatus | null {
-  if (s.hookSeen) return s.status === "starting" ? "working" : null;
+  if (s.hookSeen) {
+    if (s.status === "starting") return "working";
+    // Codex only reports the end of a turn, so output after the owner's next prompt is the start of one.
+    if (!s.promptHook && s.status === "idle" && nowMs - s.lastWriteMs > ECHO_WINDOW_MS)
+      return "working";
+    return null;
+  }
   if (s.status === "starting") return "working";
   if (s.status === "idle" && nowMs - s.lastWriteMs > ECHO_WINDOW_MS) return "working";
   return null;

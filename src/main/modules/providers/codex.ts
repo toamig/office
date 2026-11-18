@@ -160,7 +160,11 @@ export class CodexProvider implements Provider {
   }
 
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec {
-    return this.command(["resume", providerSessionId], o.env);
+    // Without a thread id yet, continue the most recent session of this folder.
+    return this.command(
+      ["resume", ...(providerSessionId ? [providerSessionId] : ["--last"])],
+      o.env,
+    );
   }
 
   async inventory(): Promise<Inventory> {
