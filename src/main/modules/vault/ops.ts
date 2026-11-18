@@ -4,7 +4,7 @@ import type { WriteResult } from "../../../shared/models";
 import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
 import { brainOpenItems } from "../explore/files";
-import { parseWaitingLine } from "./openitems";
+import { parseWaitingLine, setTodoChecked } from "./openitems";
 import type { VaultService } from "./service";
 import { VaultWriteError, type VaultWriter } from "./writer";
 
@@ -66,6 +66,18 @@ export class VaultOps {
     const text = parseWaitingLine(raw)?.text ?? raw;
     return this.guard(
       this.deps.writer.removeWaiting(file, raw, heading, `${name}: done: ${clip(text)}`),
+    );
+  }
+
+  /** Ticks or unticks a todo of any section (a plain bullet becomes a checkbox) and commits. */
+  tickTodo(projectId: string, line: number, text: string, checked: boolean): Promise<WriteResult> {
+    const { file, name } = this.target(projectId);
+    return this.guard(
+      this.deps.writer.edit(
+        file,
+        `${name}: ${checked ? "done" : "reopen"}: ${clip(text)}`,
+        (content) => setTodoChecked(content, line, text, checked),
+      ),
     );
   }
 

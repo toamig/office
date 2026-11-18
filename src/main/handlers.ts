@@ -38,6 +38,7 @@ import {
   prepareWorkspace,
 } from "./modules/setup/workspace-setup";
 import { readHubStatus, runValidate } from "./modules/vault/health";
+import { installTool, loginTool } from "./modules/setup/tool-actions";
 
 /** Registers every IPC handler. Grows by one block per module. */
 export function registerHandlers(ctx: AppContext): void {
@@ -87,6 +88,14 @@ export function registerHandlers(ctx: AppContext): void {
     return readInventories(project ? ctx.projects.absPath(project) : undefined);
   });
 
+  const toolActions = {
+    providers: ctx.providers,
+    startCommand: (spec: { cmd: string; args: string[] }, title: string) => {
+      ctx.sessions.startCommand(spec, title, userHome());
+    },
+  };
+  ctx.ipc.handle("setup.login", (req) => loginTool(toolActions, req.id));
+  ctx.ipc.handle("setup.install", (req) => installTool(toolActions, req.id));
   ctx.ipc.handle("providers.list", () =>
     Promise.all(
       ctx.providers.all().map(async (p) => {
@@ -332,6 +341,9 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("vault.openItems", (req) => ctx.vault.read(req.projectId));
   ctx.ipc.handle("vault.waiting", () => ctx.vault.allWaiting());
   ctx.ipc.handle("vault.tickWaiting", (req) => ctx.ops.tickWaiting(req.projectId, req.raw));
+  ctx.ipc.handle("vault.tickTodo", (req) =>
+    ctx.ops.tickTodo(req.projectId, req.line, req.text, req.checked),
+  );
   ctx.ipc.handle("vault.addWaiting", (req) =>
     ctx.ops.addWaiting(req.projectId, req.text, req.source),
   );

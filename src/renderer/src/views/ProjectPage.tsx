@@ -89,6 +89,15 @@ function Todos({ id }: { id: string }) {
       setError((err as Error).message);
     }
   };
+  const tickTodo = async (line: number, itemText: string, checked: boolean): Promise<void> => {
+    setError(null);
+    try {
+      await office.invoke("vault.tickTodo", { projectId: id, line, text: itemText, checked });
+      items.reload();
+    } catch (err) {
+      setError((err as Error).message);
+    }
+  };
   const v = items.data;
   return (
     <div className="grid gap-4 lg:grid-cols-2">
@@ -153,9 +162,19 @@ function Todos({ id }: { id: string }) {
             <div className="mb-1 font-semibold">{g.heading}</div>
             <ul className="m-0 list-none p-0">
               {g.items.map((i) => (
-                <li key={i.line} style={{ opacity: i.checked ? 0.55 : 1 }}>
-                  {i.checked === null ? "• " : i.checked ? "☑ " : "☐ "}
-                  {i.text}
+                <li
+                  key={i.line}
+                  className="flex items-start gap-2"
+                  style={{ opacity: i.checked ? 0.55 : 1 }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={i.checked === true}
+                    onChange={() => void tickTodo(i.line, i.text, i.checked !== true)}
+                    aria-label={`Done: ${i.text}`}
+                    data-testid="todo-tick"
+                  />
+                  <span>{i.text}</span>
                 </li>
               ))}
             </ul>

@@ -76,6 +76,26 @@ export function parseOpenItems(
   return out;
 }
 
+/**
+ * Ticks or unticks the todo on a 1-based line of a section other than "Waiting on you". A plain bullet
+ * becomes a checkbox line. Null when that line is no longer the item the owner saw (the file moved on).
+ */
+export function setTodoChecked(
+  markdown: string,
+  line: number,
+  text: string,
+  checked: boolean,
+): string | null {
+  const eol = eolOf(markdown);
+  const lines = markdown.split(/\r?\n/);
+  const current = lines[line - 1];
+  if (current === undefined) return null;
+  const m = /^- (?:\[( |x|X)\] )?(.*)$/.exec(current);
+  if (!m || m[2] !== text) return null;
+  lines[line - 1] = `- [${checked ? "x" : " "}] ${text}`;
+  return lines.join(eol);
+}
+
 const eolOf = (markdown: string): string => (markdown.includes("\r\n") ? "\r\n" : "\n");
 
 /** Formats a new "Waiting on you" line. `source` goes in trailing parentheses. */

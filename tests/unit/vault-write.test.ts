@@ -205,6 +205,45 @@ describe("vault writer", () => {
     expect(warnings.map((w) => w.kind)).toContain("write-failed");
   });
 
+  it("ticks a todo outside Waiting on you, in place, and commits only that file", async () => {
+    const { ops, vault, file } = setup();
+    await ops.addTodo("alpha", "Write the level script");
+    let todo = vault
+      .read("alpha")
+      .groups.flatMap((g) => g.items)
+      .find((i) => i.text.includes("level script"));
+    expect(todo).toMatchObject({ checked: null });
+    const before = readFileSync(file, "utf8").split("\n");
+
+    const result = await ops.tickTodo("alpha", todo!.line, todo!.text, true);
+    expect(result).toMatchObject({ committed: true });
+    const after = readFileSync(file, "utf8").split("\n");
+    expect(after.length).toBe(before.length);
+    expect(after[todo!.line - 1]).toBe(`- [x] ${todo!.text}`);
+    expect(after.filter((l, i) => l !== before[i])).toHaveLength(1);
+
+    todo = vault
+      .read("alpha")
+      .groups.flatMap((g) => g.items)
+      .find((i) => i.text.includes("level script"));
+    expect(todo?.checked).toBe(true);
+    await ops.tickTodo("alpha", todo!.line, todo!.text, false);
+    expect(readFileSync(file, "utf8").split("\n")[todo!.line - 1]).toBe(`- [ ] ${todo!.text}`);
+  });
+
+  it("refuses to tick a todo whose line has moved or changed", async () => {
+    const { ops, file } = setup();
+    await ops.addTodo("alpha", "Something");
+    const before = readFileSync(file, "utf8");
+    await expect(ops.tickTodo("alpha", 1, "Something", true)).rejects.toThrow(
+      /no longer in the file/,
+    );
+    await expect(ops.tickTodo("alpha", 9999, "Something", true)).rejects.toThrow(
+      /no longer in the file/,
+    );
+    expect(readFileSync(file, "utf8")).toBe(before);
+  });
+
   it("refuses a Co-Authored-By trailer", async () => {
     const { file } = setup();
     const writer = new VaultWriter({ hubRoot: () => null, onWarning: () => undefined });

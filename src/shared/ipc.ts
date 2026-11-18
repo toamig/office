@@ -92,6 +92,15 @@ export const channels = {
     req: z.object({ projectId: z.string(), raw: z.string() }),
     res: WriteResult,
   },
+  "vault.tickTodo": {
+    req: z.object({
+      projectId: z.string(),
+      line: z.number().int().positive(),
+      text: z.string(),
+      checked: z.boolean(),
+    }),
+    res: WriteResult,
+  },
   "vault.addWaiting": {
     req: z.object({
       projectId: z.string(),
@@ -110,6 +119,10 @@ export const channels = {
   "notes.read": { req: z.object({ projectId: z.string(), name: z.string() }), res: ProjectNote },
   "search.items": { req: z.void(), res: z.array(SearchItem) },
   "setup.detectTools": { req: z.void(), res: z.array(ToolStatus) },
+  /** Opens the tool's own login in a terminal tab. */
+  "setup.login": { req: z.object({ id: z.string() }), res: z.void() },
+  /** Opens the install command of a missing tool (Codex) in a terminal tab. */
+  "setup.install": { req: z.object({ id: z.string() }), res: z.void() },
   "setup.inspect": { req: z.object({ root: z.string() }), res: WorkspaceInspection },
   "setup.clone": {
     req: z.object({ url: z.string(), dest: z.string() }),
