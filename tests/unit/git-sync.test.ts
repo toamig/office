@@ -2,7 +2,7 @@ import { existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { operationInProgress, parseHubOutput, syncRepo } from "../../src/main/modules/git/sync";
-import { syncAll } from "../../src/main/modules/git/syncall";
+import { syncAll, syncHub } from "../../src/main/modules/git/syncall";
 import {
   cloneOf,
   commit,
@@ -174,5 +174,46 @@ describe("syncAll", () => {
       ["b", "up-to-date"],
       ["hub:Common", "pulled"],
     ]);
+  });
+});
+
+describe("syncHub", () => {
+  function hubWith(script: string): string {
+    const hub = tmp("office-hub-fail-");
+    mkdirSync(join(hub, "tools"));
+    writeFileSync(join(hub, "tools", "hub.mjs"), script);
+    return hub;
+  }
+  const row = (id: string, rows: Awaited<ReturnType<typeof syncHub>>) =>
+    rows.find((r) => r.id === id);
+
+  it("adds a failed hub row when the tool exits with an error and prints no table", async () => {
+    const hub = hubWith("console.error('fatal: not a git repository'); process.exit(3);");
+    const rows = await syncHub(hub);
+    expect(rows).toEqual([
+      { id: "hub:.", name: "Brain hub", action: "failed", reason: "fatal: not a git repository" },
+    ]);
+  });
+
+  it("adds a failed hub row even when the failing tool printed part of the table", async () => {
+    const hub = hubWith(
+      "console.log('Common'.padEnd(26) + ' pulled 1'); console.log('trace: boom'); process.exit(1);",
+    );
+    const rows = await syncHub(hub);
+    expect(row("hub:Common", rows)?.action).toBe("pulled");
+    expect(row("hub:.", rows)).toMatchObject({ action: "failed", reason: "trace: boom" });
+  });
+
+  it("adds a failed hub row when the tool does not finish in time", async () => {
+    const hub = hubWith("setTimeout(() => {}, 60000);");
+    const rows = await syncHub(hub, 700);
+    expect(row("hub:.", rows)).toMatchObject({ action: "failed" });
+    expect(row("hub:.", rows)?.reason).toContain("did not finish");
+  });
+
+  it("adds nothing for a tool that succeeded", async () => {
+    const hub = hubWith("console.log('Common'.padEnd(26) + ' up to date');");
+    const rows = await syncHub(hub);
+    expect(rows.map((r) => r.id)).toEqual(["hub:Common"]);
   });
 });

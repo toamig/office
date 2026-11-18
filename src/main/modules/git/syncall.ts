@@ -18,8 +18,11 @@ export interface SyncAllDeps {
 const sameFolder = (a: string, b: string): boolean =>
   resolve(a).toLowerCase() === resolve(b).toLowerCase();
 
-/** Runs the hub tool for a brain hub: it already handles nested repos and their rules. */
-export async function syncHub(root: string): Promise<SyncRepoResult[]> {
+/**
+ * Runs the hub tool for a brain hub: it already handles nested repos and their rules. When it exits with
+ * an error, or times out, a failed "hub:." row is always added, whatever else it printed.
+ */
+export async function syncHub(root: string, timeoutMs = 180_000): Promise<SyncRepoResult[]> {
   const tool = join(root, "tools", "hub.mjs");
   if (!existsSync(tool)) {
     return [
@@ -31,18 +34,20 @@ export async function syncHub(root: string): Promise<SyncRepoResult[]> {
       },
     ];
   }
-  const result = await run("node", [tool, "auto"], { cwd: root, timeoutMs: 180_000 });
-  if (result.code !== 0 && !result.stdout.trim()) {
-    return [
-      {
-        id: "hub:.",
-        name: "Brain hub",
-        action: "failed",
-        reason: result.stderr.trim().split("\n")[0] ?? "hub tool failed",
-      },
-    ];
-  }
-  return parseHubOutput(result.stdout);
+  const result = await run("node", [tool, "auto"], { cwd: root, timeoutMs });
+  const rows = parseHubOutput(result.stdout);
+  if (result.code === 0 && !result.timedOut) return rows;
+  const reason = result.timedOut
+    ? `the hub tool did not finish in ${Math.round(timeoutMs / 1000)} seconds`
+    : (result.stderr.trim().split(/\r?\n/)[0] ||
+      result.stdout.trim().split(/\r?\n/).at(-1) ||
+      `the hub tool exited with code ${result.code}`);
+  const own = rows.find((row) => row.id === "hub:.");
+  if (own && (own.action === "failed" || own.action === "conflict")) return rows;
+  return [
+    ...rows.filter((row) => row.id !== "hub:."),
+    { id: "hub:.", name: "Brain hub", action: "failed", reason },
+  ];
 }
 
 /** Sync all: every project repo four at a time, plus the brain hub through its own tool. */
