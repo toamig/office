@@ -60,6 +60,28 @@ export interface LaunchOptions {
   packaged?: boolean;
 }
 
+/**
+ * Makes closing the app fail the test if any Office window was ever shown or is visible on a display: a test
+ * run must never appear on, or take focus from, the owner's desktop.
+ */
+function guardVisibility(app: ElectronApplication): void {
+  const close = app.close.bind(app);
+  app.close = async (): Promise<void> => {
+    const seen = await app
+      .evaluate(({ BrowserWindow }) => ({
+        everShown: (globalThis as { __officeShown?: boolean }).__officeShown === true,
+        visible: BrowserWindow.getAllWindows().filter((w) => w.isVisible()).length,
+      }))
+      .catch(() => null);
+    await close();
+    if (seen && (seen.everShown || seen.visible > 0)) {
+      throw new Error(
+        `An Office window was shown during the test run (shown: ${seen.everShown}, visible now: ${seen.visible}).`,
+      );
+    }
+  };
+}
+
 export const packagedExe = join(repoRoot, "release", "win-unpacked", "Office.exe");
 
 /** Launches the built app against a fresh data folder and a fake home. Never touches real data. */
@@ -100,6 +122,8 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
           relay: { port: 47999, token: "e2e-token" },
           // The older specs drive terminals; the chat specs ask for a chat.
           sessionMode: "terminal",
+          // The welcome flow has its own specs; every other spec starts on a machine that is set up.
+          welcomeDone: true,
           ...before,
           ...options.settings,
         }),
@@ -111,6 +135,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
     args: options.packaged ? [] : [repoRoot],
     env: {
       ...process.env,
+      OFFICE_E2E: "1",
       OFFICE_DATA: data,
       OFFICE_HOME: home,
       GIT_CONFIG_GLOBAL: gitConfig,
@@ -119,6 +144,7 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
       ...options.env,
     } as Record<string, string>,
   });
+  guardVisibility(app);
   return { app, base, data, home, gitConfig, ghRemotes, ...(world ? { world } : {}) };
 }
 

@@ -20,6 +20,7 @@ import {
   IPC_PTY_WRITE,
 } from "../shared/ipc-names";
 import { createContext, type AppContext } from "./context";
+import { isE2E, unseenWindowOptions, watchVisibility } from "./e2e";
 import { badgePng } from "./core/badge";
 import { applyChrome, startingChrome } from "./chrome";
 import { buildContextMenu, type MenuAction } from "./core/context-menu";
@@ -124,6 +125,7 @@ function createWindow(): BrowserWindow {
     minWidth: 900,
     minHeight: 600,
     show: false,
+    ...(isE2E() ? unseenWindowOptions() : {}),
     title: "Office",
     // No system title bar: the app draws its own top bar and the system draws only the window buttons.
     titleBarStyle: "hidden",
@@ -138,12 +140,15 @@ function createWindow(): BrowserWindow {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
+      // A test run never has the window in front, and must not slow down because of it.
+      ...(isE2E() ? { backgroundThrottling: false, offscreen: true } : {}),
     },
   });
   win.setMenuBarVisibility(false);
   installNativeBehaviour(win);
   if (placed.maximized) win.maximize();
-  win.once("ready-to-show", () => win.show());
+  if (isE2E()) watchVisibility(win);
+  else win.once("ready-to-show", () => win.show());
 
   // The window reopens where it was left, maximised or not.
   let saveTimer: NodeJS.Timeout | undefined;
@@ -192,7 +197,7 @@ function createWindow(): BrowserWindow {
 }
 
 function focusWindow(): void {
-  if (!mainWindow) return;
+  if (!mainWindow || isE2E()) return;
   if (mainWindow.isMinimized()) mainWindow.restore();
   mainWindow.show();
   mainWindow.focus();
@@ -200,7 +205,7 @@ function focusWindow(): void {
 
 /** Desktop alert for an urgent notification; clicking it opens the place it links to. */
 function showDesktopNotification(row: NotificationRow): void {
-  if (!Notification.isSupported()) return;
+  if (isE2E() || !Notification.isSupported()) return;
   const note = new Notification({ title: row.title, body: row.body ?? "" });
   note.on("click", () => {
     focusWindow();
@@ -210,7 +215,7 @@ function showDesktopNotification(row: NotificationRow): void {
 }
 
 function updateBadge(count: number): void {
-  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (isE2E() || !mainWindow || mainWindow.isDestroyed()) return;
   if (process.platform === "win32") {
     mainWindow.setOverlayIcon(
       count > 0 ? nativeImage.createFromBuffer(badgePng(count)) : null,
@@ -284,6 +289,19 @@ async function boot(): Promise<void> {
   void updates.check();
 }
 
+// Hidden windows still get their frames and timers, so the page answers at full speed with nobody watching.
+if (isE2E()) {
+  for (const flag of [
+    "disable-renderer-backgrounding",
+    "disable-background-timer-throttling",
+    "disable-backgrounding-occluded-windows",
+  ]) {
+    app.commandLine.appendSwitch(flag);
+  }
+}
+// A run on its own data folder (tests, a trial) keeps Electron's own state there too. Otherwise it would share
+// the installed app's folder, find that app's single-instance lock taken, quit, and wake the owner's window.
+if (process.env["OFFICE_DATA"]) app.setPath("userData", join(process.env["OFFICE_DATA"], "electron"));
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();

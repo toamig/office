@@ -1,6 +1,7 @@
 import { BrowserWindow, shell, WebContentsView } from "electron";
 import type { PreviewBounds, PreviewState } from "../shared/models";
 import { checkPreviewUrl } from "./core/dev-server";
+import { isE2E } from "./e2e";
 
 export type PreviewAction = "back" | "forward" | "reload" | "stop" | "external" | "close";
 
@@ -53,6 +54,7 @@ export class PreviewPane {
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
+        ...(isE2E() ? { backgroundThrottling: false } : {}),
       },
     });
     const wc = view.webContents;

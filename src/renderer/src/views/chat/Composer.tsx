@@ -67,9 +67,12 @@ export function Composer({
     setMention(null);
     setFiles([]);
     requestAnimationFrame(() => {
+      const el = area.current;
+      // Put the caret after the mention, unless the owner has already typed on: then it is where they left it.
+      if (!el || el.value !== next) return;
       const end = mention.from + file.length + 2;
-      area.current?.setSelectionRange(end, end);
-      area.current?.focus();
+      el.setSelectionRange(end, end);
+      el.focus();
     });
   };
 

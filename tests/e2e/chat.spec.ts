@@ -113,6 +113,8 @@ test("@ mentions a project file, and Shift+Enter adds a line instead of sending"
   await box.press("Enter");
   await expect(box).toHaveValue("look at @README.md ");
   await box.press("Shift+Enter");
+  // The line break is inserted after the key event; wait for it, or the next characters can overtake it.
+  await expect(box).toHaveValue("look at @README.md \n");
   await box.type("then this");
   await expect(box).toHaveValue("look at @README.md \nthen this");
   await expect(win.getByTestId("chat-user")).toHaveCount(0);
