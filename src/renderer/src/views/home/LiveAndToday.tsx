@@ -24,7 +24,7 @@ export function LiveAgentsPanel() {
         <div key={s.id} className="flex items-center gap-2 py-0.5" data-testid="live-agent">
           <Chip tone={tone(s.status)}>{s.status}</Chip>
           <button
-            className="cursor-pointer border-0 bg-transparent p-0 text-left underline"
+            className="border-0 bg-transparent p-0 text-left underline"
             style={{ color: "var(--text)" }}
             onClick={() => navigate("agents")}
           >

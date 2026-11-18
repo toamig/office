@@ -11,9 +11,9 @@ const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color:
 
 const icon = (status: SpawnStep["status"]) =>
   status === "done" ? (
-    <Check size={14} color="#2e9e5b" />
+    <Check size={14} style={{ color: "var(--good)" }} />
   ) : status === "failed" ? (
-    <XCircle size={14} color="#cf4a4a" />
+    <XCircle size={14} style={{ color: "var(--bad)" }} />
   ) : status === "running" ? (
     <Loader size={14} className="animate-spin" />
   ) : (
@@ -88,10 +88,7 @@ export function SpawnWizard({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
-      data-testid="spawn-wizard"
-    >
+    <div className="dialog-backdrop" data-testid="spawn-wizard">
       <div
         className="flex max-h-[90vh] w-[720px] flex-col rounded border"
         style={{ background: "var(--panel)", borderColor: "var(--line)" }}
@@ -210,7 +207,7 @@ export function SpawnWizard({
                   </label>
                   <label
                     className="flex items-center gap-2 rounded border px-2 py-1.5"
-                    style={{ borderColor: "#c98a12" }}
+                    style={{ borderColor: "var(--warn)" }}
                   >
                     <input
                       type="checkbox"

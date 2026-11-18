@@ -279,7 +279,7 @@ export function RolesTab() {
             key={id}
             data-testid="role-row"
             onClick={() => setSelected(id)}
-            className="cursor-pointer rounded border px-3 py-2"
+            className="rounded border px-3 py-2"
             style={{
               marginBottom: 4,
               borderColor: "var(--line)",

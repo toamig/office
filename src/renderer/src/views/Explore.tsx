@@ -78,7 +78,7 @@ export function Explore() {
               key={s.id}
               data-testid="explore-row"
               onClick={() => setActive(s.id)}
-              className="cursor-pointer border-b px-3 py-2"
+              className="border-b px-3 py-2"
               style={{
                 borderColor: "var(--line)",
                 background: current?.id === s.id ? "var(--panel)" : "transparent",
@@ -94,7 +94,7 @@ export function Explore() {
             </div>
           ))}
         </div>
-        <div className="min-w-0 flex-1" style={{ background: "#14161a" }}>
+        <div className="min-w-0 flex-1" style={{ background: "var(--panel)" }}>
           {current ? <TerminalView key={current.id} id={current.id} /> : null}
         </div>
       </div>

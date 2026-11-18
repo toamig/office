@@ -6,6 +6,7 @@ import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { CaptureDialog } from "./agents/CaptureDialog";
+import { PaneHeader } from "./agents/PaneHeader";
 import { StartAgentDialog } from "./agents/StartAgentDialog";
 import { TerminalView } from "./agents/TerminalView";
 
@@ -42,7 +43,7 @@ function SessionList({
           key={s.id}
           data-testid="session-row"
           onClick={() => onOpen(s)}
-          className="cursor-pointer border-b px-3 py-2"
+          className="border-b px-3 py-2"
           style={{
             borderColor: "var(--line)",
             background: active === s.id ? "var(--panel)" : "transparent",
@@ -250,7 +251,7 @@ export function Agents() {
                   key={id}
                   data-testid="tab"
                   onClick={() => update({ ...layout, active: id })}
-                  className="flex cursor-pointer items-center gap-1.5 rounded-t border border-b-0 px-2 py-1"
+                  className="flex items-center gap-1.5 rounded-t border border-b-0 px-2 py-1"
                   style={{
                     borderColor: "var(--line)",
                     background: layout.active === id ? "var(--panel)" : "transparent",
@@ -259,7 +260,7 @@ export function Agents() {
                   {s?.title ?? id.slice(0, 8)}
                   <button
                     aria-label="Close tab"
-                    className="cursor-pointer border-0 bg-transparent p-0"
+                    className="border-0 bg-transparent p-0"
                     style={{ color: "var(--muted)" }}
                     onClick={(e) => {
                       e.stopPropagation();
@@ -283,26 +284,13 @@ export function Agents() {
                 style={{ borderColor: "var(--line)" }}
                 data-testid="pane"
               >
-                {layout.split !== "single" && (
-                  <select
-                    value={id}
-                    onChange={(e) => setPane(index, e.target.value)}
-                    aria-label="Pane session"
-                    className="border-0 border-b px-1 py-0.5"
-                    style={{
-                      borderColor: "var(--line)",
-                      background: "var(--panel)",
-                      color: "var(--text)",
-                    }}
-                  >
-                    {openIds.map((o) => (
-                      <option key={o} value={o}>
-                        {byId.get(o)?.title ?? o}
-                      </option>
-                    ))}
-                  </select>
-                )}
-                <div className="min-h-0 flex-1" style={{ background: "#14161a" }}>
+                <PaneHeader
+                  session={byId.get(id)}
+                  options={openIds.map((o) => ({ id: o, title: byId.get(o)?.title ?? o }))}
+                  split={layout.split !== "single"}
+                  onPick={(next) => setPane(index, next)}
+                />
+                <div className="min-h-0 flex-1" style={{ background: "var(--panel)" }}>
                   <TerminalView id={id} />
                 </div>
               </div>

@@ -30,10 +30,7 @@ export function SyncReportDialog() {
   useEscape(() => close(null), report !== null);
   if (!report) return null;
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
-      data-testid="sync-report"
-    >
+    <div className="dialog-backdrop" data-testid="sync-report">
       <div
         className="flex max-h-[80vh] w-[640px] flex-col rounded border"
         style={{ background: "var(--panel)", borderColor: "var(--line)" }}

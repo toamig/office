@@ -115,7 +115,7 @@ export function AskPanel({ onOpenNote }: { onOpenNote: (path: string) => void })
                         key={c}
                         onClick={() => onOpenNote(c)}
                         data-testid="citation"
-                        className="cursor-pointer rounded-full border px-2 py-px"
+                        className="rounded-full border px-2 py-px"
                         style={{
                           borderColor: "var(--accent)",
                           color: "var(--accent)",

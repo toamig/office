@@ -1,4 +1,4 @@
-import { _electron as electron, type ElectronApplication } from "@playwright/test";
+import { _electron as electron, type ElectronApplication, type Page } from "@playwright/test";
 import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
@@ -118,4 +118,31 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
     } as Record<string, string>,
   });
   return { app, base, data, home, gitConfig, ghRemotes, ...(world ? { world } : {}) };
+}
+
+/**
+ * Everything the first terminal on the page shows, as text. The terminal draws on a canvas, so its text is
+ * read from its buffer instead of from the page.
+ */
+export async function terminalText(win: Page): Promise<string> {
+  return win.evaluate(() => {
+    const host = document.querySelector('[data-testid="terminal"]') as
+      | (HTMLElement & {
+          __term?: {
+            buffer: {
+              active: {
+                length: number;
+                getLine: (i: number) => { translateToString: (t: boolean) => string } | undefined;
+              };
+            };
+          };
+        })
+      | null;
+    const buffer = host?.__term?.buffer.active;
+    if (!buffer) return "";
+    const lines: string[] = [];
+    for (let i = 0; i < buffer.length; i++)
+      lines.push(buffer.getLine(i)?.translateToString(true) ?? "");
+    return lines.join("\n");
+  });
 }

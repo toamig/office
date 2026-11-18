@@ -66,10 +66,7 @@ export function CaptureDialog({ session, onClose }: { session: SessionRow; onClo
   };
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
-      data-testid="capture-dialog"
-    >
+    <div className="dialog-backdrop" data-testid="capture-dialog">
       <div
         className="flex max-h-[85vh] w-[680px] flex-col rounded border"
         style={{ background: "var(--panel)", borderColor: "var(--line)" }}

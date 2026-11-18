@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 test("a node -e echo program runs in a tab, takes typed input and echoes it", async () => {
   const { app } = await launch({
@@ -22,11 +22,11 @@ test("a node -e echo program runs in a tab, takes typed input and echoes it", as
 
   await win.getByTestId("rail-agents").click();
   await win.getByTestId("session-row").filter({ hasText: "echo program" }).click();
-  await expect(win.locator(".xterm-rows")).toContainText("READY");
+  await expect.poll(() => terminalText(win)).toContain("READY");
   await win.locator(".xterm").click();
   await win.keyboard.type("hello office");
   await win.keyboard.press("Enter");
-  await expect(win.locator(".xterm-rows")).toContainText("GOT:hello office");
+  await expect.poll(() => terminalText(win)).toContain("GOT:hello office");
   await app.close();
 });
 
@@ -47,8 +47,8 @@ test("a fake agent session starts from the dialog, shows its status and takes it
   const row = win.getByTestId("session-row").first();
   await expect(row).toContainText("Fake agent");
   await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/);
-  await expect(win.locator(".xterm-rows")).toContainText("fake-claude ready");
-  await expect(win.locator(".xterm-rows")).toContainText("echo: hello there");
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
+  await expect.poll(() => terminalText(win)).toContain("echo: hello there");
 
   // Ending the session shows exited, and Resume brings it back in the same row.
   await win.locator(".xterm").click();

@@ -1,16 +1,44 @@
 import { FitAddon } from "@xterm/addon-fit";
 import { SearchAddon } from "@xterm/addon-search";
+import { WebglAddon } from "@xterm/addon-webgl";
 import { WebLinksAddon } from "@xterm/addon-web-links";
 import { Terminal } from "@xterm/xterm";
 import "@xterm/xterm/css/xterm.css";
-import { useEffect, useRef } from "react";
+import { ChevronDown, ChevronUp, X } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { terminalTheme } from "@shared/theme";
 import { office } from "../../lib/ipc";
+import { FIND_EVENT } from "../../lib/shortcuts";
+import { useTheme } from "../../lib/theme";
 
 const SCROLLBACK_LINES = 10_000;
+const FONT = '"Cascadia Mono", Consolas, ui-monospace, monospace';
 
-/** One xterm.js terminal attached to a main-process pty. History first, then live output. */
+/**
+ * One xterm.js terminal attached to a main-process pty, dressed like the panel around it: its colours come
+ * from the theme and change with it, the font is the app's code font, and Ctrl+F searches the scrollback.
+ * History first, then live output.
+ */
 export function TerminalView({ id }: { id: string }) {
   const host = useRef<HTMLDivElement>(null);
+  const termRef = useRef<Terminal | null>(null);
+  const searchRef = useRef<SearchAddon | null>(null);
+  const { theme, accent } = useTheme();
+  const themeRef = useRef(terminalTheme(theme, accent));
+  const [finding, setFinding] = useState(false);
+  const [query, setQuery] = useState("");
+  const findInput = useRef<HTMLInputElement>(null);
+
+  // The find box takes the focus as soon as it is on screen.
+  useEffect(() => {
+    if (finding) findInput.current?.focus();
+  }, [finding]);
+
+  useEffect(() => {
+    themeRef.current = terminalTheme(theme, accent);
+    const term = termRef.current;
+    if (term) term.options.theme = themeRef.current;
+  }, [theme, accent]);
 
   useEffect(() => {
     const el = host.current;
@@ -18,15 +46,43 @@ export function TerminalView({ id }: { id: string }) {
     const term = new Terminal({
       scrollback: SCROLLBACK_LINES,
       fontSize: 13,
-      fontFamily: 'Consolas, "Cascadia Mono", "Courier New", monospace',
+      lineHeight: 1.25,
+      fontFamily: FONT,
       cursorBlink: true,
-      theme: { background: "#14161a", foreground: "#e6e8ea" },
+      allowProposedApi: true,
+      theme: themeRef.current,
     });
     const fit = new FitAddon();
+    const search = new SearchAddon();
     term.loadAddon(fit);
     term.loadAddon(new WebLinksAddon());
-    term.loadAddon(new SearchAddon());
+    term.loadAddon(search);
     term.open(el);
+    // The GPU renderer when there is one; if its context is lost the default renderer takes over.
+    try {
+      const gl = new WebglAddon();
+      gl.onContextLoss(() => gl.dispose());
+      term.loadAddon(gl);
+    } catch {
+      /* no WebGL here: the default renderer stays */
+    }
+    // Office's own keys are not for the program in the terminal: let them reach the app instead of sending
+    // them to the pty (Ctrl+F is find, Ctrl+K the switcher, Ctrl+1..9 the views, and so on).
+    term.attachCustomKeyEventHandler((e) => {
+      if (e.type !== "keydown") return true;
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      const own =
+        (mod && ["k", "b", "f", "/", ",", "=", "-", "0"].includes(key)) ||
+        (mod && /^[1-9]$/.test(key)) ||
+        (mod && e.shiftKey && key === "a") ||
+        (e.altKey && (key === "arrowleft" || key === "arrowright"));
+      return !own;
+    });
+    termRef.current = term;
+    // The terminal is reachable from the page for tests that check its theme.
+    (el as unknown as { __term?: Terminal }).__term = term;
+    searchRef.current = search;
 
     // Live chunks that arrive before the history reply are held, then trimmed to the part history lacks.
     let upTo = -1;
@@ -60,13 +116,78 @@ export function TerminalView({ id }: { id: string }) {
     observer.observe(el);
     refit();
 
+    // Ctrl+F opens the find of the terminal that has the focus.
+    const onFind = (): void => {
+      if (el.contains(document.activeElement) || el.matches(":hover")) {
+        setFinding(true);
+      }
+    };
+    window.addEventListener(FIND_EVENT, onFind);
+
+    // Right click: a native menu with Copy and Paste, carried out here.
+    const onContext = (e: MouseEvent): void => {
+      e.preventDefault();
+      void office.invoke("app.terminalMenu", { hasSelection: term.hasSelection() });
+    };
+    el.addEventListener("contextmenu", onContext);
+    const offAction = office.on("app.terminal-action", (e) => {
+      if (!el.contains(document.activeElement) && !el.matches(":hover")) return;
+      if (e.payload === "copy") void navigator.clipboard.writeText(term.getSelection());
+      if (e.payload === "paste") void navigator.clipboard.readText().then((t) => term.paste(t));
+    });
+
     return () => {
+      window.removeEventListener(FIND_EVENT, onFind);
+      el.removeEventListener("contextmenu", onContext);
+      offAction();
       observer.disconnect();
       typed.dispose();
       offData();
+      termRef.current = null;
+      searchRef.current = null;
       term.dispose();
     };
   }, [id]);
 
-  return <div ref={host} className="h-full w-full" data-testid="terminal" data-session={id} />;
+  const find = (backwards: boolean): void => {
+    if (!query) return;
+    if (backwards) searchRef.current?.findPrevious(query);
+    else searchRef.current?.findNext(query);
+  };
+
+  const closeFind = (): void => {
+    setFinding(false);
+    termRef.current?.focus();
+  };
+
+  return (
+    <div className="terminal-frame" data-testid="terminal-frame">
+      {finding && (
+        <div className="terminal-find" data-testid="terminal-find">
+          <input
+            ref={findInput}
+            value={query}
+            placeholder="Find in terminal"
+            aria-label="Find in terminal"
+            onChange={(e) => setQuery(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") find(e.shiftKey);
+              if (e.key === "Escape") closeFind();
+            }}
+            data-testid="terminal-find-input"
+          />
+          <button className="bar-button" aria-label="Previous match" onClick={() => find(true)}>
+            <ChevronUp size={14} />
+          </button>
+          <button className="bar-button" aria-label="Next match" onClick={() => find(false)}>
+            <ChevronDown size={14} />
+          </button>
+          <button className="bar-button" aria-label="Close find" onClick={closeFind}>
+            <X size={14} />
+          </button>
+        </div>
+      )}
+      <div ref={host} className="terminal-host" data-testid="terminal" data-session={id} />
+    </div>
+  );
 }

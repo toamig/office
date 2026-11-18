@@ -103,7 +103,7 @@ export function BranchesTab({ projectId }: { projectId: string }) {
       {needStash && (
         <div
           className="flex items-center gap-3 rounded border px-3 py-2"
-          style={{ borderColor: "#c98a12" }}
+          style={{ borderColor: "var(--warn)" }}
           data-testid="stash-offer"
         >
           <span className="flex-1">

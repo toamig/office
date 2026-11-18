@@ -25,7 +25,7 @@ export function Board() {
               key={id}
               onClick={() => setTab(id)}
               data-testid={`board-tab-${id}`}
-              className="cursor-pointer border-0 bg-transparent px-3 py-1.5"
+              className="border-0 bg-transparent px-3 py-1.5"
               style={{
                 color: "var(--text)",
                 borderBottom: tab === id ? "2px solid var(--accent)" : "2px solid transparent",

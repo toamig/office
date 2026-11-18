@@ -148,7 +148,7 @@ function HealthPanel() {
         <div key={p.id} className="flex items-center gap-2 py-0.5">
           <Chip tone="warn">sync</Chip>
           <button
-            className="cursor-pointer border-0 bg-transparent p-0 underline"
+            className="border-0 bg-transparent p-0 underline"
             style={{ color: "var(--text)" }}
             onClick={() => navigate("project", { id: p.id })}
           >
@@ -192,7 +192,7 @@ function HealthPanel() {
 /** The morning screen: what waits on you, live agents, health. */
 export function Home() {
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-3" data-testid="home">
+    <div className="grid items-start gap-4 p-4 lg:grid-cols-3" data-testid="home">
       <WaitingPanel />
       <div className="grid content-start gap-4">
         <LiveAgentsPanel />

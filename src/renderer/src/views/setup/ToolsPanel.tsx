@@ -45,7 +45,7 @@ export function ToolsPanel() {
             {t.loggedIn === true && <Chip tone="good">logged in</Chip>}
             {t.loggedIn === false && <Chip tone="warn">not logged in</Chip>}
             <div className="flex-1 text-[12.5px]">
-              {t.problem && <div style={{ color: "#c98a12" }}>{t.problem}</div>}
+              {t.problem && <div style={{ color: "var(--warn)" }}>{t.problem}</div>}
               {t.fix && <div style={{ color: "var(--muted)" }}>Fix: {t.fix}</div>}
             </div>
             {t.installed && t.loggedIn === false && (

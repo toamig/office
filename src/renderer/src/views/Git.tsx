@@ -39,7 +39,7 @@ export function Git() {
             key={p.id}
             data-testid="git-repo"
             onClick={() => setSelected(p.id)}
-            className="cursor-pointer border-b px-3 py-2"
+            className="border-b px-3 py-2"
             style={{
               borderColor: "var(--line)",
               background: current?.id === p.id ? "var(--panel)" : "transparent",
@@ -89,7 +89,7 @@ export function Git() {
                   {r.uncommitted === 0 && r.ahead === 0 && r.behind === 0 && (
                     <span
                       className="text-[12px]"
-                      style={{ color: r.attention ? "#c98a12" : "var(--muted)" }}
+                      style={{ color: r.attention ? "var(--warn)" : "var(--muted)" }}
                     >
                       {r.state}
                     </span>
@@ -122,7 +122,7 @@ export function Git() {
                   key={id}
                   onClick={() => setTab(id)}
                   data-testid={`git-tab-${id}`}
-                  className="cursor-pointer border-0 bg-transparent px-3 py-1.5"
+                  className="border-0 bg-transparent px-3 py-1.5"
                   style={{
                     color: "var(--text)",
                     borderBottom: tab === id ? "2px solid var(--accent)" : "2px solid transparent",

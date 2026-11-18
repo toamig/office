@@ -66,17 +66,17 @@ export function ModulesPanel() {
               </div>
             )}
             {m.error && (
-              <div className="text-[12.5px]" style={{ color: "#cf4a4a" }}>
+              <div className="text-[12.5px]" style={{ color: "var(--bad)" }}>
                 {m.error}
               </div>
             )}
             {asking === m.name && (
               <div
                 className="mt-2 flex items-start gap-2 rounded border px-3 py-2"
-                style={{ borderColor: "#c98a12" }}
+                style={{ borderColor: "var(--warn)" }}
                 data-testid="module-warning"
               >
-                <TriangleAlert size={16} color="#c98a12" />
+                <TriangleAlert size={16} style={{ color: "var(--warn)" }} />
                 <div className="flex-1">
                   Modules run with full access to your files and accounts. Only enable a module you
                   wrote or trust.

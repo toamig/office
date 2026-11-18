@@ -21,7 +21,8 @@ export const MachineSettings = z.object({
     })
     .optional(),
   theme: z.enum(["system", "light", "dark"]).default("system"),
-  accent: z.string().default("#3b6fd4"),
+  /** The owner's accent colour; empty means the palette's own. */
+  accent: z.string().default(""),
   density: z.enum(["compact", "comfortable"]).default("comfortable"),
   /** Interface zoom in percent (80 to 150), set with Ctrl+= and Ctrl+-. */
   zoom: z.number().int().min(80).max(150).default(100),

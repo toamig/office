@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 test("branches: create, a dirty switch is refused with a stash offer, and the stash works", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
@@ -137,7 +137,7 @@ test("diff review: two line comments go to the agent that owns the worktree as o
 
   await win.getByTestId("rail-agents").click();
   await win.getByTestId("session-row").filter({ hasText: "Reviewed" }).click();
-  await expect(win.locator(".xterm-rows")).toContainText("echo: README.md:2: rename this line");
-  await expect(win.locator(".xterm-rows")).toContainText("echo: fresh.txt:1: why is this here");
+  await expect.poll(() => terminalText(win)).toContain("echo: README.md:2: rename this line");
+  await expect.poll(() => terminalText(win)).toContain("echo: fresh.txt:1: why is this here");
   await app.close();
 });

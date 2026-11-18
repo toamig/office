@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 test("Explore runs a chat and the wizard turns it into a project with gh replaced by a fake", async () => {
   const { app, world, ghRemotes } = await launch({ world: true, fakeTools: true });
@@ -13,7 +13,7 @@ test("Explore runs a chat and the wizard turns it into a project with gh replace
   await win.getByTestId("explore-provider").selectOption({ label: "Fake agent" });
   await win.getByTestId("explore-start").click();
   await expect(win.getByTestId("explore-row")).toHaveCount(1);
-  await expect(win.locator(".xterm-rows")).toContainText("fake-claude ready");
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
 
   await win.getByTestId("make-project").click();
   await expect(win.getByTestId("spawn-wizard")).toBeVisible();

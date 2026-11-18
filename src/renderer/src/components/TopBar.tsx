@@ -58,11 +58,16 @@ export function TopBar() {
       <BarButton label="Toggle sidebar (Ctrl+B)" onClick={toggleSidebar} testId="sidebar-toggle">
         <PanelLeft size={16} />
       </BarButton>
-      <BarButton label="Back (Alt+Left)" onClick={back} disabled={at <= 0} testId="history-back">
+      <BarButton
+        label="Previous view (Alt+Left)"
+        onClick={back}
+        disabled={at <= 0}
+        testId="history-back"
+      >
         <ArrowLeft size={16} />
       </BarButton>
       <BarButton
-        label="Forward (Alt+Right)"
+        label="Next view (Alt+Right)"
         onClick={forward}
         disabled={at >= history.length - 1}
         testId="history-forward"

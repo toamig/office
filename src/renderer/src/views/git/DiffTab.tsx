@@ -8,8 +8,8 @@ import { useQuery } from "../../lib/hooks";
 type Mode = "working" | "staged" | "branch";
 
 const bg = {
-  add: "rgba(46,158,91,0.16)",
-  del: "rgba(207,74,74,0.16)",
+  add: "color-mix(in srgb, var(--good) 16%, transparent)",
+  del: "color-mix(in srgb, var(--bad) 16%, transparent)",
   ctx: "transparent",
 } as const;
 
@@ -128,7 +128,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
                 key={f.path}
                 data-testid="diff-file"
                 onClick={() => setSelected(f.path)}
-                className="cursor-pointer border-b px-2 py-1.5"
+                className="border-b px-2 py-1.5"
                 style={{
                   borderColor: "var(--line)",
                   background: file?.path === f.path ? "var(--rail)" : "transparent",
@@ -171,7 +171,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
                           aria-label={`Comment on line ${lineNo}`}
                           title="Comment on this line"
                           onClick={() => setEditing({ file: file.path, line: lineNo })}
-                          className="w-14 shrink-0 cursor-pointer border-0 bg-transparent px-1 text-right"
+                          className="w-14 shrink-0 border-0 bg-transparent px-1 text-right"
                           style={{ color: "var(--muted)" }}
                           data-testid="comment-line"
                         >

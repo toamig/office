@@ -77,7 +77,8 @@ function SwitcherPanel() {
   };
   return (
     <div
-      className="fixed inset-0 z-50 flex items-start justify-center bg-black/40 pt-24"
+      className="dialog-backdrop"
+      style={{ alignItems: "flex-start", paddingTop: 96 }}
       onClick={() => setSwitcherOpen(false)}
     >
       <div
@@ -119,7 +120,7 @@ function SwitcherPanel() {
               data-testid="switcher-item"
               onMouseEnter={() => setIndex(i)}
               onClick={() => open(r.item)}
-              className="flex cursor-pointer items-center gap-2 rounded px-3 py-1.5"
+              className="flex items-center gap-2 rounded px-3 py-1.5"
               style={{ background: i === index ? "var(--rail)" : "transparent" }}
             >
               <span className="w-16 text-[11px] uppercase" style={{ color: "var(--muted)" }}>

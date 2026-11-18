@@ -3,6 +3,7 @@ import type { AppSettingsPatch } from "@shared/models";
 import { Button, Chip, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { PALETTES } from "@shared/theme";
 
 const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
@@ -35,6 +36,7 @@ export function PreferencesPanel() {
   const [topic, setTopic] = useState<string | null>(null);
   const [artRoot, setArtRoot] = useState<string | null>(null);
   const s = settings.data;
+  const theme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
   const rules = workspace.data?.workspace?.notifications;
 
   const run = async (work: () => Promise<unknown>): Promise<void> => {
@@ -82,7 +84,7 @@ export function PreferencesPanel() {
               <span className="w-28">Accent colour</span>
               <input
                 type="color"
-                value={s.accent}
+                value={s.accent || PALETTES[theme].accent}
                 onChange={(e) => void set({ accent: e.target.value })}
                 aria-label="Accent colour"
                 data-testid="accent"

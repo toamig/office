@@ -102,3 +102,60 @@ export function paletteVariables(theme: ThemeName, accent?: string): Record<stri
     "--selection": p.selection,
   };
 }
+
+/** The ANSI palettes of the two themes (the 16 colours a terminal program can ask for). */
+const ANSI: Record<ThemeName, Record<string, string>> = {
+  dark: {
+    black: "#3b3b38",
+    red: "#e06a6a",
+    green: "#5fbf80",
+    yellow: "#d9b45a",
+    blue: "#6f9cf0",
+    magenta: "#c586e0",
+    cyan: "#5cc4cf",
+    white: "#d8d8d4",
+    brightBlack: "#6d6d68",
+    brightRed: "#f08a8a",
+    brightGreen: "#7fd69c",
+    brightYellow: "#ebca7c",
+    brightBlue: "#93b6f7",
+    brightMagenta: "#d9a5ee",
+    brightCyan: "#85d9e2",
+    brightWhite: "#f4f4f1",
+  },
+  light: {
+    black: "#2b2b28",
+    red: "#c43d3d",
+    green: "#2a8a4f",
+    yellow: "#9a6b00",
+    blue: "#2f5fc4",
+    magenta: "#9a3fb5",
+    cyan: "#157f8c",
+    white: "#8a8a85",
+    brightBlack: "#5a5a56",
+    brightRed: "#d9534f",
+    brightGreen: "#3a9d5e",
+    brightYellow: "#b07f00",
+    brightBlue: "#4577d9",
+    brightMagenta: "#b457d1",
+    brightCyan: "#2796a4",
+    brightWhite: "#b8b8b3",
+  },
+};
+
+/**
+ * The xterm.js theme of a palette: the same background as the panel around the terminal, the text colour,
+ * the cursor in the accent, and the theme's 16 ANSI colours.
+ */
+export function terminalTheme(theme: ThemeName, accent?: string): Record<string, string> {
+  const p = PALETTES[theme];
+  return {
+    background: p.panel,
+    foreground: p.text,
+    cursor: accent ?? p.accent,
+    cursorAccent: p.panel,
+    selectionBackground: p.selection,
+    selectionInactiveBackground: p.hover,
+    ...ANSI[theme],
+  };
+}

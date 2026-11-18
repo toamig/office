@@ -12,7 +12,7 @@ function Card({ p }: { p: ProjectSummary }) {
     <button
       data-testid="project-card"
       onClick={() => navigate("project", { id: p.id })}
-      className="flex cursor-pointer flex-col gap-1.5 rounded border p-3 text-left"
+      className="flex flex-col gap-1.5 rounded border p-3 text-left"
       style={{ background: "var(--panel)", borderColor: "var(--line)", color: "var(--text)" }}
     >
       <div className="flex items-center gap-1.5 font-semibold">
@@ -49,7 +49,7 @@ export function Projects() {
   ]);
   const list = (projects.data ?? []).filter((p) => !p.archived);
   const groups = new Map<string, ProjectSummary[]>();
-  for (const p of list)
+  for (const p of list.filter((x) => !x.pinned))
     groups.set(p.group ?? "Other", [...(groups.get(p.group ?? "Other") ?? []), p]);
   const pinned = list.filter((p) => p.pinned);
   const archived = (projects.data ?? []).filter((p) => p.archived);

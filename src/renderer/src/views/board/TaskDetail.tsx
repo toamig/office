@@ -35,7 +35,7 @@ function BuildDiff({
       )}
       {files.map((f) => (
         <details key={f.path} className="mb-2" open>
-          <summary className="cursor-pointer font-medium">
+          <summary className="font-medium">
             {f.path}{" "}
             <span style={{ color: "var(--muted)" }}>
               +{f.additions} -{f.deletions}
@@ -49,9 +49,9 @@ function BuildDiff({
                   style={{
                     background:
                       l.kind === "add"
-                        ? "rgba(46,158,91,0.16)"
+                        ? "color-mix(in srgb, var(--good) 16%, transparent)"
                         : l.kind === "del"
-                          ? "rgba(207,74,74,0.16)"
+                          ? "color-mix(in srgb, var(--bad) 16%, transparent)"
                           : "transparent",
                   }}
                   className="whitespace-pre-wrap break-all px-2"
@@ -124,7 +124,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
               data-testid="stage-tab"
               data-status={s.status}
               onClick={() => setStage(s.stageId)}
-              className="cursor-pointer rounded border px-2 py-1"
+              className="rounded border px-2 py-1"
               style={{
                 borderColor: shown?.stageId === s.stageId ? "var(--accent)" : "var(--line)",
                 background: "transparent",
@@ -200,7 +200,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
                     v.status === "done" &&
                     (confirmKeep === v.n ? (
                       <div className="mt-2" data-testid="keep-confirm">
-                        <div className="mb-1 text-[12.5px]" style={{ color: "#c98a12" }}>
+                        <div className="mb-1 text-[12.5px]" style={{ color: "var(--warn)" }}>
                           This merges {v.branch} into the task branch and removes the other
                           builders' worktrees. Continue?
                         </div>

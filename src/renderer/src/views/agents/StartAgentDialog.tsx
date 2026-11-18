@@ -67,10 +67,7 @@ export function StartAgentDialog({
   };
 
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
-      data-testid="start-agent-dialog"
-    >
+    <div className="dialog-backdrop" data-testid="start-agent-dialog">
       <div
         className="w-[560px] rounded border"
         style={{ background: "var(--panel)", borderColor: "var(--line)" }}

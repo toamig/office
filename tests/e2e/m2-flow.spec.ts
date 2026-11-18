@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 // The M2 milestone check: a working day on fixtures. Two agents run, one needs the owner, the owner
 // answers it, one is closed with capture, the brain is asked a question and the brief is read.
@@ -31,7 +31,7 @@ test("a day in the workbench: two agents, a needs-you, capture, ask the brain an
 
   // One asks for permission: needs-you, an urgent inbox item.
   await win.getByTestId("session-row").filter({ hasText: "Alpha work" }).click();
-  await expect(win.locator(".xterm-rows")).toContainText("fake-claude ready");
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
   await win.locator(".xterm").click();
   await win.keyboard.type("ask can I delete this");
   await win.keyboard.press("Enter");

@@ -71,33 +71,36 @@ export function Inbox() {
         </EmptyState>
       )}
       <ul className="m-0 list-none p-0">
-        {list.data?.map((n) => (
-          <li
-            key={n.id}
-            data-testid="notification"
-            className="mb-1.5 flex cursor-pointer items-start gap-3 rounded border px-3 py-2"
-            style={{
-              borderColor: "var(--line)",
-              background: "var(--panel)",
-              opacity: n.readAt ? 0.6 : 1,
-            }}
-            onClick={() => void open(n.id, n.link)}
-          >
-            <div className="flex-1">
-              <div className="font-medium">{n.title}</div>
-              {n.body && (
-                <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
-                  {n.body}
-                </div>
-              )}
-            </div>
-            {n.urgent && <Chip tone="bad">urgent</Chip>}
-            <Chip>{n.kind}</Chip>
-            <span className="w-20 text-right text-[12px]" style={{ color: "var(--muted)" }}>
-              {timeAgo(n.createdAt)}
-            </span>
-          </li>
-        ))}
+        {/* An open permission question is drawn as its card above, so its row waits until it is answered. */}
+        {list.data
+          ?.filter((n) => !(n.kind === "permission.request" && n.readAt === null))
+          .map((n) => (
+            <li
+              key={n.id}
+              data-testid="notification"
+              className="mb-1.5 flex items-start gap-3 rounded border px-3 py-2"
+              style={{
+                borderColor: "var(--line)",
+                background: "var(--panel)",
+                opacity: n.readAt ? 0.6 : 1,
+              }}
+              onClick={() => void open(n.id, n.link)}
+            >
+              <div className="flex-1">
+                <div className="font-medium">{n.title}</div>
+                {n.body && (
+                  <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
+                    {n.body}
+                  </div>
+                )}
+              </div>
+              {n.urgent && <Chip tone="bad">urgent</Chip>}
+              <Chip>{n.kind}</Chip>
+              <span className="w-20 text-right text-[12px]" style={{ color: "var(--muted)" }}>
+                {timeAgo(n.createdAt)}
+              </span>
+            </li>
+          ))}
       </ul>
     </div>
   );

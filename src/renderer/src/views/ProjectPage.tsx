@@ -338,7 +338,7 @@ export function ProjectPage({
             key={t}
             onClick={() => setTab(t)}
             data-testid={`tab-${t}`}
-            className="cursor-pointer border-0 bg-transparent px-3 py-1.5"
+            className="border-0 bg-transparent px-3 py-1.5"
             style={{
               color: "var(--text)",
               borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",

@@ -18,7 +18,7 @@ export function RecentRuns({ id }: { id: string }) {
             {r.provider}
             {r.model ? `, ${r.model}` : ""}, {timeAgo(r.startedAt)}
           </span>
-          {r.error && <span style={{ color: "#cf4a4a" }}>{r.error}</span>}
+          {r.error && <span style={{ color: "var(--bad)" }}>{r.error}</span>}
         </div>
       ))}
     </Panel>

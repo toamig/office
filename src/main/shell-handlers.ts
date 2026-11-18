@@ -1,4 +1,5 @@
-import { BrowserWindow, dialog, shell } from "electron";
+import { BrowserWindow, dialog, Menu, shell } from "electron";
+import { terminalMenu } from "./core/context-menu";
 import type { AppContext } from "./context";
 import type { UpdateService } from "./core/update";
 import type { PreviewPane } from "./preview";
@@ -16,6 +17,22 @@ export function registerShellHandlers(
   updates: UpdateService,
 ): void {
   ctx.ipc.handle("app.chrome", () => currentChrome());
+  ctx.ipc.handle("app.terminalMenu", (req) => {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!window) return;
+    const menu = Menu.buildFromTemplate(
+      terminalMenu(req.hasSelection).map((entry) =>
+        entry === "separator"
+          ? { type: "separator" as const }
+          : {
+              label: entry.label,
+              enabled: entry.enabled,
+              click: () => ctx.bus.emit("app.terminal-action", entry.action),
+            },
+      ),
+    );
+    menu.popup({ window });
+  });
   ctx.ipc.handle("app.update.status", () => updates.status());
   ctx.ipc.handle("app.update.check", () => updates.check());
   ctx.ipc.handle("app.update.install", () => updates.installNow());

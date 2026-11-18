@@ -95,7 +95,7 @@ function BrainHealth() {
         </div>
       )}
       {validate?.errors.map((e) => (
-        <div key={e} className="text-[12.5px]" style={{ color: "#cf4a4a" }}>
+        <div key={e} className="text-[12.5px]" style={{ color: "var(--bad)" }}>
           {e}
         </div>
       ))}

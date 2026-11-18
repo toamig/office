@@ -109,10 +109,7 @@ export function HooksPanel() {
         })}
       </div>
       {pending && (
-        <div
-          className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
-          data-testid="hooks-consent"
-        >
+        <div className="dialog-backdrop" data-testid="hooks-consent">
           <div
             className="flex max-h-[80vh] w-[760px] flex-col rounded border"
             style={{ background: "var(--panel)", borderColor: "var(--line)" }}

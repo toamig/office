@@ -38,7 +38,7 @@ export function PermissionRequests({ compact = false }: { compact?: boolean }) {
           key={r.id}
           data-testid="permission-request"
           className="mb-1.5 rounded border px-3 py-2"
-          style={{ borderColor: "#c98a12", background: "var(--panel)" }}
+          style={{ borderColor: "var(--warn)", background: "var(--panel)" }}
         >
           <div className="flex flex-wrap items-center gap-2">
             <Chip tone="warn">waiting for you</Chip>

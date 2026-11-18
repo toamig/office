@@ -6,11 +6,11 @@ export function Button({
   ...props
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "primary" | "ghost" }) {
   const base =
-    "inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[13px] disabled:opacity-50 cursor-pointer";
+    "inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[13px] disabled:opacity-50";
   const styles = {
-    default: "border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--rail)]",
-    primary: "border-transparent bg-[var(--accent)] text-white hover:opacity-90",
-    ghost: "border-transparent hover:bg-[var(--rail)]",
+    default: "border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--hover)]",
+    primary: "border-transparent bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90",
+    ghost: "border-transparent hover:bg-[var(--hover)]",
   }[variant];
   return <button className={`${base} ${styles} ${className}`} {...props} />;
 }
@@ -24,9 +24,9 @@ export function Chip({
 }) {
   const color = {
     neutral: "var(--muted)",
-    good: "#2e9e5b",
-    warn: "#c98a12",
-    bad: "#cf4a4a",
+    good: "var(--good)",
+    warn: "var(--warn)",
+    bad: "var(--bad)",
   }[tone];
   return (
     <span
@@ -79,7 +79,7 @@ export function ErrorBanner({ message }: { message: string }) {
     <div
       role="alert"
       className="rounded border px-3 py-2"
-      style={{ borderColor: "#cf4a4a", color: "#cf4a4a" }}
+      style={{ borderColor: "var(--bad)", color: "var(--bad)" }}
     >
       {message}
     </div>

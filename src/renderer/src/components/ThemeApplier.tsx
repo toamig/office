@@ -36,7 +36,7 @@ export function ThemeApplier() {
     root.setAttribute("data-density", s.density);
     root.style.colorScheme = theme;
     // The accent stays the palette's own until the owner picks another.
-    const custom = s.accent && s.accent !== "#3b6fd4" ? s.accent : undefined;
+    const custom = s.accent || undefined;
     for (const [name, value] of Object.entries(paletteVariables(theme, custom))) {
       root.style.setProperty(name, value);
     }

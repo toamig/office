@@ -54,10 +54,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
     }
   };
   return (
-    <div
-      className="fixed inset-0 z-40 flex items-center justify-center bg-black/40"
-      data-testid="new-task"
-    >
+    <div className="dialog-backdrop" data-testid="new-task">
       <div
         className="w-[560px] rounded border p-4"
         style={{ background: "var(--panel)", borderColor: "var(--line)" }}
@@ -161,7 +158,7 @@ function Card({ t, selected, onOpen }: { t: TaskView; selected: boolean; onOpen:
       data-testid="task-card"
       data-status={t.status}
       onClick={onOpen}
-      className="mb-2 cursor-pointer rounded border p-2.5"
+      className="mb-2 rounded border p-2.5"
       style={{
         background: "var(--panel)",
         borderColor: selected ? "var(--accent)" : "var(--line)",

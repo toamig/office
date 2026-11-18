@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 test("a simulated hook POST moves a session to needs-you and raises an urgent notification", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
@@ -65,7 +65,7 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
   );
   await win.getByTestId("rail-agents").click();
   await win.getByTestId("session-row").filter({ hasText: "Asker" }).click();
-  await expect(win.locator(".xterm-rows")).toContainText("fake-claude ready");
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
   await win.locator(".xterm").click();
   await win.keyboard.type("ask can I");
   await win.keyboard.press("Enter");

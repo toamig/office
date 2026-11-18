@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 // The M3 milestone check on fixtures: a worktree, a fake builder working in it, its diff reviewed with
 // a comment, a commit of the chosen file, and a push to the bare remote.
@@ -28,11 +28,11 @@ test("worktree, fake builder, review with a comment, commit and push to the bare
   );
   await win.getByTestId("rail-agents").click();
   await win.getByTestId("session-row").filter({ hasText: "Builder" }).click();
-  await expect(win.locator(".xterm-rows")).toContainText("fake-claude ready");
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
   await win.locator(".xterm").click();
   await win.keyboard.type("build");
   await win.keyboard.press("Enter");
-  await expect(win.locator(".xterm-rows")).toContainText("built built-");
+  await expect.poll(() => terminalText(win)).toContain("built built-");
 
   // Review its diff and leave a comment for the builder.
   await win.getByTestId("rail-git").click();

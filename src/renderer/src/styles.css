@@ -290,8 +290,7 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: color-mix(in srgb, var(--bg) 55%, transparent);
-  backdrop-filter: blur(2px);
+  background: color-mix(in srgb, var(--bg) 60%, transparent);
 }
 .dialog {
   display: flex;
@@ -335,4 +334,69 @@ button,
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+}
+
+/* ---- terminals: the same background as the panel around them ---- */
+.terminal-frame {
+  position: relative;
+  height: 100%;
+  width: 100%;
+  padding: 8px 0 8px 8px;
+  box-sizing: border-box;
+  background: var(--panel);
+}
+.terminal-host {
+  height: 100%;
+  width: 100%;
+}
+.terminal-host .xterm,
+.terminal-host .xterm-viewport {
+  background: transparent !important;
+}
+.terminal-find {
+  position: absolute;
+  top: 10px;
+  right: 18px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.terminal-find input {
+  width: 180px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+}
+
+.pane-header {
+  display: flex;
+  height: 34px;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 12px;
+  border-bottom: 1px solid var(--line);
+  background: var(--panel);
+}
+.pane-title {
+  font-weight: 600;
+}
+.pane-select {
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font-weight: 600;
+}
+.pane-branch {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: var(--muted);
 }

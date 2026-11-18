@@ -139,7 +139,7 @@ export function WorktreesTab({ projectId }: { projectId: string }) {
           </div>
         ))}
         {confirm && (
-          <p className="mb-0 mt-2 text-[12.5px]" style={{ color: "#c98a12" }}>
+          <p className="mb-0 mt-2 text-[12.5px]" style={{ color: "var(--warn)" }}>
             This worktree was made by another tool. Confirm to remove it.
           </p>
         )}
