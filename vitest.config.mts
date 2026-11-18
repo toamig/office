@@ -3,5 +3,10 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: { alias: { "@shared": resolve(import.meta.dirname, "src/shared") } },
-  test: { include: ["tests/unit/**/*.test.ts"], testTimeout: 30000, hookTimeout: 30000 },
+  test: {
+    setupFiles: ["tests/unit/setup.ts"],
+    include: ["tests/unit/**/*.test.ts"],
+    testTimeout: 30000,
+    hookTimeout: 30000,
+  },
 });

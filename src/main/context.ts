@@ -7,6 +7,7 @@ import { IpcRegistry } from "./core/ipc";
 import { dataDir, dbPath } from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
+import { ProjectService } from "./modules/git/service";
 
 /** Everything the main process shares: settings, workspace, database, bus and the IPC registry. */
 export interface AppContext {
@@ -16,6 +17,7 @@ export interface AppContext {
   db: Db;
   bus: Bus;
   ipc: IpcRegistry;
+  projects: ProjectService;
 }
 
 export async function createContext(checkResponses: boolean): Promise<AppContext> {
@@ -25,6 +27,11 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
   const store = new WorkspaceStore();
   store.subscribe((state) => bus.emit("workspace.changed", { error: state.error }));
   if (isConfigured(current)) await store.open(current.workspaceRoot, current.workspaceConfigPath);
+  const projects = new ProjectService({
+    bus,
+    projects: () => store.state.workspace?.projects ?? [],
+    projectsRoot: () => current.projectsRoot,
+  });
   return {
     settings: () => current,
     patchSettings: (patch) => (current = updateSettings(patch)),
@@ -32,6 +39,7 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     db: openDb(dbPath()),
     bus,
     ipc: new IpcRegistry(checkResponses),
+    projects,
   };
 }
 
