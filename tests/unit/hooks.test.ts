@@ -452,6 +452,27 @@ describe("relay script", () => {
   });
 });
 
+describe.skipIf(process.platform !== "win32")("relay script with a batch file original", () => {
+  it("still runs a .cmd original notify command, which Node cannot start without a shell", async () => {
+    const h = fakeHome();
+    const marker = join(h.home, "chained-cmd.txt");
+    const writer = join(h.home, "write-last-arg.js");
+    writeFileSync(
+      writer,
+      `require('fs').writeFileSync(${JSON.stringify(marker)}, process.argv[process.argv.length - 1])`,
+    );
+    const batch = join(h.home, "original notify.cmd");
+    writeFileSync(batch, `@echo off\r\nnode "${writer}" %*\r\n`);
+    const json = JSON.stringify({ type: "agent-turn-complete", "thread-id": "T" });
+    const done = await run("node", [relayScript, "codex", "--chain", batch, json], {
+      timeoutMs: 10_000,
+    });
+    expect(done.code).toBe(0);
+    await until(() => existsSync(marker));
+    expect(readFileSync(marker, "utf8")).toBe(json);
+  });
+});
+
 async function until(cond: () => boolean, ms = 8000): Promise<void> {
   const end = Date.now() + ms;
   while (Date.now() < end) {

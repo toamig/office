@@ -78,6 +78,20 @@ function readStdin() {
   });
 }
 
+// Node refuses to start a .cmd or .bat without a shell on Windows (EINVAL), so those go through cmd.exe
+// with verbatim, quoted arguments. Anything else starts directly.
+function launch(cmd, args) {
+  const detached = { detached: true, stdio: "ignore", windowsHide: true };
+  if (process.platform === "win32" && /\.(cmd|bat)$/i.test(cmd)) {
+    const quote = (a) => '"' + String(a).replace(/"/g, '""') + '"';
+    return spawn(process.env.ComSpec || "cmd.exe", ["/d", "/s", "/c", '"' + [cmd, ...args].map(quote).join(" ") + '"'], {
+      ...detached,
+      windowsVerbatimArguments: true,
+    });
+  }
+  return spawn(cmd, args, detached);
+}
+
 async function main() {
   const [mode, ...rest] = process.argv.slice(2);
   if (mode === "claude") {
@@ -94,7 +108,7 @@ async function main() {
     if (chain.length > 0) {
       const [cmd, ...args] = chain;
       try {
-        const child = spawn(cmd, [...args, json], { detached: true, stdio: "ignore", windowsHide: true });
+        const child = launch(cmd, [...args, json]);
         child.on("error", () => undefined);
         child.unref();
       } catch {
