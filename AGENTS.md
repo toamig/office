@@ -9,16 +9,15 @@ the code. The notes (spec, decisions, open items) live in the Brain, at
 
 ## Source of truth
 
-**Read first:** `E:/Projects/Knowledge/Brain/Office/_index.md`, then `Office/Spec.md`.
+**Read first:** `E:/Projects/Knowledge/Brain/Office/_index.md`, then `Office/Spec.md` (what
+and why) and `Office/Implementation.md` (how, task by task).
 
-The spec owns the features, the design, the build order (M0 to M5), the settled choices and the
-open questions. Before any implementation or design change:
-
-1. Read the spec section for the area you are touching.
-2. Do not contradict a settled choice (spec section 9) without the owner agreeing, then record
-   the change in the Brain.
-3. Build only the current milestone. Each milestone must be usable on its own before the next
-   one starts.
+- **Building:** follow `Office/Implementation.md` from its section 1 ("How to work"). It holds the
+  schemas, interfaces, every task with its done check, the stop conditions and the final review
+  list. Work through it in order and commit per task.
+- **Behaviour:** the spec wins over the plan. Never edit either to match the code; record the
+  difference in `Office/OpenItems.md` in the Brain.
+- Do not contradict a settled choice (spec section 9) without the owner agreeing.
 
 ## Stack and conventions
 
