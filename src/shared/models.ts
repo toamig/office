@@ -336,3 +336,12 @@ export const Layout = z.object({
   panes: z.array(z.string()).max(4),
 });
 export type Layout = z.infer<typeof Layout>;
+
+export const HookStatus = z.object({
+  installed: z.boolean(),
+  path: z.string(),
+  exists: z.boolean(),
+  /** The notify command Codex runs today. */
+  notify: z.string().optional(),
+});
+export type HookStatus = z.infer<typeof HookStatus>;

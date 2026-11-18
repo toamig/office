@@ -1,17 +1,27 @@
 import { mkdirSync } from "node:fs";
+import { join } from "node:path";
 import type { SyncReport, WorkspaceView } from "../shared/models";
 import type { MachineSettings } from "../shared/types";
 import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
 import { IpcRegistry } from "./core/ipc";
 import { Notifier } from "./core/notifier";
-import { dataDir, dbPath, sessionsDir, userHome } from "./core/paths";
+import { RelayServer } from "./core/relay-server";
+import {
+  claudeSettingsPath,
+  codexConfigPath,
+  dataDir,
+  dbPath,
+  sessionsDir,
+  userHome,
+} from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
 import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
+import { HooksManager } from "./modules/setup/install-hooks";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
 import { VaultService } from "./modules/vault/service";
@@ -28,6 +38,8 @@ export interface AppContext {
   notifier: Notifier;
   providers: ProviderRegistry;
   sessions: SessionService;
+  hooks: HooksManager;
+  relay: RelayServer;
   projects: ProjectService;
   vault: VaultService;
   ops: VaultOps;
@@ -41,7 +53,10 @@ export interface AppContext {
   stop: () => Promise<void>;
 }
 
-export async function createContext(checkResponses: boolean): Promise<AppContext> {
+export async function createContext(
+  checkResponses: boolean,
+  relayScript: string,
+): Promise<AppContext> {
   mkdirSync(dataDir(), { recursive: true });
   let current = loadSettings();
   const bus = new Bus();
@@ -93,6 +108,16 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
   providers.setTerminalOpener((spec, title) => {
     sessions.startCommand(spec, title, userHome());
   });
+  const hooks = new HooksManager(() => ({
+    claudeSettings: claudeSettingsPath(),
+    codexConfig: codexConfigPath(),
+    recordPath: join(dataDir(), "hooks-install.json"),
+    relayScript,
+  }));
+  const relay = new RelayServer(current.relay.token, {
+    onClaude: (payload) => sessions.onClaudeHook(payload),
+    onCodex: (payload) => sessions.onCodexEvent(payload),
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -110,12 +135,16 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
 
   const stop = async (): Promise<void> => {
     sessions.stopTimer();
+    await relay.stop();
     projects.stopAuto();
     await vault.unwatch();
     await store.close();
   };
   const start = async (): Promise<void> => {
     await stop();
+    const port = await relay.start(current.relay.port);
+    if (port !== current.relay.port)
+      current = updateSettings({ relay: { ...current.relay, port } });
     if (!isConfigured(current)) return;
     await store.open(current.workspaceRoot, current.workspaceConfigPath);
     waiting.prime();
@@ -135,6 +164,8 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     notifier,
     providers,
     sessions,
+    hooks,
+    relay,
     projects,
     vault,
     ops,

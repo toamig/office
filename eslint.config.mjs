@@ -46,7 +46,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["src/main/core/exec.ts", "tests/**", "scripts/**"],
+    files: ["src/main/core/exec.ts", "tests/**", "scripts/**", "resources/relay/**"],
     rules: { "no-restricted-imports": "off" },
   },
   prettier,

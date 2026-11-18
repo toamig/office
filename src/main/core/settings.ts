@@ -14,6 +14,14 @@ function freshSettings(): MachineSettings {
   });
 }
 
+/** Writes a file atomically exactly as given (UTF-8, no line-ending conversion). For files that are not ours. */
+export function writeRawFile(path: string, text: string): void {
+  mkdirSync(dirname(path), { recursive: true });
+  const tmp = `${path}.tmp-${process.pid}`;
+  writeFileSync(tmp, text, { encoding: "utf8" });
+  renameSync(tmp, path);
+}
+
 /** Writes a file atomically as UTF-8 without BOM and with LF endings. */
 export function writeTextFile(path: string, text: string): void {
   mkdirSync(dirname(path), { recursive: true });

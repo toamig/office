@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   HealthView,
+  HookStatus,
   Inventory,
   Layout,
   NotificationFilter,
@@ -123,6 +124,27 @@ export const channels = {
   "sessions.rename": { req: z.object({ id: z.string(), title: z.string() }), res: z.void() },
   "layout.get": { req: z.object({ key: z.string() }), res: Layout.nullable() },
   "layout.set": { req: z.object({ key: z.string(), layout: Layout }), res: z.void() },
+  "hooks.status": {
+    req: z.void(),
+    res: z.object({
+      claude: HookStatus,
+      codex: HookStatus,
+    }),
+  },
+  "hooks.preview": {
+    req: z.object({
+      target: z.enum(["claude", "codex"]),
+      action: z.enum(["install", "uninstall"]),
+    }),
+    res: z.object({ path: z.string(), diff: z.string(), changed: z.boolean() }),
+  },
+  "hooks.apply": {
+    req: z.object({
+      target: z.enum(["claude", "codex"]),
+      action: z.enum(["install", "uninstall"]),
+    }),
+    res: z.object({ backup: z.string().nullable() }),
+  },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

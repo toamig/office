@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Button, Panel } from "../components/ui";
 import { useQuery } from "../lib/hooks";
+import { HooksPanel } from "./setup/HooksPanel";
 import { InventoryPanel } from "./setup/InventoryPanel";
 import { ToolsPanel } from "./setup/ToolsPanel";
 import { WorkspaceWizard } from "./setup/WorkspaceWizard";
@@ -37,6 +38,7 @@ export function Setup() {
         </Panel>
       )}
       <ToolsPanel />
+      <HooksPanel />
       {w?.configured && <InventoryPanel />}
     </div>
   );

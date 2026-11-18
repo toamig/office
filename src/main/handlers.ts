@@ -92,6 +92,9 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.rename", (req) => ctx.sessions.rename(req.id, req.title));
   ctx.ipc.handle("layout.get", (req) => getLayout(ctx.db, req.key));
   ctx.ipc.handle("layout.set", (req) => setLayout(ctx.db, req.key, req.layout));
+  ctx.ipc.handle("hooks.status", () => ctx.hooks.status());
+  ctx.ipc.handle("hooks.preview", (req) => ctx.hooks.preview(req.target, req.action));
+  ctx.ipc.handle("hooks.apply", (req) => ctx.hooks.apply(req.target, req.action));
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

@@ -102,7 +102,12 @@ function updateBadge(count: number): void {
 
 async function boot(): Promise<void> {
   app.setAppUserModelId("com.toamig.office");
-  const context = await createContext(!app.isPackaged);
+  const relayScript =
+    process.env["OFFICE_RELAY_SCRIPT"] ??
+    (app.isPackaged
+      ? join(process.resourcesPath, "relay", "office-relay.mjs")
+      : join(app.getAppPath(), "resources", "relay", "office-relay.mjs"));
+  const context = await createContext(!app.isPackaged, relayScript);
   ctx = context;
   registerHandlers(context);
   registerShellHandlers(context);
