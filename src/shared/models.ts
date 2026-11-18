@@ -696,3 +696,22 @@ export const PreviewBounds = z.object({
   visible: z.boolean(),
 });
 export type PreviewBounds = z.infer<typeof PreviewBounds>;
+
+export const UpdateStatus = z.object({
+  version: z.string(),
+  /** False for development runs and anything not installed from a release. */
+  enabled: z.boolean(),
+  state: z.enum([
+    "disabled",
+    "idle",
+    "checking",
+    "available",
+    "downloading",
+    "downloaded",
+    "up-to-date",
+    "error",
+  ]),
+  newVersion: z.string().nullable(),
+  detail: z.string().nullable(),
+});
+export type UpdateStatus = z.infer<typeof UpdateStatus>;

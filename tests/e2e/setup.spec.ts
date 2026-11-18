@@ -109,3 +109,13 @@ test("automations: add one, run it now, and see it finish", async () => {
   await expect(win.getByTestId("automation-error")).toContainText("not a valid cron expression");
   await app.close();
 });
+
+test("About shows the version and says updates are off while running against test data", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  await win.getByTestId("rail-setup").click();
+  await expect(win.getByTestId("about")).toContainText("0.1.0");
+  await expect(win.getByTestId("about")).toContainText("Updates are off");
+  await expect(win.getByTestId("update-check")).toBeDisabled();
+  await app.close();
+});

@@ -45,6 +45,7 @@ import {
   WaitingEntry,
   WorkspaceView,
   VaultFile,
+  UpdateStatus,
   WorkspaceInspection,
   WorktreeRow,
   WriteResult,
@@ -64,6 +65,7 @@ export const eventTypes = [
   "task.changed",
   "app.navigate",
   "preview.state",
+  "app.update",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
 
@@ -297,6 +299,9 @@ export const channels = {
   },
   "preview.state": { req: z.void(), res: PreviewState },
   "preview.detect": { req: z.void(), res: z.string().nullable() },
+  "app.update.status": { req: z.void(), res: UpdateStatus },
+  "app.update.check": { req: z.void(), res: UpdateStatus },
+  "app.update.install": { req: z.void(), res: z.void() },
   "tasks.list": { req: z.object({ projectId: z.string().optional() }), res: z.array(TaskView) },
   "tasks.get": { req: z.object({ id: z.string() }), res: TaskDetail },
   "tasks.create": { req: CreateTask, res: TaskView },

@@ -12,6 +12,8 @@ import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
 import { registerHandlers } from "./handlers";
 import { PreviewPane } from "./preview";
+import { autoUpdater } from "electron-updater";
+import { UpdateService, type UpdaterLike } from "./core/update";
 import { registerShellHandlers } from "./shell-handlers";
 
 const CSP =
@@ -115,7 +117,16 @@ async function boot(): Promise<void> {
     () => mainWindow,
     (state) => context.bus.emit("preview.state", state),
   );
-  registerShellHandlers(context, preview);
+  const updates = new UpdateService({
+    updater: autoUpdater as unknown as UpdaterLike,
+    version: app.getVersion(),
+    enabled: app.isPackaged && !process.env["OFFICE_DATA"] && !process.env["OFFICE_NO_UPDATE"],
+    disabledReason: app.isPackaged
+      ? "Updates are off while the app runs against test data"
+      : "Updates are off in development runs",
+    onChange: (status) => context.bus.emit("app.update", status),
+  });
+  registerShellHandlers(context, preview, updates);
   ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
     context.ipc.dispatch(channel, payload),
   );
@@ -140,6 +151,7 @@ async function boot(): Promise<void> {
   mainWindow.webContents.once("did-finish-load", () => context.notifier.reportUnread());
   app.on("browser-window-focus", () => void context.projects.refreshAll());
   await context.start();
+  void updates.check();
 }
 
 const gotLock = app.requestSingleInstanceLock();
