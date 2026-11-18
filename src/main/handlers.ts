@@ -144,7 +144,8 @@ export function registerHandlers(ctx: AppContext): void {
       else await ctx.ops.addTodo(session.projectId, item.text, source);
     }
     ctx.sessions.markCaptured(req.id);
-    ctx.sessions.archive(req.id);
+    // Left open, a captured session is archived by the auto-archive rule after the quiet days.
+    if (req.archive !== false) ctx.sessions.archive(req.id);
     return { saved: kept.length };
   });
   ctx.ipc.handle("ask.start", (req) => ({ runId: ctx.ask.start(req.question, req.projectId) }));

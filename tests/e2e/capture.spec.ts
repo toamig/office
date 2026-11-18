@@ -65,3 +65,35 @@ test("archiving without saving leaves the vault alone", async () => {
   expect(readFileSync(join(world.hub, "Alpha", "OpenItems.md"), "utf8")).toBe(before);
   await app.close();
 });
+
+test("saving and keeping a session open marks it captured so auto-archive can close it later", async () => {
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  const win = await app.firstWindow();
+  const started = await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Kept open",
+    }),
+  );
+  await win.getByTestId("rail-agents").click();
+  await win.getByTestId("close-session").click();
+  await expect(win.getByTestId("capture-item")).toHaveCount(2);
+  await win.getByTestId("capture-keep").click();
+  await expect(win.getByTestId("capture-dialog")).toHaveCount(0);
+  await expect
+    .poll(
+      async () =>
+        (await win.evaluate(() => window.office.invoke("sessions.list", {}))).find(
+          (s) => s.id === started.id,
+        )?.capturedAt,
+      { timeout: 20000 },
+    )
+    .toBeTruthy();
+  const row = (await win.evaluate(() => window.office.invoke("sessions.list", {}))).find(
+    (s) => s.id === started.id,
+  );
+  expect(row?.archivedAt).toBeNull();
+  await app.close();
+});

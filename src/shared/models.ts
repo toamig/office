@@ -361,6 +361,8 @@ export type CaptureResult = z.infer<typeof CaptureResult>;
 export const CaptureCommit = z.object({
   id: z.string(),
   items: z.array(z.object({ text: z.string(), dest: z.enum(["waiting", "todo", "drop"]) })),
+  /** False keeps the session open once its leftovers are saved; auto-archive then closes it after quiet days. */
+  archive: z.boolean().optional(),
 });
 export type CaptureCommit = z.infer<typeof CaptureCommit>;
 

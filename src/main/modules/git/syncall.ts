@@ -39,9 +39,9 @@ export async function syncHub(root: string, timeoutMs = 180_000): Promise<SyncRe
   if (result.code === 0 && !result.timedOut) return rows;
   const reason = result.timedOut
     ? `the hub tool did not finish in ${Math.round(timeoutMs / 1000)} seconds`
-    : (result.stderr.trim().split(/\r?\n/)[0] ||
+    : result.stderr.trim().split(/\r?\n/)[0] ||
       result.stdout.trim().split(/\r?\n/).at(-1) ||
-      `the hub tool exited with code ${result.code}`);
+      `the hub tool exited with code ${result.code}`;
   const own = rows.find((row) => row.id === "hub:.");
   if (own && (own.action === "failed" || own.action === "conflict")) return rows;
   return [

@@ -47,13 +47,14 @@ export function CaptureDialog({ session, onClose }: { session: SessionRow; onClo
   const update = (index: number, patch: Partial<Row>): void =>
     setRows((all) => all.map((r, i) => (i === index ? { ...r, ...patch } : r)));
 
-  const finish = async (save: boolean): Promise<void> => {
+  const finish = async (save: boolean, archive = true): Promise<void> => {
     setSaving(true);
     setError(null);
     try {
       await office.invoke("capture.commit", {
         id: session.id,
         items: save ? rows.filter((r) => r.text.trim()) : [],
+        archive,
       });
       onClose();
     } catch (err) {
@@ -146,6 +147,13 @@ export function CaptureDialog({ session, onClose }: { session: SessionRow; onClo
             data-testid="capture-skip"
           >
             Archive without saving
+          </Button>
+          <Button
+            disabled={saving || !result}
+            onClick={() => void finish(true, false)}
+            data-testid="capture-keep"
+          >
+            Save and keep open
           </Button>
           <Button
             variant="primary"
