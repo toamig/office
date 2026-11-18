@@ -109,9 +109,10 @@ describe("templates", () => {
     expect(() => renderTemplate("{{stages.review.outputPath}}", ctx)).toThrow(
       /Unknown placeholder/,
     );
-    expect(() => renderTemplate("{{task.empty}}", { task: { empty: "" } })).toThrow(
+    expect(() => renderTemplate("{{task.branch}}", { task: { branch: null } })).toThrow(
       /Unknown placeholder/,
     );
+    expect(renderTemplate("[{{task.empty}}]", { task: { empty: "" } })).toBe("[]");
     expect(renderTemplate("no placeholders", {})).toBe("no placeholders");
   });
 });

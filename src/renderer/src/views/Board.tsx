@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { EmptyState } from "../components/ui";
+import { BoardTab } from "./board/BoardTab";
 import { RolesTab } from "./board/RolesTab";
 
 type Tab = "board" | "roles";
@@ -34,7 +34,7 @@ export function Board() {
           ))}
         </div>
       </div>
-      {tab === "board" && <EmptyState>Tasks arrive with the task engine.</EmptyState>}
+      {tab === "board" && <BoardTab />}
       {tab === "roles" && <RolesTab />}
     </div>
   );

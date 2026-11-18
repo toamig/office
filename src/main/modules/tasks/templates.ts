@@ -9,13 +9,13 @@ function lookup(ctx: unknown, path: string): unknown {
 }
 
 /**
- * Fills `{{task.description}}`-style placeholders by simple replacement. A placeholder that has no
- * value is an error (naming it), never an empty string.
+ * Fills `{{task.description}}`-style placeholders by simple replacement. A placeholder that is not
+ * known (or has no value yet, like a branch before the worktree exists) is an error naming it.
  */
 export function renderTemplate(template: string, ctx: Record<string, unknown>): string {
   return template.replace(/\{\{\s*([\w.-]+)\s*\}\}/g, (_match, key: string) => {
     const value = lookup(ctx, key);
-    if (value === undefined || value === null || value === "") {
+    if (value === undefined || value === null) {
       throw new Error(`Unknown placeholder {{${key}}} in the stage prompt`);
     }
     return String(value);

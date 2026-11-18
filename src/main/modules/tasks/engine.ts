@@ -137,6 +137,15 @@ export class TaskEngine {
 
   // ---------- queries ----------
 
+  /** The provider a role resolves to for a project, or null when the role is missing. */
+  private providerOf(roleId: string, projectId: string): string | null {
+    try {
+      return this.deps.resolveRole(roleId, projectId).provider;
+    } catch {
+      return null;
+    }
+  }
+
   private view(t: TaskRow): TaskView {
     const ws = this.deps.workspace();
     const project = ws?.projects.find((p) => p.id === t.project_id);
@@ -158,12 +167,7 @@ export class TaskEngine {
       updatedAt: t.updated_at,
       stages: rows.map((r) => {
         const def = pipeline?.stages[r.idx];
-        let provider: string | null = null;
-        try {
-          provider = this.deps.resolveRole(r.role, t.project_id).provider;
-        } catch {
-          provider = null;
-        }
+        const provider = this.providerOf(r.role, t.project_id);
         return {
           idx: r.idx,
           stageId: r.stage_id,
