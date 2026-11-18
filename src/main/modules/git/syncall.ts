@@ -84,3 +84,30 @@ export async function syncAll(deps: SyncAllDeps): Promise<SyncReport> {
   await deps.onReport?.(report);
   return report;
 }
+
+/** Sync one project's repo (the project page's Sync button). */
+export async function syncProject(deps: SyncAllDeps, projectId: string): Promise<SyncReport> {
+  const startedAt = nowIso();
+  const workspace = deps.workspace();
+  const project = workspace?.projects.find((p) => p.id === projectId);
+  const results: SyncRepoResult[] = [];
+  if (project && workspace) {
+    const path = resolve(deps.projectsRoot(), project.path);
+    const isHub = workspace.vault.kind === "brain-hub" && sameFolder(path, deps.workspaceRoot());
+    if (isHub) results.push(...(await syncHub(deps.workspaceRoot())));
+    else if (!existsSync(join(path, ".git"))) {
+      results.push({
+        id: project.id,
+        name: project.name,
+        action: "skipped",
+        reason: "not a git repo",
+      });
+    } else {
+      results.push({ id: project.id, name: project.name, ...(await syncRepo(path)) });
+      deps.onRepoDone?.(project.id);
+    }
+  }
+  const report: SyncReport = { startedAt, finishedAt: nowIso(), repos: results };
+  await deps.onReport?.(report);
+  return report;
+}

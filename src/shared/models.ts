@@ -213,3 +213,20 @@ export const NotificationFilter = z.object({
   limit: z.number().int().positive().optional(),
 });
 export type NotificationFilter = z.infer<typeof NotificationFilter>;
+
+export const ProjectNote = z.object({
+  projectId: z.string(),
+  name: z.string(),
+  exists: z.boolean(),
+  /** Markdown body with the frontmatter removed. */
+  markdown: z.string(),
+});
+export type ProjectNote = z.infer<typeof ProjectNote>;
+
+export const SearchItem = z.object({
+  kind: z.enum(["project", "note", "branch", "worktree", "session"]),
+  label: z.string(),
+  detail: z.string().optional(),
+  link: z.object({ view: z.string(), params: z.record(z.string(), z.string()).optional() }),
+});
+export type SearchItem = z.infer<typeof SearchItem>;

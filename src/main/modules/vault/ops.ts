@@ -1,6 +1,7 @@
 import type { WriteResult } from "../../../shared/models";
 import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
+import { parseWaitingLine } from "./openitems";
 import type { VaultService } from "./service";
 import { VaultWriteError, type VaultWriter } from "./writer";
 
@@ -41,7 +42,7 @@ export class VaultOps {
   /** Removes one "Waiting on you" line and commits it. Git keeps the history. */
   tickWaiting(projectId: string, raw: string): Promise<WriteResult> {
     const { file, name, heading } = this.target(projectId);
-    const text = /^- \[ \] \d{4}-\d{2}-\d{2} (.*)$/.exec(raw)?.[1] ?? raw;
+    const text = parseWaitingLine(raw)?.text ?? raw;
     return this.guard(
       this.deps.writer.removeWaiting(file, raw, heading, `${name}: done: ${clip(text)}`),
     );

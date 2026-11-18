@@ -40,3 +40,53 @@ body {
     sans-serif;
   font-size: 13.5px;
 }
+
+.markdown h1 {
+  font-size: 1.4em;
+  margin: 0.6em 0 0.4em;
+}
+.markdown h2 {
+  font-size: 1.2em;
+  margin: 0.9em 0 0.4em;
+}
+.markdown h3 {
+  font-size: 1.05em;
+  margin: 0.8em 0 0.3em;
+}
+.markdown p,
+.markdown ul,
+.markdown ol {
+  margin: 0.4em 0;
+}
+.markdown ul,
+.markdown ol {
+  padding-left: 1.4em;
+}
+.markdown code {
+  font-family: ui-monospace, Consolas, monospace;
+  font-size: 0.92em;
+  background: var(--rail);
+  padding: 0 3px;
+  border-radius: 3px;
+}
+.markdown pre {
+  background: var(--rail);
+  padding: 8px;
+  overflow: auto;
+  border-radius: 4px;
+}
+.markdown pre code {
+  background: none;
+  padding: 0;
+}
+.markdown table {
+  border-collapse: collapse;
+}
+.markdown th,
+.markdown td {
+  border: 1px solid var(--line);
+  padding: 2px 8px;
+}
+.markdown a {
+  color: var(--accent);
+}

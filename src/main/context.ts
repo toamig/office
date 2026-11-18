@@ -9,7 +9,7 @@ import { dataDir, dbPath } from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
 import { ProjectService } from "./modules/git/service";
-import { syncAll } from "./modules/git/syncall";
+import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
 import { VaultOps } from "./modules/vault/ops";
 import { VaultService } from "./modules/vault/service";
@@ -31,6 +31,7 @@ export interface AppContext {
   warnings: Array<{ at: string; message: string }>;
   /** Sync all repos and raise notifications for what needs the owner. */
   sync: () => Promise<SyncReport>;
+  syncProject: (id: string) => Promise<SyncReport>;
   /** Opens the workspace, starts watchers and timers. Call after settings change too. */
   start: () => Promise<void>;
   stop: () => Promise<void>;
@@ -79,14 +80,13 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     projects.startAuto();
   });
 
-  const sync = (): Promise<SyncReport> =>
-    syncAll({
-      workspace: () => store.state.workspace,
-      projectsRoot: () => current.projectsRoot,
-      workspaceRoot: () => current.workspaceRoot,
-      onRepoDone: (id) => void projects.refresh(id),
-      onReport: (report) => notifyFromSyncReport(notifier, report),
-    });
+  const syncDeps: SyncAllDeps = {
+    workspace: () => store.state.workspace,
+    projectsRoot: () => current.projectsRoot,
+    workspaceRoot: () => current.workspaceRoot,
+    onRepoDone: (id) => void projects.refresh(id),
+    onReport: (report) => notifyFromSyncReport(notifier, report),
+  };
 
   const stop = async (): Promise<void> => {
     projects.stopAuto();
@@ -115,7 +115,8 @@ export async function createContext(checkResponses: boolean): Promise<AppContext
     vault,
     ops,
     warnings,
-    sync,
+    sync: () => syncAll(syncDeps),
+    syncProject: (id) => syncProject(syncDeps, id),
     start,
     stop,
   };

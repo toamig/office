@@ -17,7 +17,11 @@ import { Button } from "./components/ui";
 import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
 import { useQuery } from "./lib/hooks";
+import { QuickSwitcher } from "./components/QuickSwitcher";
+import { Home as HomeView } from "./views/Home";
 import { Inbox } from "./views/Inbox";
+import { ProjectPage } from "./views/ProjectPage";
+import { Projects } from "./views/Projects";
 import { Placeholder } from "./views/Placeholder";
 
 const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: number }> }> = [
@@ -34,6 +38,19 @@ const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: numb
 
 function CurrentView() {
   const view = useUi((s) => s.view);
+  const params = useUi((s) => s.params);
+  if (view === "home") return <HomeView />;
+  if (view === "projects") return <Projects />;
+  if (view === "project") {
+    return (
+      <ProjectPage
+        key={`${params["id"]}-${params["tab"] ?? ""}-${params["note"] ?? ""}`}
+        id={params["id"] ?? ""}
+        {...(params["tab"] ? { tab: params["tab"] } : {})}
+        {...(params["note"] ? { note: params["note"] } : {})}
+      />
+    );
+  }
   if (view === "inbox") return <Inbox />;
   const item = rail.find((r) => r.id === view);
   return <Placeholder title={item?.label ?? view} note="Coming in a later task." />;
@@ -127,6 +144,7 @@ export default function App() {
         </main>
       </div>
       <SyncReportDialog />
+      <QuickSwitcher />
     </div>
   );
 }

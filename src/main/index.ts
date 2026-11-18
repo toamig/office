@@ -5,6 +5,7 @@ import { IPC_EVENT, IPC_INVOKE } from "../shared/ipc";
 import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
 import { registerHandlers } from "./handlers";
+import { registerShellHandlers } from "./shell-handlers";
 
 const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'";
@@ -95,6 +96,7 @@ async function boot(): Promise<void> {
   const context = await createContext(!app.isPackaged);
   ctx = context;
   registerHandlers(context);
+  registerShellHandlers(context);
   ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
     context.ipc.dispatch(channel, payload),
   );

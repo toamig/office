@@ -3,6 +3,15 @@ import type { TodoGroup, WaitingItem } from "../../../shared/models";
 const ITEM_RE = /^- \[ \] (\d{4}-\d{2}-\d{2}) (.+?)(?: \(([^()]*)\))?\s*$/;
 const H2_RE = /^## (.+?)\s*$/;
 
+/** Splits a "Waiting on you" line into date, text and optional source; null if it does not match. */
+export function parseWaitingLine(
+  line: string,
+): { date: string; text: string; source?: string } | null {
+  const m = ITEM_RE.exec(line);
+  if (!m) return null;
+  return { date: m[1] ?? "", text: m[2] ?? "", ...(m[3] ? { source: m[3] } : {}) };
+}
+
 export interface ParsedOpenItems {
   waiting: WaitingItem[];
   unparsed: Array<{ line: number; text: string }>;

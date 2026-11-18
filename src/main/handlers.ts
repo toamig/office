@@ -1,5 +1,6 @@
 import { workspaceView, type AppContext } from "./context";
 import { IpcFailure } from "./core/ipc";
+import { noteAndProjectItems, readNote } from "./modules/notes/notes";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 
 /** Registers every IPC handler. Grows by one block per module. */
@@ -18,6 +19,13 @@ export function registerHandlers(ctx: AppContext): void {
     else await ctx.projects.refreshAll();
   });
   ctx.ipc.handle("git.syncAll", () => ctx.sync());
+  ctx.ipc.handle("git.syncProject", (req) => ctx.syncProject(req.id));
+  ctx.ipc.handle("notes.read", (req) =>
+    readNote(ctx.store.state.workspace, ctx.settings().workspaceRoot, req.projectId, req.name),
+  );
+  ctx.ipc.handle("search.items", () =>
+    noteAndProjectItems(ctx.store.state.workspace, ctx.settings().workspaceRoot),
+  );
 
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
