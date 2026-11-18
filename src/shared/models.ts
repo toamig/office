@@ -363,3 +363,19 @@ export const CaptureCommit = z.object({
   items: z.array(z.object({ text: z.string(), dest: z.enum(["waiting", "todo", "drop"]) })),
 });
 export type CaptureCommit = z.infer<typeof CaptureCommit>;
+
+export const AskResult = z.object({
+  done: z.boolean(),
+  ok: z.boolean(),
+  text: z.string(),
+  /** Vault-relative note paths the answer cites, only those that exist. */
+  citations: z.array(z.string()),
+  error: z.string().optional(),
+});
+export type AskResult = z.infer<typeof AskResult>;
+
+export const AuditEntry = z.object({ repo: z.string(), entries: z.array(z.string()) });
+export type AuditEntry = z.infer<typeof AuditEntry>;
+
+export const VaultFile = z.object({ path: z.string(), markdown: z.string() });
+export type VaultFile = z.infer<typeof VaultFile>;

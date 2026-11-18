@@ -1,6 +1,8 @@
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
+import { readVaultFile } from "./modules/ask/ask";
+import { readAudit } from "./modules/vault/audit";
 import { captureSession } from "./modules/sessions/capture";
 import { getLayout, setLayout } from "./modules/sessions/layouts";
 import { userHome } from "./core/paths";
@@ -116,6 +118,11 @@ export function registerHandlers(ctx: AppContext): void {
     ctx.sessions.archive(req.id);
     return { saved: kept.length };
   });
+  ctx.ipc.handle("ask.start", (req) => ({ runId: ctx.ask.start(req.question, req.projectId) }));
+  ctx.ipc.handle("ask.result", (req) => ctx.ask.result(req.runId));
+  ctx.ipc.handle("ask.cancel", (req) => ctx.ask.cancel(req.runId));
+  ctx.ipc.handle("vault.readFile", (req) => readVaultFile(ctx.settings().workspaceRoot, req.path));
+  ctx.ipc.handle("vault.audit", () => readAudit(ctx.settings().workspaceRoot));
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

@@ -1,6 +1,6 @@
 import {
   Bot,
-  Brain,
+  Brain as BrainIcon,
   Compass,
   FolderKanban,
   GitBranch,
@@ -19,6 +19,7 @@ import { useUi, type ViewId } from "./stores/ui";
 import { useQuery } from "./lib/hooks";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Agents } from "./views/Agents";
+import { Brain } from "./views/Brain";
 import { Home as HomeView } from "./views/Home";
 import { Inbox } from "./views/Inbox";
 import { Setup } from "./views/Setup";
@@ -32,7 +33,7 @@ const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: numb
   { id: "agents", label: "Agents", icon: Bot },
   { id: "git", label: "Git", icon: GitBranch },
   { id: "board", label: "Board", icon: KanbanSquare },
-  { id: "brain", label: "Brain", icon: Brain },
+  { id: "brain", label: "Brain", icon: BrainIcon },
   { id: "inbox", label: "Inbox", icon: InboxIcon },
   { id: "explore", label: "Explore", icon: Compass },
   { id: "setup", label: "Setup", icon: Settings },
@@ -56,6 +57,7 @@ function CurrentView({ configured }: { configured: boolean }) {
   }
   if (view === "agents")
     return <Agents key={`${params["project"] ?? ""}-${params["session"] ?? ""}`} />;
+  if (view === "brain") return <Brain />;
   if (view === "inbox") return <Inbox />;
   if (view === "setup") return <Setup />;
   const item = rail.find((r) => r.id === view);

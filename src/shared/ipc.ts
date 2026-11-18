@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  AskResult,
+  AuditEntry,
   CaptureCommit,
   CaptureResult,
   HealthView,
@@ -21,6 +23,7 @@ import {
   ToolStatus,
   WaitingEntry,
   WorkspaceView,
+  VaultFile,
   WorkspaceInspection,
   WriteResult,
 } from "./models";
@@ -149,6 +152,14 @@ export const channels = {
   },
   "capture.run": { req: z.object({ id: z.string() }), res: CaptureResult },
   "capture.commit": { req: CaptureCommit, res: z.object({ saved: z.number() }) },
+  "ask.start": {
+    req: z.object({ question: z.string().min(1), projectId: z.string().optional() }),
+    res: z.object({ runId: z.string() }),
+  },
+  "ask.result": { req: z.object({ runId: z.string() }), res: AskResult },
+  "ask.cancel": { req: z.object({ runId: z.string() }), res: z.void() },
+  "vault.readFile": { req: z.object({ path: z.string() }), res: VaultFile },
+  "vault.audit": { req: z.void(), res: z.array(AuditEntry) },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

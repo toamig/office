@@ -23,6 +23,7 @@ import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
 import { HooksManager } from "./modules/setup/install-hooks";
+import { AskService } from "./modules/ask/ask";
 import { RunService } from "./modules/runs/service";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
@@ -41,6 +42,7 @@ export interface AppContext {
   providers: ProviderRegistry;
   sessions: SessionService;
   runs: RunService;
+  ask: AskService;
   hooks: HooksManager;
   relay: RelayServer;
   projects: ProjectService;
@@ -97,6 +99,11 @@ export async function createContext(
   });
   const providers = new ProviderRegistry();
   const runs = new RunService({ db, bus, providers, runsDir: runsDir() });
+  const ask = new AskService({
+    runs,
+    workspace: () => store.state.workspace,
+    workspaceRoot: () => current.workspaceRoot,
+  });
   const sessions = new SessionService({
     db,
     bus,
@@ -176,6 +183,7 @@ export async function createContext(
     providers,
     sessions,
     runs,
+    ask,
     hooks,
     relay,
     projects,
