@@ -27,6 +27,7 @@ export interface ClaudeProviderConfig {
 export class ClaudeCodeProvider implements Provider {
   readonly id: string;
   readonly label: string;
+  readonly canResumeHeadless = true;
   private readonly bin: string;
   private readonly openTerminal: () => TerminalOpener | null;
 

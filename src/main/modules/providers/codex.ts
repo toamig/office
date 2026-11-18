@@ -65,6 +65,7 @@ export function rememberCodexModel(model: string): void {
 export class CodexProvider implements Provider {
   readonly id: string;
   readonly label = "Codex";
+  readonly canResumeHeadless = false;
   private readonly bin: string;
   private readonly openTerminal: () => TerminalOpener | null;
 

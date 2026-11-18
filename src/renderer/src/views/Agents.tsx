@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
+import { CaptureDialog } from "./agents/CaptureDialog";
 import { StartAgentDialog } from "./agents/StartAgentDialog";
 import { TerminalView } from "./agents/TerminalView";
 
@@ -19,11 +20,13 @@ function SessionList({
   active,
   onOpen,
   onChanged,
+  onCloseSession,
 }: {
   sessions: SessionRow[];
   active: string | null;
   onOpen: (s: SessionRow) => void;
   onChanged: () => void;
+  onCloseSession: (s: SessionRow) => void;
 }) {
   const projects = useQuery("projects.list");
   const name = (id: string | null): string => projects.data?.find((p) => p.id === id)?.name ?? "";
@@ -90,11 +93,11 @@ function SessionList({
               variant="ghost"
               onClick={(e) => {
                 e.stopPropagation();
-                void office.invoke("sessions.archive", { id: s.id }).then(onChanged);
+                onCloseSession(s);
               }}
-              data-testid="archive-session"
+              data-testid="close-session"
             >
-              <Archive size={12} /> Archive
+              <Archive size={12} /> Close
             </Button>
           </div>
         </div>
@@ -114,6 +117,7 @@ export function Agents() {
   const projects = useQuery("projects.list");
   const [saved, setLayout] = useState<Layout>(EMPTY);
   const [starting, setStarting] = useState(params["start"] === "1");
+  const [closing, setClosing] = useState<SessionRow | null>(null);
 
   useEffect(() => {
     let alive = true;
@@ -231,6 +235,7 @@ export function Agents() {
           active={layout.active}
           onOpen={open}
           onChanged={sessions.reload}
+          onCloseSession={setClosing}
         />
         <div className="flex min-w-0 flex-1 flex-col">
           <div
@@ -305,6 +310,15 @@ export function Agents() {
           </div>
         </div>
       </div>
+      {closing && (
+        <CaptureDialog
+          session={closing}
+          onClose={() => {
+            setClosing(null);
+            sessions.reload();
+          }}
+        />
+      )}
       {starting && (
         <StartAgentDialog
           {...(filter ? { projectId: filter } : {})}

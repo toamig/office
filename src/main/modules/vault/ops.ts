@@ -65,10 +65,16 @@ export class VaultOps {
     );
   }
 
-  /** Adds a todo bullet under a named section (used by end-of-session capture). */
-  addTodo(projectId: string, text: string, heading = "Todo"): Promise<WriteResult> {
+  /** Adds a dated bullet under a named section (used by end-of-session capture). */
+  addTodo(
+    projectId: string,
+    text: string,
+    source?: string,
+    heading = "Session leftovers",
+  ): Promise<WriteResult> {
     const { file, name } = this.target(projectId);
-    const line = `- ${text.replace(/\s+/g, " ").trim()}`;
+    const clean = text.replace(/\s+/g, " ").trim();
+    const line = `- ${this.today()} ${clean}${source ? ` (${source.replace(/[()]/g, "")})` : ""}`;
     return this.guard(
       this.deps.writer.addToSection(file, heading, line, `${name}: todo: ${clip(text)}`),
     );

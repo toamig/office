@@ -12,6 +12,7 @@ import {
   codexConfigPath,
   dataDir,
   dbPath,
+  runsDir,
   sessionsDir,
   userHome,
 } from "./core/paths";
@@ -22,6 +23,7 @@ import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
 import { HooksManager } from "./modules/setup/install-hooks";
+import { RunService } from "./modules/runs/service";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
 import { VaultService } from "./modules/vault/service";
@@ -38,6 +40,7 @@ export interface AppContext {
   notifier: Notifier;
   providers: ProviderRegistry;
   sessions: SessionService;
+  runs: RunService;
   hooks: HooksManager;
   relay: RelayServer;
   projects: ProjectService;
@@ -93,6 +96,7 @@ export async function createContext(
     waiting: (id) => vault.waitingCount(id),
   });
   const providers = new ProviderRegistry();
+  const runs = new RunService({ db, bus, providers, runsDir: runsDir() });
   const sessions = new SessionService({
     db,
     bus,
@@ -133,7 +137,9 @@ export async function createContext(
     onReport: (report) => notifyFromSyncReport(notifier, report),
   };
 
+  let archiveTimer: NodeJS.Timeout | undefined;
   const stop = async (): Promise<void> => {
+    clearInterval(archiveTimer);
     sessions.stopTimer();
     await relay.stop();
     projects.stopAuto();
@@ -152,6 +158,11 @@ export async function createContext(
     projects.startAuto();
     void projects.refreshAll();
     sessions.startTimer();
+    const archive = (): void => {
+      sessions.autoArchive(store.state.workspace?.archiveAfterDays ?? 7);
+    };
+    archive();
+    archiveTimer = setInterval(archive, 3_600_000);
   };
 
   return {
@@ -164,6 +175,7 @@ export async function createContext(
     notifier,
     providers,
     sessions,
+    runs,
     hooks,
     relay,
     projects,

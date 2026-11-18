@@ -345,3 +345,21 @@ export const HookStatus = z.object({
   notify: z.string().optional(),
 });
 export type HookStatus = z.infer<typeof HookStatus>;
+
+export const CaptureItem = z.object({ text: z.string(), kind: z.enum(["waiting", "todo"]) });
+export type CaptureItem = z.infer<typeof CaptureItem>;
+
+export const CaptureResult = z.object({
+  /** False for tools that cannot be resumed headless (Codex): the dialog opens empty. */
+  supported: z.boolean(),
+  items: z.array(CaptureItem),
+  runId: z.string().nullable(),
+  error: z.string().optional(),
+});
+export type CaptureResult = z.infer<typeof CaptureResult>;
+
+export const CaptureCommit = z.object({
+  id: z.string(),
+  items: z.array(z.object({ text: z.string(), dest: z.enum(["waiting", "todo", "drop"]) })),
+});
+export type CaptureCommit = z.infer<typeof CaptureCommit>;

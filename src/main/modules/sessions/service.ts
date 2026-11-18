@@ -301,6 +301,15 @@ export class SessionService {
     this.pty.kill(id);
   }
 
+  /** Ends the terminal and waits until its process is really gone (up to `timeoutMs`). */
+  async stop(id: string, timeoutMs = 8000): Promise<void> {
+    this.kill(id);
+    const end = Date.now() + timeoutMs;
+    while (this.pty.isRunning(id) && Date.now() < end) {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    }
+  }
+
   rename(id: string, title: string): void {
     this.deps.db
       .prepare("UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?")
@@ -481,6 +490,19 @@ export class SessionService {
     const status = statusForCodexEvent(typeof payload["type"] === "string" ? payload["type"] : "");
     if (status) this.setStatus(match.id, status);
     return true;
+  }
+
+  /** Archives finished sessions whose leftovers were captured and that have been quiet for `days` days. */
+  autoArchive(days: number): number {
+    const cutoff = new Date(Date.now() - days * 86_400_000).toISOString();
+    const rows = this.deps.db
+      .prepare(
+        `SELECT id FROM sessions WHERE archived_at IS NULL AND captured_at IS NOT NULL AND updated_at < ?
+         AND status IN ('idle','exited','failed')`,
+      )
+      .all(cutoff) as Array<{ id: string }>;
+    for (const row of rows) this.archive(row.id);
+    return rows.length;
   }
 
   shutdown(): void {

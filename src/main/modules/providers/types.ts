@@ -50,6 +50,8 @@ export interface Detection {
 export interface Provider {
   id: string;
   label: string;
+  /** True when `headless` can resume an interactive session by id (end-of-session capture needs it). */
+  readonly canResumeHeadless: boolean;
   detect(): Promise<Detection>;
   /** Opens the tool's own login in a terminal tab. */
   login(): Promise<void>;

@@ -1,6 +1,7 @@
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
+import { captureSession } from "./modules/sessions/capture";
 import { getLayout, setLayout } from "./modules/sessions/layouts";
 import { userHome } from "./core/paths";
 import { noteAndProjectItems, readNote } from "./modules/notes/notes";
@@ -95,6 +96,26 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("hooks.status", () => ctx.hooks.status());
   ctx.ipc.handle("hooks.preview", (req) => ctx.hooks.preview(req.target, req.action));
   ctx.ipc.handle("hooks.apply", (req) => ctx.hooks.apply(req.target, req.action));
+  ctx.ipc.handle("capture.run", (req) => captureSession(ctx, req.id));
+  ctx.ipc.handle("capture.commit", async (req) => {
+    const session = ctx.sessions.get(req.id);
+    const kept = req.items.filter((i) => i.dest !== "drop" && i.text.trim());
+    if (kept.length > 0 && !session.projectId) {
+      throw new IpcFailure(
+        "no-project",
+        "This session is not tied to a project, so there is nowhere to save items",
+      );
+    }
+    const source = `from the ${session.title ?? session.provider} session`;
+    for (const item of kept) {
+      if (!session.projectId) break;
+      if (item.dest === "waiting") await ctx.ops.addWaiting(session.projectId, item.text, source);
+      else await ctx.ops.addTodo(session.projectId, item.text, source);
+    }
+    ctx.sessions.markCaptured(req.id);
+    ctx.sessions.archive(req.id);
+    return { saved: kept.length };
+  });
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

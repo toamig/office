@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  CaptureCommit,
+  CaptureResult,
   HealthView,
   HookStatus,
   Inventory,
@@ -145,6 +147,8 @@ export const channels = {
     }),
     res: z.object({ backup: z.string().nullable() }),
   },
+  "capture.run": { req: z.object({ id: z.string() }), res: CaptureResult },
+  "capture.commit": { req: CaptureCommit, res: z.object({ saved: z.number() }) },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),
