@@ -8,7 +8,7 @@ import { writeTextFile } from "../../core/settings";
 import { git } from "../git/run";
 import type { RunService } from "../runs/service";
 import type { SessionService } from "../sessions/service";
-import type { VaultWriter } from "../vault/writer";
+import { updateFromUpstream, type VaultWriter } from "../vault/writer";
 import {
   addHubRow,
   addIgnoreLine,
@@ -75,6 +75,14 @@ function resolveInput(deps: SpawnDeps, input: SpawnInput): Resolved {
     );
   }
   const vaultFolder = folderName(input.name);
+  // Checked here, before anything is created, so a taken name never leaves an orphan GitHub repo behind.
+  const vaultDir = join(deps.workspaceRoot(), vaultFolder);
+  if (ws.vault.kind === "brain-hub" && existsSync(vaultDir) && readdirSync(vaultDir).length > 0) {
+    throw new IpcFailure(
+      "vault-folder-exists",
+      `The brain already has a folder called ${vaultFolder}. Pick another name.`,
+    );
+  }
   return {
     input,
     slug,
@@ -250,9 +258,40 @@ async function editHubFile(c: Ctx, name: string, edit: (text: string) => string)
   writeTextFile(file, edit(readFileSync(file, "utf8")));
 }
 
-async function stepHub(c: Ctx): Promise<string> {
-  const { r } = c;
+const HUB_FILES = [".gitignore", "brain.repos.json", "_index.md"];
+
+/** Registers the project in the hub, on the writer's queue so it never overlaps a vault write. */
+function stepHub(c: Ctx): Promise<string> {
+  return c.deps.writer.exclusive(() => registerInHub(c));
+}
+
+async function registerInHub(c: Ctx): Promise<string> {
   const root = c.deps.workspaceRoot();
+  // The three hub files must be clean, and the hub up to date, before they are edited.
+  const dirty = await git(root, ["status", "--porcelain", "--", ...HUB_FILES]);
+  if (dirty.stdout.trim() !== "")
+    throw new Error(
+      `${HUB_FILES.join(", ")} have changes that are not committed in the hub; commit or discard them first`,
+    );
+  if ((await git(root, ["rev-parse", "--abbrev-ref", "@{u}"])).code === 0) {
+    const problem = await updateFromUpstream(root);
+    if (problem) throw new Error(problem.message);
+  }
+  let committed = false;
+  try {
+    const result = await editAndCommitHub(c, root, () => {
+      committed = true;
+    });
+    return result;
+  } catch (err) {
+    // Until the hub commit exists, put the hub files back, so a failed registration leaves nothing edited.
+    if (!committed) await git(root, ["checkout", "--", ...HUB_FILES]);
+    throw err;
+  }
+}
+
+async function editAndCommitHub(c: Ctx, root: string, onCommitted: () => void): Promise<string> {
+  const { r } = c;
   await editHubFile(c, ".gitignore", (t) => addIgnoreLine(t, r.vaultFolder));
   await editHubFile(c, "brain.repos.json", (t) =>
     addRepoEntry(t, r.vaultFolder, `brain-${r.slug}`),
@@ -287,26 +326,34 @@ async function stepHub(c: Ctx): Promise<string> {
   const brainDir = join(root, r.vaultFolder);
   await git(brainDir, ["add", "-A"]);
   const staged = await git(brainDir, ["diff", "--cached", "--quiet"]);
+  const notPushed: string[] = [];
   if (staged.code !== 0) {
     await must(
       "git commit",
       git(brainDir, ["commit", "-q", "-m", `${r.input.name}: router and front page`]),
     );
-    await git(brainDir, ["push", "-q"], { timeoutMs: 120_000 });
+    const push = await git(brainDir, ["push", "-q"], { timeoutMs: 120_000 });
+    if (push.code !== 0) notPushed.push(`${r.vaultFolder} (${firstLineOf(push.stderr)})`);
   }
   // The hub gets only the three files this step changed.
-  const files = [".gitignore", "brain.repos.json", "_index.md"];
-  await must("git add", git(root, ["add", "--", ...files]));
-  const hubStaged = await git(root, ["diff", "--cached", "--quiet", "--", ...files]);
+  await must("git add", git(root, ["add", "--", ...HUB_FILES]));
+  const hubStaged = await git(root, ["diff", "--cached", "--quiet", "--", ...HUB_FILES]);
   if (hubStaged.code !== 0) {
     await must(
       "git commit",
-      git(root, ["commit", "-q", "-m", `Add ${r.input.name} to the hub`, "--", ...files]),
+      git(root, ["commit", "-q", "-m", `Add ${r.input.name} to the hub`, "--", ...HUB_FILES]),
     );
-    await git(root, ["push", "-q"], { timeoutMs: 120_000 });
+    onCommitted();
+    const push = await git(root, ["push", "-q"], { timeoutMs: 120_000 });
+    if (push.code !== 0) notPushed.push(`the hub (${firstLineOf(push.stderr)})`);
   }
-  return "registered";
+  // A push that failed keeps its commit; the next sync retries it, so this is reported, not fatal.
+  return notPushed.length > 0
+    ? `registered, but not pushed: ${notPushed.join("; ")}. The next sync retries.`
+    : "registered";
 }
+
+const firstLineOf = (text: string): string => text.trim().split(/\r?\n/)[0] ?? "";
 
 export const SUMMARY_PROMPT =
   "SUMMARY_OF_EXPLORATION. Summarise this exploration for the project's notes. Write two parts. Part 1, headed `## Positioning and vision`: what the project is, who it is for and why it is worth doing. Part 2, headed `## Open items`: a bullet list of the next steps and open questions.";

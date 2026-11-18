@@ -306,6 +306,84 @@ describe("make this a project", () => {
     await h.store.close();
   });
 
+  it("refuses a name whose brain folder exists before any GitHub repo is created", async () => {
+    const h = harness();
+    await h.store.open(h.world.hub, h.world.workspaceConfigPath);
+    await expect(h.explore.spawn(input({ name: "Common" }))).rejects.toThrow(
+      /already has a folder called Common/,
+    );
+    expect(existsSync(join(h.ghRemotes, "common.git"))).toBe(false);
+    expect(existsSync(join(h.ghRemotes, "gh.log"))).toBe(false);
+    expect(existsSync(join(h.world.projectsRoot, "Common"))).toBe(false);
+    await h.store.close();
+  });
+
+  it("leaves the hub files as they were when the registration fails", async () => {
+    const h = harness();
+    await h.store.open(h.world.hub, h.world.workspaceConfigPath);
+    writeFileSync(join(h.world.hub, "FAIL_VALIDATE"), "");
+    const before = ["_index.md", ".gitignore", "brain.repos.json"].map((f) =>
+      readFileSync(join(h.world.hub, f), "utf8"),
+    );
+    const report = await h.explore.spawn(input());
+    expect(report.failedAt).toBe("hub");
+    expect(report.steps[3]?.result).toContain("brain validate failed");
+    expect(
+      ["_index.md", ".gitignore", "brain.repos.json"].map((f) =>
+        readFileSync(join(h.world.hub, f), "utf8"),
+      ),
+    ).toEqual(before);
+    expect(
+      sh(h.world.hub, "status", "--porcelain", "--", "_index.md", "brain.repos.json").trim(),
+    ).toBe("");
+    await h.store.close();
+  });
+
+  it("refuses to register when a hub file has changes that are not committed", async () => {
+    const h = harness();
+    await h.store.open(h.world.hub, h.world.workspaceConfigPath);
+    const index = join(h.world.hub, "_index.md");
+    const mine = `${readFileSync(index, "utf8")}\nmy own note\n`;
+    writeFileSync(index, mine);
+    const report = await h.explore.spawn(input());
+    expect(report.failedAt).toBe("hub");
+    expect(report.steps[3]?.result).toContain("not committed");
+    expect(readFileSync(index, "utf8")).toBe(mine);
+    await h.store.close();
+  });
+
+  it("pulls the hub first, so another machine's change is kept and the push works", async () => {
+    const h = harness();
+    await h.store.open(h.world.hub, h.world.workspaceConfigPath);
+    const other = join(h.world.root, "hub-other");
+    sh(h.world.root, "clone", "-q", h.world.remotes["."] as string, other);
+    writeFileSync(join(other, "Other.md"), "from another machine\n");
+    sh(other, "add", "Other.md");
+    sh(other, "commit", "-q", "-m", "other machine");
+    sh(other, "push", "-q");
+    const report = await h.explore.spawn(input());
+    expect(report.ok).toBe(true);
+    expect(readFileSync(join(h.world.hub, "Other.md"), "utf8")).toBe("from another machine\n");
+    expect(report.steps[3]?.result).toBe("registered");
+    expect(sh(h.world.remotes["."] as string, "log", "-1", "--format=%s").trim()).toBe(
+      "Add Sheep Dream to the hub",
+    );
+    h.sessions.shutdown();
+    await h.store.close();
+  });
+
+  it("reports a failed hub push instead of ignoring it", async () => {
+    const h = harness();
+    await h.store.open(h.world.hub, h.world.workspaceConfigPath);
+    sh(h.world.hub, "remote", "set-url", "--push", "origin", join(h.world.root, "nowhere.git"));
+    const report = await h.explore.spawn(input());
+    expect(report.ok).toBe(true);
+    expect(report.steps[3]?.result).toMatch(/not pushed: the hub/);
+    expect(sh(h.world.hub, "log", "-1", "--format=%s").trim()).toBe("Add Sheep Dream to the hub");
+    h.sessions.shutdown();
+    await h.store.close();
+  });
+
   it("refuses an existing project id, a non-empty folder and an empty name", async () => {
     const h = harness();
     await h.store.open(h.world.hub, h.world.workspaceConfigPath);

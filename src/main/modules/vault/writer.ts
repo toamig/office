@@ -31,6 +31,34 @@ export interface VaultWriterDeps {
 const firstLine = (text: string): string => text.trim().split(/\r?\n/)[0] ?? "";
 
 /**
+ * `git pull --rebase --autostash` for a repo that is about to be written. Git exits 0 when putting the
+ * stash back conflicts, so unmerged files are checked too; in that case the tree is cleaned and the
+ * stash entry (which git keeps) holds the owner's changes. Returns null when all is well.
+ */
+export async function updateFromUpstream(
+  repo: string,
+): Promise<{ code: "pull-failed" | "conflict"; message: string } | null> {
+  const pull = await git(repo, ["pull", "--rebase", "--autostash", "--quiet"], {
+    timeoutMs: 60_000,
+  });
+  if (pull.code !== 0) {
+    if (await operationInProgress(repo)) await git(repo, ["rebase", "--abort"]);
+    return {
+      code: "pull-failed",
+      message: `Could not update ${basename(repo)} before writing: ${firstLine(pull.stderr)}`,
+    };
+  }
+  const unmerged = await git(repo, ["diff", "--name-only", "--diff-filter=U"]);
+  if (unmerged.stdout.trim() === "") return null;
+  const files = unmerged.stdout.trim().split(/\r?\n/).join(", ");
+  await git(repo, ["reset", "--hard", "HEAD"]);
+  return {
+    code: "conflict",
+    message: `Could not write: your uncommitted changes in ${basename(repo)} conflict with the update (${files}). They are kept in "git stash"; nothing was written`,
+  };
+}
+
+/**
  * Every vault write: pull --rebase --autostash, edit the one file, commit only that file, push.
  * A failed pull aborts the write; a failed push keeps the commit and raises a warning.
  */
@@ -54,6 +82,13 @@ export class VaultWriter {
     initial?: () => string,
   ): Promise<WriteResult> {
     const next = this.chain.then(() => this.doEdit(file, message, transform, initial));
+    this.chain = next.catch(() => undefined);
+    return next;
+  }
+
+  /** Runs other work on the same queue, so it never overlaps a write (for example registering a project in the hub). */
+  exclusive<T>(work: () => Promise<T>): Promise<T> {
+    const next = this.chain.then(work);
     this.chain = next.catch(() => undefined);
     return next;
   }
@@ -112,24 +147,10 @@ export class VaultWriter {
 
     const hasUpstream = (await git(repo, ["rev-parse", "--abbrev-ref", "@{u}"])).code === 0;
     if (hasUpstream) {
-      const pull = await git(repo, ["pull", "--rebase", "--autostash", "--quiet"], {
-        timeoutMs: 60_000,
-      });
-      if (pull.code !== 0) {
-        if (await operationInProgress(repo)) await git(repo, ["rebase", "--abort"]);
-        const why = `Could not update ${basename(repo)} before writing: ${firstLine(pull.stderr)}`;
-        this.deps.onWarning({ kind: "write-failed", message: why });
-        throw new VaultWriteError("pull-failed", why);
-      }
-      // `pull --autostash` exits 0 even when putting the stash back conflicts; check for unmerged files.
-      const unmerged = await git(repo, ["diff", "--name-only", "--diff-filter=U"]);
-      if (unmerged.stdout.trim() !== "") {
-        const files = unmerged.stdout.trim().split(/\r?\n/).join(", ");
-        // Git keeps the stash entry when it conflicts, so the owner's changes are not lost.
-        await git(repo, ["reset", "--hard", "HEAD"]);
-        const why = `Could not write: your uncommitted changes in ${basename(repo)} conflict with the update (${files}). They are kept in "git stash"; nothing was written`;
-        this.deps.onWarning({ kind: "write-failed", message: why });
-        throw new VaultWriteError("conflict", why);
+      const problem = await updateFromUpstream(repo);
+      if (problem) {
+        this.deps.onWarning({ kind: "write-failed", message: problem.message });
+        throw new VaultWriteError(problem.code, problem.message);
       }
     }
 
