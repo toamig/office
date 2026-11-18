@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -494,6 +494,82 @@ describe("fan-out", () => {
     expect(first.length).toBe(2);
     await expect(h.engine.keep(t.id, 9)).rejects.toThrow(/not available/);
     h.engine.cancel(t.id);
+  });
+});
+
+describe("fan-out failures", () => {
+  /** Runs a two-builder task up to the choice. */
+  async function toChoice(h: Harness, title: string, beforeBuild?: (id: string) => void) {
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "feature",
+      title,
+      description: "x",
+      fanout: 2,
+    });
+    await waitFor(h.engine, t.id, "waiting-gate");
+    beforeBuild?.(t.id);
+    h.engine.approve(t.id);
+    await until(
+      () => h.engine.list().find((x) => x.id === t.id)?.stages[1]?.status === "waiting-gate",
+    );
+    return t.id;
+  }
+  const slugOf = (name: string): string =>
+    name
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "");
+
+  it("records a builder whose worktree cannot be made as failed, and the others still run", async () => {
+    const h = harness();
+    const alpha = h.world.code["alpha"]?.work as string;
+    const id = await toChoice(h, "Half broken", (taskId) => {
+      const slug = slugOf(`Half broken ${taskId.slice(0, 4)} v2`);
+      mkdirSync(join(alpha, ".office", "worktrees", slug), { recursive: true });
+    });
+    const detail = await h.engine.get(id);
+    expect(detail.variants.map((v) => [v.n, v.status])).toEqual([
+      [1, "done"],
+      [2, "failed"],
+    ]);
+    expect(detail.variants[1]?.error).toMatch(/already exists/);
+    await h.engine.keep(id, 1);
+    await waitFor(h.engine, id, "waiting-gate");
+  });
+
+  it("reports builders that could not be removed instead of calling them discarded", async () => {
+    const h = harness();
+    const alpha = h.world.code["alpha"]?.work as string;
+    const id = await toChoice(h, "Stuck builder");
+    const before = await h.engine.get(id);
+    // A locked worktree refuses to be removed.
+    sh(alpha, "worktree", "lock", before.variants[0]?.worktree as string);
+    await h.engine.keep(id, 2);
+    const after = await h.engine.get(id);
+    expect(after.variants.map((v) => v.status)).toEqual(["done", "kept"]);
+    const note = h.notifier.list().find((n) => n.title.includes("some builders were not removed"));
+    expect(note?.body).toContain("builder 1");
+  });
+
+  it("tells a merge conflict from another merge failure", async () => {
+    const h = harness();
+    const id = await toChoice(h, "Merge trouble");
+    const detail = await h.engine.get(id);
+    const built = detail.variants[1]?.files[0] as string;
+    const taskWorktree = detail.worktree as string;
+
+    // Not a conflict: an untracked file in the way makes git refuse the merge.
+    writeFileSync(join(taskWorktree, built), "in the way\n");
+    await expect(h.engine.keep(id, 2)).rejects.toThrow(/could not be merged/);
+    expect((await h.engine.get(id)).variants.map((v) => v.status)).toEqual(["done", "done"]);
+
+    // A real conflict: the same file was committed differently on the task branch.
+    sh(taskWorktree, "add", "--", built);
+    sh(taskWorktree, "commit", "-q", "-m", "task branch wrote it first");
+    await expect(h.engine.keep(id, 2)).rejects.toThrow(/conflicts with the task branch/);
+    expect(sh(taskWorktree, "status", "--porcelain").trim()).toBe("");
+    expect((await h.engine.get(id)).variants.map((v) => v.status)).toEqual(["done", "done"]);
   });
 });
 

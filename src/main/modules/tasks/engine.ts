@@ -301,7 +301,16 @@ export class TaskEngine {
     this.setTask(id, { status: "running" });
     const repo = this.deps.projectPath(t.project_id);
     void (async () => {
-      if (repo && this.fanout.awaitingChoice(id)) await this.fanout.discardAll(id, repo);
+      const left =
+        repo && this.fanout.awaitingChoice(id) ? await this.fanout.discardAll(id, repo) : [];
+      if (left.length > 0) {
+        this.fail(
+          this.task(id),
+          t.stage_index,
+          `Could not remove the earlier builders: ${left.join("; ")}`,
+        );
+        return;
+      }
       await this.drive(id, comment.trim());
     })();
   }
@@ -345,7 +354,16 @@ export class TaskEngine {
     if (t.status !== "waiting-gate" || !this.fanout.awaitingChoice(id) || !repo || !t.worktree) {
       throw new IpcFailure("not-waiting", "This task has no builder results waiting for a choice");
     }
-    await this.fanout.keep(id, variant, { repo, taskWorktree: t.worktree });
+    const left = await this.fanout.keep(id, variant, { repo, taskWorktree: t.worktree });
+    if (left.length > 0) {
+      this.deps.notifier.notify({
+        kind: "agent.failed",
+        projectId: t.project_id,
+        title: `Builder kept, but some builders were not removed: ${t.title}`,
+        body: left.join("; "),
+        link: { view: "board" },
+      });
+    }
     this.setStage(id, t.stage_index, { status: "approved", approved_at: nowIso() });
     this.setTask(id, { stage_index: t.stage_index + 1, status: "running" });
     void this.drive(id);
@@ -442,7 +460,11 @@ export class TaskEngine {
     idx: number,
     o: { current: TaskRow; repo: string; role: Role; prompt: string; outputPath: string },
   ): Promise<"continue" | "stop"> {
-    if (this.fanout.rows(t.id).length > 0) await this.fanout.discardAll(t.id, o.repo);
+    if (this.fanout.rows(t.id).length > 0) {
+      const left = await this.fanout.discardAll(t.id, o.repo);
+      if (left.length > 0)
+        return this.fail(t, idx, `Could not remove the earlier builders: ${left.join("; ")}`);
+    }
     this.deps.db.prepare("DELETE FROM task_variants WHERE task_id = ?").run(t.id);
     const succeeded = await this.fanout.run({
       taskId: t.id,

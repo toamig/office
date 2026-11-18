@@ -81,7 +81,19 @@ export class FanOut {
     );
     const pending: Array<Promise<boolean>> = [];
     for (let n = 1; n <= o.count; n++) {
-      const made = await createWorktree(o.repo, `${o.slug} v${n}`, o.taskBranch);
+      let made: { path: string; branch: string };
+      try {
+        made = await createWorktree(o.repo, `${o.slug} v${n}`, o.taskBranch);
+      } catch (err) {
+        // The builders already started keep running; this one is recorded as failed, with the reason.
+        this.deps.db
+          .prepare(
+            "INSERT INTO task_variants (task_id, stage_idx, n, branch, worktree, run_id, status, error) VALUES (?, ?, ?, '', '', NULL, 'failed', ?)",
+          )
+          .run(o.taskId, o.stageIdx, n, (err as Error).message);
+        this.deps.changed(o.taskId);
+        continue;
+      }
       const prompt = `${o.prompt}\n\nYou are builder ${n} of ${o.count}, working in parallel with the others. Work only in this folder and commit your work here.`;
       const handle = this.deps.runs.start({
         kind: "stage",
@@ -117,21 +129,40 @@ export class FanOut {
     for (const h of this.handles.get(taskId) ?? []) h.run.cancel();
   }
 
-  /** Removes every variant worktree and branch of a task (used before a re-run and after a choice). */
-  async discardAll(taskId: string, repo: string, except?: number): Promise<void> {
+  /**
+   * Removes every variant worktree and branch of a task (used before a re-run and after a choice).
+   * Returns what could not be removed; those builders keep their status so a later call tries again.
+   */
+  async discardAll(taskId: string, repo: string, except?: number): Promise<string[]> {
+    const problems: string[] = [];
     for (const v of this.rows(taskId)) {
       if (v.status === "discarded" || v.n === except) continue;
-      await git(repo, ["worktree", "remove", "--force", v.worktree]);
-      await git(repo, ["branch", "-D", v.branch]);
+      if (v.worktree) {
+        const removed = await git(repo, ["worktree", "remove", "--force", v.worktree]);
+        if (removed.code !== 0) {
+          problems.push(`builder ${v.n} worktree: ${firstLine(removed.stderr)}`);
+          continue;
+        }
+        const branch = await git(repo, ["branch", "-D", v.branch]);
+        if (branch.code !== 0) {
+          problems.push(`builder ${v.n} branch ${v.branch}: ${firstLine(branch.stderr)}`);
+          continue;
+        }
+      }
       this.setStatus(taskId, v.stage_idx, v.n, "discarded");
     }
+    return problems;
   }
 
   /**
    * Keeps one builder: its leftover changes are committed, its branch is merged into the task branch
    * (a conflict aborts the merge and nothing changes), and all the other worktrees are removed.
    */
-  async keep(taskId: string, n: number, o: { repo: string; taskWorktree: string }): Promise<void> {
+  async keep(
+    taskId: string,
+    n: number,
+    o: { repo: string; taskWorktree: string },
+  ): Promise<string[]> {
     const chosen = this.rows(taskId).find(
       (r) => r.n === n && (r.status === "done" || r.status === "failed"),
     );
@@ -152,16 +183,27 @@ export class FanOut {
       chosen.branch,
     ]);
     if (merge.code !== 0) {
+      const unmerged = await git(o.taskWorktree, ["diff", "--name-only", "--diff-filter=U"]);
       await git(o.taskWorktree, ["merge", "--abort"]);
+      const why = firstLine(merge.stdout || merge.stderr);
+      if (unmerged.stdout.trim() !== "") {
+        throw new IpcFailure(
+          "merge-conflict",
+          `${chosen.branch} conflicts with the task branch; nothing was merged. ${why}`,
+        );
+      }
       throw new IpcFailure(
-        "merge-conflict",
-        `${chosen.branch} conflicts with the task branch; nothing was merged. ${firstLine(merge.stdout || merge.stderr)}`,
+        "merge-failed",
+        `${chosen.branch} could not be merged into the task branch; nothing was merged. ${why}`,
       );
     }
-    await this.discardAll(taskId, o.repo, n);
-    await git(o.repo, ["worktree", "remove", "--force", chosen.worktree]);
-    await git(o.repo, ["branch", "-D", chosen.branch]);
+    const problems = await this.discardAll(taskId, o.repo, n);
+    const worktree = await git(o.repo, ["worktree", "remove", "--force", chosen.worktree]);
+    if (worktree.code !== 0)
+      problems.push(`kept builder's worktree: ${firstLine(worktree.stderr)}`);
+    else await git(o.repo, ["branch", "-D", chosen.branch]);
     this.setStatus(taskId, chosen.stage_idx, n, "kept");
+    return problems;
   }
 
   /** The builders of a task with their check results against the task branch. */
