@@ -543,3 +543,54 @@ export const GithubOverview = z.object({
   error: z.string().optional(),
 });
 export type GithubOverview = z.infer<typeof GithubOverview>;
+
+export const TaskStageView = z.object({
+  idx: z.number(),
+  stageId: z.string(),
+  role: z.string(),
+  provider: z.string().nullable(),
+  gate: z.boolean(),
+  worktree: z.boolean(),
+  status: z.enum(["pending", "running", "waiting-gate", "approved", "done", "failed"]),
+  runId: z.string().nullable(),
+  outputPath: z.string().nullable(),
+  approvedAt: z.string().nullable(),
+  startedAt: z.string().nullable(),
+  error: z.string().nullable(),
+});
+export type TaskStageView = z.infer<typeof TaskStageView>;
+
+export const TaskStatus = z.enum(["running", "waiting-gate", "done", "failed", "cancelled"]);
+export type TaskStatus = z.infer<typeof TaskStatus>;
+
+export const TaskView = z.object({
+  id: z.string(),
+  projectId: z.string(),
+  projectName: z.string(),
+  pipeline: z.string(),
+  pipelineName: z.string(),
+  title: z.string(),
+  description: z.string(),
+  branch: z.string().nullable(),
+  worktree: z.string().nullable(),
+  stageIndex: z.number(),
+  status: TaskStatus,
+  createdAt: z.string(),
+  updatedAt: z.string(),
+  stages: z.array(TaskStageView),
+});
+export type TaskView = z.infer<typeof TaskView>;
+
+export const TaskDetail = TaskView.extend({
+  /** Stage outputs by stage id, as text (plans, reviews). */
+  outputs: z.record(z.string(), z.string()),
+});
+export type TaskDetail = z.infer<typeof TaskDetail>;
+
+export const CreateTask = z.object({
+  projectId: z.string(),
+  pipeline: z.string(),
+  title: z.string().min(1),
+  description: z.string().default(""),
+});
+export type CreateTask = z.infer<typeof CreateTask>;

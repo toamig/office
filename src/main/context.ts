@@ -15,6 +15,7 @@ import {
   exploreDir,
   runsDir,
   sessionsDir,
+  tasksDir,
   userHome,
 } from "./core/paths";
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
@@ -24,6 +25,7 @@ import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
+import { TaskEngine } from "./modules/tasks/engine";
 import { WorkspaceEditor } from "./modules/tasks/editor";
 import { HooksManager } from "./modules/setup/install-hooks";
 import { BriefService } from "./modules/brief/brief";
@@ -52,6 +54,7 @@ export interface AppContext {
   brief: BriefService;
   hooks: HooksManager;
   editor: WorkspaceEditor;
+  tasks: TaskEngine;
   relay: RelayServer;
   projects: ProjectService;
   github: GithubService;
@@ -168,6 +171,19 @@ export async function createContext(
     workspaceFile: () => store.filePath,
     reload: () => void store.reload(),
   });
+  const tasks = new TaskEngine({
+    db,
+    bus,
+    runs,
+    notifier,
+    workspace: () => store.state.workspace,
+    projectPath: (id) => {
+      const project = projects.find(id);
+      return project ? projects.absPath(project) : undefined;
+    },
+    resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
+    tasksDir: tasksDir(),
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -234,6 +250,7 @@ export async function createContext(
     brief,
     hooks,
     editor,
+    tasks,
     relay,
     projects,
     github,

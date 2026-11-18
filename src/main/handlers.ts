@@ -268,6 +268,13 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("roles.setOverride", (req) =>
     ctx.editor.setOverride(req.projectId, req.role, req.target),
   );
+  ctx.ipc.handle("tasks.list", (req) => ctx.tasks.list(req.projectId));
+  ctx.ipc.handle("tasks.get", (req) => ctx.tasks.get(req.id));
+  ctx.ipc.handle("tasks.create", (req) => ctx.tasks.create(req));
+  ctx.ipc.handle("tasks.approve", (req) => ctx.tasks.approve(req.id));
+  ctx.ipc.handle("tasks.reject", (req) => ctx.tasks.reject(req.id, req.comment));
+  ctx.ipc.handle("tasks.cancel", (req) => ctx.tasks.cancel(req.id));
+  ctx.ipc.handle("tasks.retry", (req) => ctx.tasks.retry(req.id));
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({
