@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   AskResult,
+  BranchCompare,
+  BranchList,
   AuditEntry,
   BriefView,
   CaptureCommit,
@@ -173,6 +175,31 @@ export const channels = {
   "explore.list": { req: z.void(), res: z.array(SessionRow) },
   "explore.plan": { req: SpawnInput, res: z.array(SpawnStep) },
   "explore.spawn": { req: SpawnInput, res: SpawnReport },
+  "branches.list": { req: z.object({ projectId: z.string() }), res: BranchList },
+  "branches.switch": {
+    req: z.object({
+      projectId: z.string(),
+      name: z.string(),
+      stash: z.boolean().optional(),
+      remote: z.boolean().optional(),
+    }),
+    res: z.object({ stashed: z.boolean() }),
+  },
+  "branches.create": {
+    req: z.object({
+      projectId: z.string(),
+      name: z.string(),
+      from: z.string().optional(),
+      switchTo: z.boolean().optional(),
+    }),
+    res: z.void(),
+  },
+  "branches.compare": {
+    req: z.object({ projectId: z.string(), a: z.string(), b: z.string() }),
+    res: BranchCompare,
+  },
+  "branches.delete": { req: z.object({ projectId: z.string(), name: z.string() }), res: z.void() },
+  "branches.cleanMerged": { req: z.object({ projectId: z.string() }), res: z.array(z.string()) },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

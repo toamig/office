@@ -1,6 +1,14 @@
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
+import {
+  cleanMergedBranches,
+  compareBranches,
+  createBranch,
+  deleteBranch,
+  listBranches,
+  switchBranch,
+} from "./modules/git/branches";
 import { readVaultFile } from "./modules/ask/ask";
 import { readAudit } from "./modules/vault/audit";
 import { captureSession } from "./modules/sessions/capture";
@@ -129,6 +137,38 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("explore.list", () => ctx.explore.list());
   ctx.ipc.handle("explore.plan", (req) => ctx.explore.plan(req));
   ctx.ipc.handle("explore.spawn", (req) => ctx.explore.spawn(req));
+  const repoOf = (projectId: string): string => {
+    const project = ctx.projects.find(projectId);
+    if (!project) throw new IpcFailure("not-found", `No project with id ${projectId}`);
+    return ctx.projects.absPath(project);
+  };
+  const changed = (projectId: string): void => void ctx.projects.refresh(projectId);
+  ctx.ipc.handle("branches.list", (req) => listBranches(repoOf(req.projectId)));
+  ctx.ipc.handle("branches.switch", async (req) => {
+    const result = await switchBranch(repoOf(req.projectId), req.name, {
+      ...(req.stash ? { stash: true } : {}),
+      ...(req.remote ? { remote: true } : {}),
+    });
+    changed(req.projectId);
+    return result;
+  });
+  ctx.ipc.handle("branches.create", async (req) => {
+    await createBranch(repoOf(req.projectId), req.name, {
+      ...(req.from ? { from: req.from } : {}),
+      ...(req.switchTo ? { switchTo: true } : {}),
+    });
+    changed(req.projectId);
+  });
+  ctx.ipc.handle("branches.compare", (req) => compareBranches(repoOf(req.projectId), req.a, req.b));
+  ctx.ipc.handle("branches.delete", async (req) => {
+    await deleteBranch(repoOf(req.projectId), req.name);
+    changed(req.projectId);
+  });
+  ctx.ipc.handle("branches.cleanMerged", async (req) => {
+    const removed = await cleanMergedBranches(repoOf(req.projectId));
+    changed(req.projectId);
+    return removed;
+  });
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

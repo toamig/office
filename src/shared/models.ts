@@ -432,3 +432,36 @@ export const SpawnReport = z.object({
   sessionId: z.string().optional(),
 });
 export type SpawnReport = z.infer<typeof SpawnReport>;
+
+export const BranchInfo = z.object({
+  name: z.string(),
+  current: z.boolean(),
+  upstream: z.string().nullable(),
+  ahead: z.number(),
+  behind: z.number(),
+  gone: z.boolean(),
+  lastCommit: z.string().nullable(),
+  subject: z.string(),
+  hash: z.string(),
+  remote: z.boolean(),
+  /** Merged into the default branch (local branches only). */
+  merged: z.boolean(),
+});
+export type BranchInfo = z.infer<typeof BranchInfo>;
+
+export const BranchList = z.object({
+  current: z.string().nullable(),
+  defaultBranch: z.string().nullable(),
+  local: z.array(BranchInfo),
+  remote: z.array(BranchInfo),
+});
+export type BranchList = z.infer<typeof BranchList>;
+
+export const BranchCompare = z.object({
+  a: z.string(),
+  b: z.string(),
+  onlyInA: z.array(z.string()),
+  onlyInB: z.array(z.string()),
+  stat: z.string(),
+});
+export type BranchCompare = z.infer<typeof BranchCompare>;
