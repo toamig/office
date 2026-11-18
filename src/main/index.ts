@@ -32,6 +32,7 @@ import { registerHandlers } from "./handlers";
 import { PreviewPane } from "./preview";
 import { autoUpdater } from "electron-updater";
 import { UpdateService, type UpdaterLike } from "./core/update";
+import { createElectronPlatform } from "./electron-platform";
 import { registerShellHandlers } from "./shell-handlers";
 
 const CSP =
@@ -254,7 +255,7 @@ async function boot(): Promise<void> {
       : "Updates are off in development runs",
     onChange: (status) => context.bus.emit("app.update", status),
   });
-  registerShellHandlers(context, preview, updates);
+  registerShellHandlers(context, createElectronPlatform(context, preview, updates));
   ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
     context.ipc.dispatch(channel, payload),
   );

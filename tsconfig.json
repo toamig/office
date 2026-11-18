@@ -20,5 +20,5 @@
       "@shared/*": ["./src/shared/*"]
     }
   },
-  "include": ["src", "tests", "scripts", "electron.vite.config.ts", "playwright.config.ts", "vitest.config.mts", "eslint.config.mjs"]
+  "include": ["src", "tests", "scripts", "electron.vite.config.ts", "vite.web.config.ts", "vite.host.config.ts", "playwright.config.ts", "playwright.web.config.ts", "vitest.config.mts", "eslint.config.mjs"]
 }

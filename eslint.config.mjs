@@ -8,6 +8,7 @@ export default tseslint.config(
   {
     ignores: [
       "out/**",
+      "out-web/**",
       "release/**",
       "node_modules/**",
       ".dev/**",

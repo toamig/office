@@ -470,7 +470,7 @@ export async function createContext(
     bus,
     ipc: new IpcRegistry(checkResponses, (channel, ms) => {
       // Development and test runs log every call's duration, so a slow handler shows up where it is called.
-      if (checkResponses || process.env["OFFICE_E2E"] === "1")
+      if ((checkResponses || process.env["OFFICE_E2E"] === "1") && !process.env["OFFICE_QUIET_IPC"])
         console.log(`[ipc] ${channel} ${ms.toFixed(1)} ms`);
     }),
     notifier,
