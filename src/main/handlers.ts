@@ -263,6 +263,11 @@ export function registerHandlers(ctx: AppContext): void {
     return outcome.ok ? { pushed: true } : { pushed: false, error: outcome.error };
   });
   ctx.ipc.handle("github.overview", (req) => ctx.github.overview(req.projectId));
+  ctx.ipc.handle("roles.save", (req) => ctx.editor.saveRole(req.id, req.role));
+  ctx.ipc.handle("roles.remove", (req) => ctx.editor.removeRole(req.id));
+  ctx.ipc.handle("roles.setOverride", (req) =>
+    ctx.editor.setOverride(req.projectId, req.role, req.target),
+  );
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

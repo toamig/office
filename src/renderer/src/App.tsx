@@ -19,6 +19,7 @@ import { useUi, type ViewId } from "./stores/ui";
 import { useQuery } from "./lib/hooks";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Agents } from "./views/Agents";
+import { Board } from "./views/Board";
 import { Brain } from "./views/Brain";
 import { Explore } from "./views/Explore";
 import { Git } from "./views/Git";
@@ -64,6 +65,7 @@ function CurrentView({ configured }: { configured: boolean }) {
       />
     );
   if (view === "git") return <Git key={params["project"] ?? ""} />;
+  if (view === "board") return <Board />;
   if (view === "brain") return <Brain />;
   if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;

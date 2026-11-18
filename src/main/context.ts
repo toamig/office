@@ -24,6 +24,7 @@ import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
 import { notifyFromSyncReport, notifyFromWarning, WaitingWatcher } from "./modules/notify/sources";
+import { WorkspaceEditor } from "./modules/tasks/editor";
 import { HooksManager } from "./modules/setup/install-hooks";
 import { BriefService } from "./modules/brief/brief";
 import { ExploreService } from "./modules/explore/explore";
@@ -50,6 +51,7 @@ export interface AppContext {
   explore: ExploreService;
   brief: BriefService;
   hooks: HooksManager;
+  editor: WorkspaceEditor;
   relay: RelayServer;
   projects: ProjectService;
   github: GithubService;
@@ -161,6 +163,11 @@ export async function createContext(
       runs,
     },
   });
+  const editor = new WorkspaceEditor({
+    writer,
+    workspaceFile: () => store.filePath,
+    reload: () => void store.reload(),
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -226,6 +233,7 @@ export async function createContext(
     explore,
     brief,
     hooks,
+    editor,
     relay,
     projects,
     github,

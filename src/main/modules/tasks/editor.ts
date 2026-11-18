@@ -1,0 +1,98 @@
+import { Role as RoleSchema, Workspace as WorkspaceSchema } from "../../../shared/schemas";
+import type { Role } from "../../../shared/types";
+import { IpcFailure } from "../../core/ipc";
+import type { VaultWriter } from "../vault/writer";
+
+export interface EditorDeps {
+  writer: VaultWriter;
+  workspaceFile: () => string;
+  reload: () => void;
+}
+
+type Json = Record<string, unknown>;
+
+const ID_RE = /^[a-z0-9-]+$/;
+
+/** Edits the workspace config through the vault writer: validated, committed and pushed like any note. */
+export class WorkspaceEditor {
+  constructor(private readonly deps: EditorDeps) {}
+
+  private async edit(message: string, change: (json: Json) => void): Promise<void> {
+    await this.deps.writer.edit(this.deps.workspaceFile(), message, (text) => {
+      const json = JSON.parse(text) as Json;
+      change(json);
+      const checked = WorkspaceSchema.safeParse(json);
+      if (!checked.success) {
+        const issue = checked.error.issues[0];
+        throw new IpcFailure(
+          "invalid",
+          `That change is not valid: ${issue?.path.join(".") ?? ""} ${issue?.message ?? ""}`.trim(),
+        );
+      }
+      return `${JSON.stringify(json, null, 2)}\n`;
+    });
+    this.deps.reload();
+  }
+
+  /** Adds or replaces a role. The role is checked against the schema before anything is written. */
+  async saveRole(id: string, role: Role): Promise<void> {
+    if (!ID_RE.test(id))
+      throw new IpcFailure("bad-id", "A role id uses lowercase letters, digits and dashes");
+    const parsed = RoleSchema.safeParse(role);
+    if (!parsed.success) {
+      throw new IpcFailure(
+        "invalid",
+        `That role is not valid: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}`,
+      );
+    }
+    await this.edit(`Workspace: update role ${id}`, (json) => {
+      const roles = (json["roles"] ??= {}) as Json;
+      roles[id] = parsed.data;
+    });
+  }
+
+  /** Removes a role, unless a pipeline stage or a project override still uses it. */
+  async removeRole(id: string): Promise<void> {
+    await this.edit(`Workspace: remove role ${id}`, (json) => {
+      const pipelines = (json["pipelines"] ?? {}) as Record<
+        string,
+        { stages?: Array<{ role?: string }> }
+      >;
+      for (const [pid, p] of Object.entries(pipelines)) {
+        if ((p.stages ?? []).some((s) => s.role === id)) {
+          throw new IpcFailure("in-use", `The role "${id}" is used by the "${pid}" pipeline`);
+        }
+      }
+      const projects = (json["projects"] ?? []) as Array<{
+        name?: string;
+        roles?: Record<string, string>;
+      }>;
+      for (const p of projects) {
+        if (Object.entries(p.roles ?? {}).some(([k, v]) => k === id || v === id)) {
+          throw new IpcFailure(
+            "in-use",
+            `The role "${id}" is used by a project override (${p.name ?? "a project"})`,
+          );
+        }
+      }
+      delete (json["roles"] as Json)[id];
+    });
+  }
+
+  /** Sets (or clears, with null) a project's override: when it asks for `role`, it gets `target` instead. */
+  async setOverride(projectId: string, role: string, target: string | null): Promise<void> {
+    await this.edit(`Workspace: ${projectId} role override`, (json) => {
+      const roles = (json["roles"] ?? {}) as Json;
+      if (target !== null && !(target in roles))
+        throw new IpcFailure("no-role", `There is no role called "${target}"`);
+      const projects = (json["projects"] ?? []) as Array<Record<string, unknown>>;
+      const project = projects.find((p) => p["id"] === projectId);
+      if (!project) throw new IpcFailure("not-found", `No project with id ${projectId}`);
+      const overrides = { ...((project["roles"] as Record<string, string> | undefined) ?? {}) };
+      if (target === null) delete overrides[role];
+      else overrides[role] = target;
+      if (Object.keys(overrides).length === 0) delete project["roles"];
+      else project["roles"] = overrides;
+    });
+  }
+}

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { Role } from "./schemas";
 import {
   AskResult,
   BranchCompare,
@@ -258,6 +259,12 @@ export const channels = {
     res: z.object({ pushed: z.boolean(), error: z.string().optional() }),
   },
   "github.overview": { req: z.object({ projectId: z.string() }), res: GithubOverview },
+  "roles.save": { req: z.object({ id: z.string(), role: Role }), res: z.void() },
+  "roles.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "roles.setOverride": {
+    req: z.object({ projectId: z.string(), role: z.string(), target: z.string().nullable() }),
+    res: z.void(),
+  },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),
