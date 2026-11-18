@@ -6,6 +6,7 @@ import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
 import { IpcRegistry } from "./core/ipc";
 import { NtfyChannel } from "./core/channels/ntfy";
+import { ModuleManager } from "./core/modules";
 import { Notifier } from "./core/notifier";
 import { Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
@@ -15,6 +16,7 @@ import {
   dataDir,
   dbPath,
   exploreDir,
+  modulesDir,
   runsDir,
   sessionsDir,
   tasksDir,
@@ -58,6 +60,7 @@ export interface AppContext {
   editor: WorkspaceEditor;
   tasks: TaskEngine;
   scheduler: Scheduler;
+  modules: ModuleManager;
   ntfy: NtfyChannel;
   relay: RelayServer;
   projects: ProjectService;
@@ -204,6 +207,21 @@ export async function createContext(
     },
     resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
   });
+  const modules = new ModuleManager({
+    dir: () => modulesDir(),
+    enabled: () => current.modules,
+    setEnabled: (name, on) => {
+      current = updateSettings({ modules: { ...current.modules, [name]: on } });
+    },
+    workspace: () => store.state.workspace,
+    targets: {
+      addChannel: (c) => notifier.addChannel(c),
+      removeChannel: (id) => notifier.removeChannel(id),
+      addProvider: (p) => providers.add(p),
+      removeProvider: (id) => providers.remove(id),
+    },
+    log: (m) => console.log(m),
+  });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());
   bus.on("workspace.changed", () => {
@@ -234,6 +252,7 @@ export async function createContext(
   };
   const start = async (): Promise<void> => {
     await stop();
+    await modules.loadEnabled();
     const port = await relay.start(current.relay.port);
     if (port !== current.relay.port)
       current = updateSettings({ relay: { ...current.relay, port } });
@@ -274,6 +293,7 @@ export async function createContext(
     editor,
     tasks,
     scheduler,
+    modules,
     ntfy,
     relay,
     projects,

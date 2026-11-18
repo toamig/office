@@ -81,6 +81,11 @@ export class Notifier {
     this.channels.push(channel);
   }
 
+  removeChannel(id: string): void {
+    const at = this.channels.findIndex((c) => c.id === id);
+    if (at >= 0) this.channels.splice(at, 1);
+  }
+
   private now(): Date {
     return this.deps.now ? this.deps.now() : new Date();
   }

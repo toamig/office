@@ -65,6 +65,7 @@ export function registerHandlers(ctx: AppContext): void {
       workspaceRoot: ctx.settings().workspaceRoot,
       projects: ctx.projects,
       sessions: ctx.sessions,
+      extraSources: () => ctx.modules.searchSources(),
     }),
   );
 
@@ -304,6 +305,8 @@ export function registerHandlers(ctx: AppContext): void {
       throw new IpcFailure("ping-failed", `The test ping failed: ${(err as Error).message}`);
     }
   });
+  ctx.ipc.handle("modules.list", () => ctx.modules.list());
+  ctx.ipc.handle("modules.setEnabled", (req) => ctx.modules.setEnabled(req.name, req.enabled));
   ctx.ipc.handle("tasks.list", (req) => ctx.tasks.list(req.projectId));
   ctx.ipc.handle("tasks.get", (req) => ctx.tasks.get(req.id));
   ctx.ipc.handle("tasks.create", (req) => ctx.tasks.create(req));

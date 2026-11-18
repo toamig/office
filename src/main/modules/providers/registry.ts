@@ -28,6 +28,10 @@ export class ProviderRegistry {
     this.providers.set(provider.id, provider);
   }
 
+  remove(id: string): void {
+    this.providers.delete(id);
+  }
+
   get(id: string): Provider | undefined {
     return this.providers.get(id);
   }

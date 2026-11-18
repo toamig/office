@@ -666,3 +666,13 @@ export const NotificationRules = z.object({
   ntfyTopicUrl: z.string().optional(),
 });
 export type NotificationRules = z.infer<typeof NotificationRules>;
+
+export const ModuleInfo = z.object({
+  name: z.string(),
+  kind: z.string().nullable(),
+  description: z.string(),
+  enabled: z.boolean(),
+  loaded: z.boolean(),
+  error: z.string().optional(),
+});
+export type ModuleInfo = z.infer<typeof ModuleInfo>;

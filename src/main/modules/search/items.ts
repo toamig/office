@@ -23,6 +23,8 @@ export async function buildSearchItems(deps: {
   workspaceRoot: string;
   projects: ProjectService;
   sessions: SessionService;
+  /** Quick switcher sources added by enabled modules. */
+  extraSources?: () => Array<{ items: () => Promise<SearchItem[]> }>;
 }): Promise<SearchItem[]> {
   const base = noteAndProjectItems(deps.workspace, deps.workspaceRoot);
   const sessions: SearchItem[] = deps.sessions.list().map((s) => ({
@@ -67,5 +69,13 @@ export async function buildSearchItems(deps: {
     });
     cache = { at: Date.now(), key, items: groups.flat() };
   }
-  return [...base, ...cache.items, ...sessions];
+  const extra: SearchItem[] = [];
+  for (const source of deps.extraSources?.() ?? []) {
+    try {
+      extra.push(...(await source.items()));
+    } catch {
+      /* a failing source adds nothing */
+    }
+  }
+  return [...base, ...cache.items, ...sessions, ...extra];
 }

@@ -1,0 +1,4 @@
+{
+  "kind": "channel",
+  "description": "Appends every urgent notification to received.log in the module's data folder."
+}
