@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { timeAgo, useQuery } from "../../lib/hooks";
 import { TaskDetail } from "./TaskDetail";
+import { useEscape } from "../../lib/escape";
 
 const columns: Array<{ id: string; title: string; match: (t: TaskView) => boolean }> = [
   { id: "running", title: "Running", match: (t) => t.status === "running" },
@@ -25,6 +26,7 @@ const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
 
 function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
+  useEscape(onClose);
   const projects = useQuery("projects.list");
   const workspace = useQuery("workspace.get");
   const pipelines = Object.entries(workspace.data?.workspace?.pipelines ?? {});

@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Button, Chip, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { useEscape } from "../../lib/escape";
 
 type Target = "claude" | "codex";
 type Action = "install" | "uninstall";
@@ -26,6 +27,7 @@ const explain: Record<Target, string> = {
 export function HooksPanel() {
   const status = useQuery("hooks.status");
   const [pending, setPending] = useState<Pending | null>(null);
+  useEscape(() => setPending(null), pending !== null);
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 

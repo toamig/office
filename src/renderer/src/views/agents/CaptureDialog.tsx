@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import type { CaptureResult, SessionRow } from "@shared/models";
 import { Button, EmptyState, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
+import { useEscape } from "../../lib/escape";
 
 type Dest = "waiting" | "todo" | "drop";
 interface Row {
@@ -22,6 +23,7 @@ export function CaptureDialog({ session, onClose }: { session: SessionRow; onClo
   const [rows, setRows] = useState<Row[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  useEscape(onClose);
 
   useEffect(() => {
     let alive = true;

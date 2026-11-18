@@ -76,6 +76,8 @@ export const eventTypes = [
   "preview.state",
   "permission.changed",
   "settings.changed",
+  "app.history",
+  "app.terminal-action",
   "app.update",
 ] as const;
 export type EventType = (typeof eventTypes)[number];

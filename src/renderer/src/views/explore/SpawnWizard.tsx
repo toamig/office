@@ -4,6 +4,7 @@ import type { SpawnInput, SpawnReport, SpawnStep } from "@shared/models";
 import { Button, Chip, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { useEscape } from "../../lib/escape";
 
 const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
@@ -27,6 +28,7 @@ export function SpawnWizard({
   exploreSessionId?: string;
   onClose: () => void;
 }) {
+  useEscape(onClose);
   const navigate = useUi((s) => s.navigate);
   const groups = useGroups();
   const [name, setName] = useState("");

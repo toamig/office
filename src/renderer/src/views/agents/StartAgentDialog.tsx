@@ -4,6 +4,7 @@ import type { SessionRow } from "@shared/models";
 import { Button, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { useEscape } from "../../lib/escape";
 
 const NEW_WORKTREE = "__new_worktree__";
 const field = "rounded border px-2 py-1";
@@ -21,6 +22,7 @@ export function StartAgentDialog({
   onClose: () => void;
   onStarted: (session: SessionRow) => void;
 }) {
+  useEscape(onClose);
   const projects = useQuery("projects.list");
   const workspace = useQuery("workspace.get");
   const providers = useQuery("providers.list");

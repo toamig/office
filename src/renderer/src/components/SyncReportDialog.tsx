@@ -2,6 +2,7 @@ import { X } from "lucide-react";
 import type { SyncAction } from "@shared/models";
 import { useUi } from "../stores/ui";
 import { Button, Chip, EmptyState } from "./ui";
+import { useEscape } from "../lib/escape";
 
 const label: Record<SyncAction, string> = {
   pulled: "Pulled",
@@ -26,6 +27,7 @@ const tone = (a: SyncAction): "neutral" | "good" | "warn" | "bad" =>
 export function SyncReportDialog() {
   const report = useUi((s) => s.syncReport);
   const close = useUi((s) => s.setSyncReport);
+  useEscape(() => close(null), report !== null);
   if (!report) return null;
   return (
     <div

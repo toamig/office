@@ -2,10 +2,14 @@ import { useEffect } from "react";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Sidebar } from "./components/Sidebar";
 import { SyncReportDialog } from "./components/SyncReportDialog";
+import { ShortcutsSheet } from "./components/ShortcutsSheet";
 import { ThemeApplier } from "./components/ThemeApplier";
+import { ViewBoundary } from "./components/ViewBoundary";
 import { TopBar } from "./components/TopBar";
 import { ErrorBanner } from "./components/ui";
 import { useQuery } from "./lib/hooks";
+import { useSidebarCollapsed } from "./lib/sidebar";
+import { useGlobalShortcuts } from "./lib/shortcuts";
 import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
 import { Agents } from "./views/Agents";
@@ -51,6 +55,9 @@ function CurrentView({ configured }: { configured: boolean }) {
 
 export default function App() {
   const navigate = useUi((s) => s.navigate);
+  const view = useUi((s) => s.view);
+  const [, toggleSidebar] = useSidebarCollapsed();
+  useGlobalShortcuts(toggleSidebar);
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   useEffect(
     () =>
@@ -71,11 +78,16 @@ export default function App() {
               <ErrorBanner message={workspace.data.error} />
             </div>
           )}
-          {workspace.data && <CurrentView configured={workspace.data.configured} />}
+          {workspace.data && (
+            <ViewBoundary key={view}>
+              <CurrentView configured={workspace.data.configured} />
+            </ViewBoundary>
+          )}
         </main>
       </div>
       <SyncReportDialog />
       <QuickSwitcher />
+      <ShortcutsSheet />
       <ThemeApplier />
     </div>
   );

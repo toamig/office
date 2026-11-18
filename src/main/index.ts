@@ -1,7 +1,9 @@
 import {
   app,
   BrowserWindow,
+  clipboard,
   ipcMain,
+  Menu,
   nativeImage,
   nativeTheme,
   Notification,
@@ -20,6 +22,8 @@ import {
 import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
 import { applyChrome, startingChrome } from "./chrome";
+import { buildContextMenu, type MenuAction } from "./core/context-menu";
+import { classifyKey, nextZoom } from "./core/keys";
 import { restoreBounds, toSaved } from "./core/window-state";
 import { isAllowedNavigation, isAppRequest } from "./core/window-security";
 import { TITLE_BAR_HEIGHT } from "../shared/theme";
@@ -41,6 +45,67 @@ function isHttps(url: string): boolean {
   } catch {
     return false;
   }
+}
+
+/** Applies the interface zoom from the settings; pinch zoom is off so only Office's own zoom exists. */
+function applyZoom(win: BrowserWindow | null): void {
+  if (!win || win.isDestroyed() || !ctx) return;
+  void win.webContents.setVisualZoomLevelLimits(1, 1);
+  win.webContents.setZoomFactor(ctx.settings().zoom / 100);
+}
+
+/** Runs one item of the native context menu against the page that was clicked. */
+function runMenuAction(win: BrowserWindow, action: MenuAction, linkURL: string): void {
+  const wc = win.webContents;
+  if (typeof action === "object") return wc.replaceMisspelling(action.replaceWith);
+  if (action === "undo") wc.undo();
+  else if (action === "redo") wc.redo();
+  else if (action === "cut") wc.cut();
+  else if (action === "copy") wc.copy();
+  else if (action === "paste") wc.paste();
+  else if (action === "selectAll") wc.selectAll();
+  else if (action === "copyLink") clipboard.writeText(linkURL);
+  else if (action === "openLink" && isHttps(linkURL)) void shell.openExternal(linkURL);
+}
+
+/**
+ * What takes the web page feel away (plan 12.1): no application menu and so none of its keys, the browser
+ * keys that would reload, print or open developer tools turned off, the browser's zoom replaced by Office's
+ * own, the mouse's back and forward buttons sent to the app's history, and a native right-click menu.
+ */
+function installNativeBehaviour(win: BrowserWindow): void {
+  const development = !app.isPackaged;
+  const wc = win.webContents;
+  wc.on("before-input-event", (event, input) => {
+    const action = classifyKey(input, development);
+    if (action.kind === "block") return event.preventDefault();
+    if (action.kind === "zoom" && ctx) {
+      event.preventDefault();
+      ctx.patchSettings({ zoom: nextZoom(ctx.settings().zoom, action.step) });
+      ctx.bus.emit("settings.changed", {});
+    }
+  });
+  wc.on("did-finish-load", () => applyZoom(win));
+  win.on("app-command", (_event, command) => {
+    if (command === "browser-backward") ctx?.bus.emit("app.history", "back");
+    if (command === "browser-forward") ctx?.bus.emit("app.history", "forward");
+  });
+  wc.on("context-menu", (_event, params) => {
+    const entries = buildContextMenu(params);
+    if (entries.length === 0) return;
+    const menu = Menu.buildFromTemplate(
+      entries.map((entry) =>
+        entry === "separator"
+          ? { type: "separator" as const }
+          : {
+              label: entry.label,
+              enabled: entry.enabled,
+              click: () => runMenuAction(win, entry.action, params.linkURL),
+            },
+      ),
+    );
+    menu.popup({ window: win });
+  });
 }
 
 function createWindow(): BrowserWindow {
@@ -73,6 +138,7 @@ function createWindow(): BrowserWindow {
     },
   });
   win.setMenuBarVisibility(false);
+  installNativeBehaviour(win);
   if (placed.maximized) win.maximize();
   win.once("ready-to-show", () => win.show());
 
@@ -154,6 +220,11 @@ function updateBadge(count: number): void {
 
 async function boot(): Promise<void> {
   app.setAppUserModelId("com.toamig.office");
+  // No application menu, so none of Electron's default accelerators (reload, developer tools, zoom) exist.
+  // macOS keeps copy and paste in the Edit menu, so only there a menu with just that stays.
+  Menu.setApplicationMenu(
+    process.platform === "darwin" ? Menu.buildFromTemplate([{ role: "editMenu" }]) : null,
+  );
   const relayScript =
     process.env["OFFICE_RELAY_SCRIPT"] ??
     (app.isPackaged
@@ -195,7 +266,10 @@ async function boot(): Promise<void> {
     }
   });
   // The window chrome follows the theme setting and the system's colour scheme at once.
-  const refreshChrome = (): void => void applyChrome(mainWindow, context.settings().theme);
+  const refreshChrome = (): void => {
+    applyChrome(mainWindow, context.settings().theme);
+    applyZoom(mainWindow);
+  };
   context.bus.on("settings.changed", refreshChrome);
   nativeTheme.on("updated", refreshChrome);
   context.notifier.addChannel({ id: "desktop", send: showDesktopNotification });

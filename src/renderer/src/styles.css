@@ -208,3 +208,131 @@ body {
 .markdown a {
   color: var(--accent);
 }
+
+/* ---- native feel: what a page would do and an app does not ---- */
+html {
+  overscroll-behavior: none;
+}
+body {
+  cursor: default;
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+/* Content can be selected: notes, messages, diffs, logs, terminals and every field. */
+input,
+textarea,
+select,
+[contenteditable],
+pre,
+code,
+.markdown,
+.xterm,
+.text-selectable,
+.font-mono {
+  user-select: text;
+}
+input,
+textarea {
+  cursor: text;
+}
+button,
+select,
+summary,
+label {
+  cursor: default;
+}
+a,
+.link {
+  cursor: pointer;
+}
+img,
+a {
+  -webkit-user-drag: none;
+}
+:focus {
+  outline: none;
+}
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+::selection {
+  background: var(--selection);
+}
+
+/* Thin scrollbars in the theme's colours. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--line);
+  border: 2px solid transparent;
+  border-radius: 999px;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--muted);
+  background-clip: content-box;
+}
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+
+/* Dialogs. */
+.dialog-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: color-mix(in srgb, var(--bg) 55%, transparent);
+  backdrop-filter: blur(2px);
+}
+.dialog {
+  display: flex;
+  max-height: 85vh;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+}
+.dialog-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.kbd {
+  padding: 1px 6px;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--muted);
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+}
+
+/* Quick, subtle motion, none when the system asks for less. */
+button,
+.sidebar-item,
+.bar-button {
+  transition:
+    background-color var(--ease),
+    color var(--ease),
+    border-color var(--ease);
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
