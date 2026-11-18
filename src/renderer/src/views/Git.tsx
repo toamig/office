@@ -3,10 +3,12 @@ import { Chip, EmptyState } from "../components/ui";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { BranchesTab } from "./git/BranchesTab";
+import { CommitTab } from "./git/CommitTab";
 import { DiffTab } from "./git/DiffTab";
 import { WorktreesTab } from "./git/WorktreesTab";
 
-type Tab = "branches" | "worktrees" | "changes";
+const TABS = ["branches", "worktrees", "changes", "commit"] as const;
+type Tab = (typeof TABS)[number];
 
 /** The Git desk: every repo at a glance, and branches, worktrees, diffs, commits and PRs for the chosen one. */
 export function Git() {
@@ -14,13 +16,7 @@ export function Git() {
   const projects = useQuery("projects.list", undefined, ["project.status"]);
   const health = useQuery("vault.health", undefined, ["vault.changed"]);
   const [selected, setSelected] = useState(params["project"] ?? "");
-  const [tab, setTab] = useState<Tab>(
-    params["tab"] === "worktrees"
-      ? "worktrees"
-      : params["tab"] === "changes"
-        ? "changes"
-        : "branches",
-  );
+  const [tab, setTab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "branches");
 
   const repos = (projects.data ?? []).filter((p) => !p.archived && p.isRepo);
   const current = repos.find((p) => p.id === selected) ?? repos[0];
@@ -100,6 +96,7 @@ export function Git() {
                   ["branches", "Branches"],
                   ["worktrees", "Worktrees"],
                   ["changes", "Changes"],
+                  ["commit", "Commit"],
                 ] as Array<[Tab, string]>
               ).map(([id, label]) => (
                 <button
@@ -120,6 +117,7 @@ export function Git() {
             {tab === "branches" && <BranchesTab key={current.id} projectId={current.id} />}
             {tab === "worktrees" && <WorktreesTab key={current.id} projectId={current.id} />}
             {tab === "changes" && <DiffTab key={current.id} projectId={current.id} />}
+            {tab === "commit" && <CommitTab key={current.id} projectId={current.id} />}
           </>
         )}
       </div>

@@ -18,7 +18,9 @@ import {
   listWorktrees,
   removeWorktree,
 } from "./modules/git/worktrees";
+import { commitFiles, pushCurrent } from "./modules/git/commit";
 import { getDiff } from "./modules/git/diff";
+import { readStatus } from "./modules/git/status";
 import { sendReviewToAgent } from "./modules/sessions/review";
 import { readVaultFile } from "./modules/ask/ask";
 import { readAudit } from "./modules/vault/audit";
@@ -242,6 +244,24 @@ export function registerHandlers(ctx: AppContext): void {
       req.comments,
     ),
   );
+  ctx.ipc.handle("git.status", async (req) => {
+    const status = await readStatus(await checkoutOf(req.projectId, req.dir));
+    if (!status.ok) throw new IpcFailure("git-failed", status.error);
+    return status.status;
+  });
+  ctx.ipc.handle("commit.run", async (req) => {
+    const dir = await checkoutOf(req.projectId, req.dir);
+    const result = await commitFiles(dir, req.files, req.message, {
+      ...(req.push ? { push: true } : {}),
+    });
+    changed(req.projectId);
+    return result;
+  });
+  ctx.ipc.handle("git.push", async (req) => {
+    const outcome = await pushCurrent(await checkoutOf(req.projectId, req.dir));
+    changed(req.projectId);
+    return outcome.ok ? { pushed: true } : { pushed: false, error: outcome.error };
+  });
   ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
   ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
   ctx.ipc.handle("notifications.counts", () => ({

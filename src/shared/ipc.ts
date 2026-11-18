@@ -8,6 +8,7 @@ import {
   CaptureCommit,
   CaptureResult,
   DiffResult,
+  RepoStatus,
   HealthView,
   HookStatus,
   Inventory,
@@ -236,6 +237,24 @@ export const channels = {
       comments: z.array(ReviewComment).min(1),
     }),
     res: z.object({ sessionId: z.string(), started: z.boolean() }),
+  },
+  "git.status": {
+    req: z.object({ projectId: z.string(), dir: z.string().optional() }),
+    res: RepoStatus,
+  },
+  "commit.run": {
+    req: z.object({
+      projectId: z.string(),
+      dir: z.string().optional(),
+      files: z.array(z.string()).min(1),
+      message: z.string(),
+      push: z.boolean().optional(),
+    }),
+    res: z.object({ hash: z.string(), pushed: z.boolean(), pushError: z.string().optional() }),
+  },
+  "git.push": {
+    req: z.object({ projectId: z.string(), dir: z.string().optional() }),
+    res: z.object({ pushed: z.boolean(), error: z.string().optional() }),
   },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
