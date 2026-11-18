@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { timeAgo, useQuery } from "../../lib/hooks";
+import { Select } from "../../components/Select";
 
 const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
@@ -137,7 +138,7 @@ export function AutomationsPanel() {
             aria-label="Cron expression"
             data-testid="automation-cron"
           />
-          <select
+          <Select
             className={field}
             style={fieldStyle}
             value={project}
@@ -151,8 +152,8 @@ export function AutomationsPanel() {
                 {p.name}
               </option>
             ))}
-          </select>
-          <select
+          </Select>
+          <Select
             className={field}
             style={fieldStyle}
             value={role}
@@ -165,7 +166,7 @@ export function AutomationsPanel() {
                 {r}
               </option>
             ))}
-          </select>
+          </Select>
         </div>
         <textarea
           className={field}

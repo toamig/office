@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { launch, terminalText } from "./helpers";
+import { launch, terminalText, pick } from "./helpers";
 
 async function openChat(win: Page, input: Record<string, unknown>): Promise<string> {
   await expect(win.getByTestId("topbar")).toBeVisible();
@@ -69,7 +69,7 @@ test("an approval is a card in the conversation: Deny returns the reason, Allow 
   await say(win, "NEEDS_PERMISSION: rm -rf build");
   const card = win.getByTestId("chat").getByTestId("permission-request");
   await expect(card).toContainText("rm -rf build", { timeout: 30000 });
-  await expect(win.getByTestId("session-status").first()).toContainText("needs-you");
+  await expect(win.getByTestId("session-status").first()).toContainText(/needs you/i);
   // The same question waits in the Inbox too.
   await card.getByTestId("permission-reason").fill("not in this project");
   await card.getByTestId("permission-deny").click();
@@ -172,9 +172,9 @@ test("the Start agent dialog offers Chat or Terminal and remembers the choice", 
   await expect(win.getByTestId("topbar")).toBeVisible();
   await win.getByTestId("rail-agents").click();
   await win.getByRole("button", { name: /Start agent/ }).click();
-  await win.getByTestId("agent-project").selectOption({ label: "Alpha" });
+  await pick(win, "agent-project", { label: "Alpha" });
   await win.getByTestId("mode-provider").check();
-  await win.getByTestId("agent-provider").selectOption({ label: "Fake agent" });
+  await pick(win, "agent-provider", { label: "Fake agent" });
   await expect(win.getByTestId("mode-terminal")).toBeChecked(); // the machine's earlier choice
   await win.getByTestId("mode-chat").check();
   await win.getByTestId("agent-start").click();

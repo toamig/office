@@ -4,6 +4,7 @@ import type { DiffFile, ReviewComment } from "@shared/models";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { Select } from "../../components/Select";
 
 type Mode = "working" | "staged" | "branch";
 
@@ -65,7 +66,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
   return (
     <div className="grid gap-3" data-testid="diff-tab">
       <div className="flex flex-wrap items-center gap-3">
-        <select
+        <Select
           value={dir}
           onChange={(e) => setDir(e.target.value)}
           aria-label="Checkout"
@@ -81,7 +82,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
                 Worktree: {w.branch ?? w.path}
               </option>
             ))}
-        </select>
+        </Select>
         {(["working", "staged", "branch"] as const).map((m) => (
           <label key={m} className="flex items-center gap-1">
             <input
@@ -94,7 +95,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
           </label>
         ))}
         {mode === "branch" && (
-          <select
+          <Select
             value={baseName}
             onChange={(e) => setBase(e.target.value)}
             aria-label="Base branch"
@@ -106,7 +107,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
                 {b.name}
               </option>
             ))}
-          </select>
+          </Select>
         )}
       </div>
       {(diff.error || error) && <ErrorBanner message={diff.error ?? error ?? ""} />}

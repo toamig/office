@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, pick } from "./helpers";
 
 test("a fake provider answer renders with clickable citations that open the note", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
@@ -26,12 +26,12 @@ test("a scoped question and a quick note both work", async () => {
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
   await win.getByTestId("rail-brain").click();
-  await win.getByTestId("ask-scope").selectOption({ label: "Alpha" });
+  await pick(win, "ask-scope", { label: "Alpha" });
   await win.getByTestId("ask-input").fill("Scoped question");
   await win.getByTestId("ask-send").click();
   await expect(win.getByTestId("ask-answer")).toBeVisible();
 
-  await win.getByTestId("note-project").selectOption({ label: "Beta" });
+  await pick(win, "note-project", { label: "Beta" });
   await win.getByTestId("note-text").fill("remember the sheep");
   await win.getByTestId("note-save").click();
   await expect(win.getByTestId("note-message")).toContainText("Noted");

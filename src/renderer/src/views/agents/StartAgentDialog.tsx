@@ -5,6 +5,7 @@ import { Button, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { useEscape } from "../../lib/escape";
+import { Select } from "../../components/Select";
 
 const NEW_WORKTREE = "__new_worktree__";
 const field = "rounded border px-2 py-1";
@@ -108,7 +109,7 @@ export function StartAgentDialog({
           </div>
           <label className="grid grid-cols-[110px_1fr] items-center gap-2">
             Project
-            <select
+            <Select
               className={field}
               style={fieldStyle}
               value={project}
@@ -123,11 +124,11 @@ export function StartAgentDialog({
                     {p.name}
                   </option>
                 ))}
-            </select>
+            </Select>
           </label>
           <label className="grid grid-cols-[110px_1fr] items-center gap-2">
             Folder
-            <select
+            <Select
               className={field}
               style={fieldStyle}
               value={folder}
@@ -143,7 +144,7 @@ export function StartAgentDialog({
                   </option>
                 ))}
               <option value={NEW_WORKTREE}>New worktree...</option>
-            </select>
+            </Select>
           </label>
           {folder === NEW_WORKTREE && (
             <label className="grid grid-cols-[110px_1fr] items-center gap-2">
@@ -179,7 +180,7 @@ export function StartAgentDialog({
           {mode === "role" ? (
             <label className="grid grid-cols-[110px_1fr] items-center gap-2">
               Role
-              <select
+              <Select
                 className={field}
                 style={fieldStyle}
                 value={roleId}
@@ -191,13 +192,13 @@ export function StartAgentDialog({
                     {r}
                   </option>
                 ))}
-              </select>
+              </Select>
             </label>
           ) : (
             <>
               <label className="grid grid-cols-[110px_1fr] items-center gap-2">
                 Provider
-                <select
+                <Select
                   className={field}
                   style={fieldStyle}
                   value={providerId}
@@ -210,7 +211,7 @@ export function StartAgentDialog({
                       {p.installed ? "" : " (not installed)"}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="grid grid-cols-[110px_1fr] items-center gap-2">
                 Model

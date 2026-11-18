@@ -338,6 +338,15 @@ export const channels = {
   /** The colours the native window chrome was last given (for tests and the title bar). */
   /** Pops up the native Copy and Paste menu of a terminal; the choice comes back as app.terminal-action. */
   "app.terminalMenu": { req: z.object({ hasSelection: z.boolean() }), res: z.void() },
+  /** Pops up a native menu where the pointer is; answers the id of the chosen item, or null. */
+  "app.popupMenu": {
+    req: z.object({
+      items: z.array(
+        z.object({ id: z.string(), label: z.string(), enabled: z.boolean().optional() }),
+      ),
+    }),
+    res: z.string().nullable(),
+  },
   "app.chrome": { req: z.void(), res: ChromeStateSchema },
   "projects.update": {
     req: z.object({

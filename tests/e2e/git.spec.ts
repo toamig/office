@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch, terminalText } from "./helpers";
+import { launch, terminalText, pick } from "./helpers";
 
 test("branches: create, a dirty switch is refused with a stash offer, and the stash works", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
@@ -55,7 +55,7 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
   await row.getByTestId("agent-in-worktree").click();
   await expect(win.getByTestId("agent-folder")).toHaveValue(wtPath);
   await win.getByTestId("mode-provider").check();
-  await win.getByTestId("agent-provider").selectOption({ label: "Fake agent" });
+  await pick(win, "agent-provider", { label: "Fake agent" });
   await win.getByTestId("agent-start").click();
   await expect(win.getByTestId("session-row").first()).toContainText("office/task-one", {
     timeout: 20000,
@@ -70,7 +70,7 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
 
   // A running process holds its folder open on Windows, so the agent is stopped before the removal.
   await win.getByTestId("stop-session").click();
-  await expect(win.getByTestId("session-status").first()).toContainText("exited");
+  await expect(win.getByTestId("session-status").first()).toContainText(/exited/i);
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
   await win.getByTestId("git-tab-worktrees").click();
@@ -109,7 +109,7 @@ test("diff review: two line comments go to the agent that owns the worktree as o
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
   await win.getByTestId("git-tab-changes").click();
-  await win.getByTestId("diff-dir").selectOption({ label: "Worktree: office/review-task" });
+  await pick(win, "diff-dir", { label: "Worktree: office/review-task" });
   await expect(win.getByTestId("diff-file")).toHaveCount(2);
 
   await win.getByTestId("diff-file").filter({ hasText: "README.md" }).click();

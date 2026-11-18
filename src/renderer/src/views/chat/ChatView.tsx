@@ -7,9 +7,16 @@ import { Chip, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
+import { Select } from "../../components/Select";
+import { StatusChip } from "../../components/StatusChip";
 
-const tone = (s: SessionRow["status"]): "neutral" | "good" | "warn" | "bad" =>
-  s === "needs-you" || s === "failed" ? "bad" : s === "working" ? "good" : "neutral";
+/** The permission modes in words, as the header shows them. */
+const PERMISSION_LABELS: Record<string, string> = {
+  default: "Ask first (default)",
+  acceptEdits: "Accept edits",
+  plan: "Plan only",
+  auto: "Auto",
+};
 
 /** The conversation of one chat session, built from its stored events and then from the live ones. */
 function useConversation(id: string): { conversation: Conversation; ready: boolean } {
@@ -96,7 +103,7 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
     <div className="chat" data-testid="chat" data-session={session.id}>
       <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>
-        <Chip tone={tone(session.status)}>{session.status}</Chip>
+        <StatusChip status={session.status} />
         {session.branch && (
           <span className="pane-branch">
             <GitBranch size={12} />
@@ -106,7 +113,7 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
         <div className="flex-1" />
         {state && state.kind === "claude" && (
           <>
-            <select
+            <Select
               className="chat-select"
               aria-label="Model"
               data-testid="chat-model"
@@ -128,8 +135,8 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
                   {m}
                 </option>
               ))}
-            </select>
-            <select
+            </Select>
+            <Select
               className="chat-select"
               aria-label="Permission mode"
               data-testid="chat-permission-mode"
@@ -146,10 +153,10 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
             >
               {state.permissionModes.map((m) => (
                 <option key={m} value={m}>
-                  {m}
+                  {PERMISSION_LABELS[m] ?? m}
                 </option>
               ))}
-            </select>
+            </Select>
           </>
         )}
         {state && state.kind === "codex" && (

@@ -148,3 +148,21 @@ export async function terminalText(win: Page): Promise<string> {
     return lines.join("\n");
   });
 }
+
+/**
+ * Chooses an option of one of Office's dropdowns (they are buttons with a menu, not form selects): by its
+ * visible label, or by its value when given a plain string.
+ */
+export async function pick(
+  win: Page,
+  testId: string,
+  choice: string | { label: string },
+): Promise<void> {
+  await win.getByTestId(testId).click();
+  const menu = win.getByTestId("select-menu");
+  const option =
+    typeof choice === "string"
+      ? menu.locator(`[data-value="${choice}"]`)
+      : menu.getByRole("option", { name: choice.label, exact: true });
+  await option.click();
+}

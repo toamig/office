@@ -1,10 +1,8 @@
-import type { AutomationView, SessionRow } from "@shared/models";
+import type { AutomationView } from "@shared/models";
 import { Chip, EmptyState, Panel } from "../../components/ui";
 import { useQuery } from "../../lib/hooks";
 import { useUi } from "../../stores/ui";
-
-const tone = (s: SessionRow["status"]): "neutral" | "good" | "warn" | "bad" =>
-  s === "needs-you" || s === "failed" ? "bad" : s === "working" ? "good" : "neutral";
+import { StatusChip } from "../../components/StatusChip";
 
 /** Running agents and the ones that need you, plus how many have finished since the owner looked. */
 export function LiveAgentsPanel() {
@@ -22,7 +20,7 @@ export function LiveAgentsPanel() {
       )}
       {live.map((s) => (
         <div key={s.id} className="flex items-center gap-2 py-0.5" data-testid="live-agent">
-          <Chip tone={tone(s.status)}>{s.status}</Chip>
+          <StatusChip status={s.status} />
           <button
             className="border-0 bg-transparent p-0 text-left underline"
             style={{ color: "var(--text)" }}

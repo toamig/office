@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, pick } from "./helpers";
 
 test("the first-run wizard completes on fixtures from an empty app-data folder", async () => {
   const { app, world, data } = await launch({ world: "unconfigured", fakeTools: true });
@@ -75,8 +75,8 @@ test("automations: add one, run it now, and see it finish", async () => {
   await win.getByTestId("rail-setup").click();
   await win.getByTestId("automation-id").fill("nightly-brief");
   await win.getByTestId("automation-cron").fill("0 3 * * *");
-  await win.getByTestId("automation-project").selectOption({ label: "Alpha" });
-  await win.getByTestId("automation-role").selectOption("researcher");
+  await pick(win, "automation-project", { label: "Alpha" });
+  await pick(win, "automation-role", "researcher");
   await win.getByTestId("automation-prompt").fill("Summarise yesterday");
   await win.getByTestId("automation-save").click();
   const row = win.getByTestId("automation-row").filter({ hasText: "nightly-brief" });
@@ -103,7 +103,7 @@ test("automations: add one, run it now, and see it finish", async () => {
   await win.getByTestId("rail-setup").click();
   await win.getByTestId("automation-cron").fill("every day");
   await win.getByTestId("automation-id").fill("bad-one");
-  await win.getByTestId("automation-project").selectOption({ label: "Alpha" });
+  await pick(win, "automation-project", { label: "Alpha" });
   await win.getByTestId("automation-prompt").fill("x");
   await win.getByTestId("automation-save").click();
   await expect(win.getByTestId("automation-error")).toContainText("not a valid cron expression");

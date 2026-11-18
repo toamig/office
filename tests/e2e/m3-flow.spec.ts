@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch, terminalText } from "./helpers";
+import { launch, terminalText, pick } from "./helpers";
 
 // The M3 milestone check on fixtures: a worktree, a fake builder working in it, its diff reviewed with
 // a comment, a commit of the chosen file, and a push to the bare remote.
@@ -38,7 +38,7 @@ test("worktree, fake builder, review with a comment, commit and push to the bare
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
   await win.getByTestId("git-tab-changes").click();
-  await win.getByTestId("diff-dir").selectOption({ label: "Worktree: office/review-flow" });
+  await pick(win, "diff-dir", { label: "Worktree: office/review-flow" });
   await expect(win.getByTestId("diff-file")).toHaveCount(1);
   await win
     .getByTestId("diff-line")
@@ -52,7 +52,7 @@ test("worktree, fake builder, review with a comment, commit and push to the bare
 
   // Commit only that file, and push: the first push sets the upstream on the bare remote.
   await win.getByTestId("git-tab-commit").click();
-  await win.getByTestId("commit-dir").selectOption({ label: "Worktree: office/review-flow" });
+  await pick(win, "commit-dir", { label: "Worktree: office/review-flow" });
   await expect(win.getByTestId("commit-file")).toHaveCount(1);
   await win.getByTestId("commit-message").fill("Builder: add the built file");
   await win.getByTestId("commit-push").click();

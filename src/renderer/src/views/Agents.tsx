@@ -1,7 +1,7 @@
 import { Archive, LayoutGrid, Play, Rows2, Columns2, Square, X } from "lucide-react";
 import { useEffect, useState } from "react";
-import type { Layout, SessionRow, SessionStatus } from "@shared/models";
-import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
+import type { Layout, SessionRow } from "@shared/models";
+import { Button, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
@@ -9,12 +9,11 @@ import { CaptureDialog } from "./agents/CaptureDialog";
 import { PaneHeader } from "./agents/PaneHeader";
 import { StartAgentDialog } from "./agents/StartAgentDialog";
 import { SessionSurface } from "./agents/SessionSurface";
+import { Select } from "../components/Select";
+import { StatusChip } from "../components/StatusChip";
 
 const EMPTY: Layout = { open: [], active: null, split: "single", panes: [] };
 const CAPACITY: Record<Layout["split"], number> = { single: 1, columns: 2, rows: 2, grid: 4 };
-
-const tone = (s: SessionStatus): "neutral" | "good" | "warn" | "bad" =>
-  s === "working" ? "good" : s === "needs-you" ? "warn" : s === "failed" ? "bad" : "neutral";
 
 function SessionList({
   sessions,
@@ -43,16 +42,34 @@ function SessionList({
           key={s.id}
           data-testid="session-row"
           onClick={() => onOpen(s)}
-          className="border-b px-3 py-2"
+          onContextMenu={(e) => {
+            e.preventDefault();
+            void office
+              .invoke("app.popupMenu", {
+                items: [
+                  { id: "resume", label: "Resume", enabled: !s.running && s.mode !== "chat" },
+                  { id: "stop", label: "Stop", enabled: s.running },
+                  { id: "close", label: "Close and wrap up" },
+                ],
+              })
+              .then((choice) => {
+                if (choice === "resume")
+                  void office.invoke("sessions.resume", { id: s.id }).then(onChanged);
+                else if (choice === "stop")
+                  void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
+                else if (choice === "close") onCloseSession(s);
+              });
+          }}
+          className="session-row border-b px-3 py-2"
           style={{
             borderColor: "var(--line)",
-            background: active === s.id ? "var(--panel)" : "transparent",
+            background: active === s.id ? "var(--panel)" : undefined,
           }}
         >
           <div className="flex items-center gap-2">
             <span className="flex-1 truncate font-medium">{s.title ?? s.provider}</span>
             <span data-testid="session-status">
-              <Chip tone={tone(s.status)}>{s.status}</Chip>
+              <StatusChip status={s.status} />
             </span>
           </div>
           <div
@@ -64,7 +81,7 @@ function SessionList({
             {s.role && <span>role {s.role}</span>}
             <span>{timeAgo(s.updatedAt)}</span>
           </div>
-          <div className="mt-1 flex gap-1.5">
+          <div className="session-actions mt-1 flex gap-1.5">
             {!s.running && s.mode !== "chat" && (
               <Button
                 onClick={(e) => {
@@ -198,7 +215,7 @@ export function Agents() {
         style={{ borderColor: "var(--line)" }}
       >
         <h1 className="m-0 mr-2 text-lg font-semibold">Agents</h1>
-        <select
+        <Select
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           aria-label="Project filter"
@@ -211,7 +228,7 @@ export function Agents() {
               {p.name}
             </option>
           ))}
-        </select>
+        </Select>
         <div className="flex-1" />
         {splits.map(([id, Icon, label]) => (
           <Button
@@ -260,6 +277,7 @@ export function Agents() {
                   {s?.title ?? id.slice(0, 8)}
                   <button
                     aria-label="Close tab"
+                    title="Close tab"
                     className="border-0 bg-transparent p-0"
                     style={{ color: "var(--muted)" }}
                     onClick={(e) => {

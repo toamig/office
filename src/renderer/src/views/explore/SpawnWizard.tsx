@@ -5,6 +5,7 @@ import { Button, Chip, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import { useEscape } from "../../lib/escape";
+import { Select } from "../../components/Select";
 
 const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
@@ -144,7 +145,7 @@ export function SpawnWizard({
               </label>
               <label className="grid grid-cols-[120px_1fr] items-center gap-2">
                 Notes domain
-                <select
+                <Select
                   className={field}
                   style={fieldStyle}
                   value={domain}
@@ -155,7 +156,7 @@ export function SpawnWizard({
                       {d}
                     </option>
                   ))}
-                </select>
+                </Select>
               </label>
               <label className="grid grid-cols-[120px_1fr] items-center gap-2">
                 Group
@@ -175,7 +176,7 @@ export function SpawnWizard({
               </label>
               <label className="grid grid-cols-[120px_1fr] items-center gap-2">
                 GitHub repo
-                <select
+                <Select
                   className={field}
                   style={fieldStyle}
                   value={visibility}
@@ -189,13 +190,13 @@ export function SpawnWizard({
                 >
                   <option value="private">Private</option>
                   <option value="public">Public</option>
-                </select>
+                </Select>
               </label>
               {visibility === "public" && (
                 <>
                   <label className="grid grid-cols-[120px_1fr] items-center gap-2">
                     Licence
-                    <select
+                    <Select
                       className={field}
                       style={fieldStyle}
                       value={license}
@@ -203,7 +204,7 @@ export function SpawnWizard({
                     >
                       <option value="mit">MIT</option>
                       <option value="none">None</option>
-                    </select>
+                    </Select>
                   </label>
                   <label
                     className="flex items-center gap-2 rounded border px-2 py-1.5"

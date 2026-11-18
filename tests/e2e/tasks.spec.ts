@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, pick } from "./helpers";
 
 test("a Feature task runs plan, build and review with only the owner's approvals", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
@@ -9,7 +9,7 @@ test("a Feature task runs plan, build and review with only the owner's approvals
   const win = await app.firstWindow();
   await win.getByTestId("rail-board").click();
   await win.getByTestId("new-task-open").click();
-  await win.getByTestId("task-project").selectOption({ label: "Alpha" });
+  await pick(win, "task-project", { label: "Alpha" });
   await win.getByTestId("task-title").fill("Add the sheep counter");
   await win.getByTestId("task-description").fill("Add a counter of sheep to the HUD.");
   await win.getByTestId("task-create").click();
@@ -51,7 +51,7 @@ test("rejecting a gate runs the stage again, and a failed task can be retried or
   const win = await app.firstWindow();
   await win.getByTestId("rail-board").click();
   await win.getByTestId("new-task-open").click();
-  await win.getByTestId("task-project").selectOption({ label: "Beta" });
+  await pick(win, "task-project", { label: "Beta" });
   await win.getByTestId("task-title").fill("Rework me");
   await win.getByTestId("task-create").click();
   await expect(win.getByTestId("column-waiting").getByTestId("task-card")).toHaveCount(1, {
@@ -84,9 +84,9 @@ test("fan-out: two builders run side by side, one is kept after a confirm, and n
   const win = await app.firstWindow();
   await win.getByTestId("rail-board").click();
   await win.getByTestId("new-task-open").click();
-  await win.getByTestId("task-project").selectOption({ label: "Alpha" });
+  await pick(win, "task-project", { label: "Alpha" });
   await win.getByTestId("task-title").fill("Two builders");
-  await win.getByTestId("task-fanout").selectOption("2");
+  await pick(win, "task-fanout", "2");
   await win.getByTestId("task-create").click();
   await expect(win.getByTestId("column-waiting").getByTestId("task-card")).toHaveCount(1, {
     timeout: 60000,

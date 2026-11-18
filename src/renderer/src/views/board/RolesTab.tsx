@@ -3,6 +3,7 @@ import type { Role } from "@shared/types";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { Select } from "../../components/Select";
 
 const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
@@ -64,7 +65,7 @@ function RoleForm({
       )}
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Provider
-        <select
+        <Select
           className={field}
           style={fieldStyle}
           value={draft.provider}
@@ -79,7 +80,7 @@ function RoleForm({
           {!providers.data?.some((p) => p.id === draft.provider) && (
             <option value={draft.provider}>{draft.provider}</option>
           )}
-        </select>
+        </Select>
       </label>
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Model
@@ -100,7 +101,7 @@ function RoleForm({
       </label>
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Effort
-        <select
+        <Select
           className={field}
           style={fieldStyle}
           value={draft.effort ?? ""}
@@ -112,7 +113,7 @@ function RoleForm({
               {e || "provider default"}
             </option>
           ))}
-        </select>
+        </Select>
       </label>
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Permission mode
@@ -204,7 +205,7 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
         for example a project whose builder is Codex.
       </p>
       {error && <ErrorBanner message={error} />}
-      <select
+      <Select
         value={projectId}
         onChange={(e) => setProjectId(e.target.value)}
         aria-label="Override project"
@@ -218,12 +219,12 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
             {p.name}
           </option>
         ))}
-      </select>
+      </Select>
       {projectId &&
         roleIds.map((role) => (
           <div key={role} className="mt-2 flex items-center gap-2">
             <span className="w-28">{role}</span>
-            <select
+            <Select
               value={overrides[role] ?? ""}
               onChange={(e) => void set(role, e.target.value || null)}
               aria-label={`Override for ${role}`}
@@ -239,7 +240,7 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
                     use {r}
                   </option>
                 ))}
-            </select>
+            </Select>
           </div>
         ))}
     </Panel>

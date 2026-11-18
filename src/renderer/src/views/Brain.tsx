@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
 import { office } from "../lib/ipc";
 import { useQuery } from "../lib/hooks";
 import { AskPanel } from "./brain/AskPanel";
+import { Select } from "../components/Select";
 
 function QuickNote() {
   const projects = useQuery("projects.list");
@@ -39,7 +40,7 @@ function QuickNote() {
         </div>
       )}
       <div className="flex gap-2">
-        <select
+        <Select
           value={project}
           onChange={(e) => setProject(e.target.value)}
           aria-label="Note project"
@@ -53,7 +54,7 @@ function QuickNote() {
               {p.name}
             </option>
           ))}
-        </select>
+        </Select>
         <input
           value={text}
           onChange={(e) => setText(e.target.value)}

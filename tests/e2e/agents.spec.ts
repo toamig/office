@@ -1,5 +1,5 @@
 import { expect, test } from "@playwright/test";
-import { launch, terminalText } from "./helpers";
+import { launch, terminalText, pick } from "./helpers";
 
 test("a node -e echo program runs in a tab, takes typed input and echoes it", async () => {
   const { app } = await launch({
@@ -38,15 +38,15 @@ test("a fake agent session starts from the dialog, shows its status and takes it
   await win.getByTestId("start-agent").click();
 
   await expect(win.getByTestId("start-agent-dialog")).toBeVisible();
-  await win.getByTestId("agent-project").selectOption({ label: "Alpha" });
+  await pick(win, "agent-project", { label: "Alpha" });
   await win.getByTestId("mode-provider").check();
-  await win.getByTestId("agent-provider").selectOption({ label: "Fake agent" });
+  await pick(win, "agent-provider", { label: "Fake agent" });
   await win.getByTestId("agent-prompt").fill("hello there");
   await win.getByTestId("agent-start").click();
 
   const row = win.getByTestId("session-row").first();
   await expect(row).toContainText("Fake agent");
-  await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/);
+  await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/i);
   await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
   await expect.poll(() => terminalText(win)).toContain("echo: hello there");
 
@@ -54,9 +54,9 @@ test("a fake agent session starts from the dialog, shows its status and takes it
   await win.locator(".xterm").click();
   await win.keyboard.type("quit");
   await win.keyboard.press("Enter");
-  await expect(win.getByTestId("session-status").first()).toContainText("exited");
+  await expect(win.getByTestId("session-status").first()).toContainText(/exited/i);
   await win.getByTestId("resume-session").first().click();
-  await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/);
+  await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/i);
   await expect(win.getByTestId("session-row")).toHaveCount(1);
   await app.close();
 });

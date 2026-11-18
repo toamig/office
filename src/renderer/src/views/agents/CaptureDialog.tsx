@@ -4,6 +4,7 @@ import type { CaptureResult, SessionRow } from "@shared/models";
 import { Button, EmptyState, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useEscape } from "../../lib/escape";
+import { Select } from "../../components/Select";
 
 type Dest = "waiting" | "todo" | "drop";
 interface Row {
@@ -113,7 +114,7 @@ export function CaptureDialog({ session, onClose }: { session: SessionRow; onClo
                   aria-label="Item text"
                   onChange={(e) => update(index, { text: e.target.value })}
                 />
-                <select
+                <Select
                   className={field}
                   style={fieldStyle}
                   value={row.dest}
@@ -123,7 +124,7 @@ export function CaptureDialog({ session, onClose }: { session: SessionRow; onClo
                   <option value="waiting">Waiting on you</option>
                   <option value="todo">Open items</option>
                   <option value="drop">Drop</option>
-                </select>
+                </Select>
               </div>
             ))}
           </div>

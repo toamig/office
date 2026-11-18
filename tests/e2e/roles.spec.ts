@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, pick } from "./helpers";
 
 test("editing a role round-trips through the workspace file", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
@@ -11,7 +11,7 @@ test("editing a role round-trips through the workspace file", async () => {
   await win.getByTestId("board-tab-roles").click();
   await win.getByTestId("role-row").filter({ hasText: "builder" }).click();
   await win.getByTestId("role-model").fill("haiku");
-  await win.getByTestId("role-effort").selectOption("high");
+  await pick(win, "role-effort", "high");
   await win.getByTestId("role-instructions").fill("Build carefully.");
   await win.getByTestId("role-save").click();
   await expect(win.getByText("Saved to the workspace config")).toBeVisible();
@@ -27,8 +27,8 @@ test("editing a role round-trips through the workspace file", async () => {
   await win.getByTestId("new-role-id").fill("qa");
   await win.getByTestId("new-role").click();
   await expect(win.getByTestId("role-row").filter({ hasText: "qa" })).toBeVisible();
-  await win.getByTestId("override-project").selectOption({ label: "Alpha" });
-  await win.getByTestId("override-builder").selectOption("qa");
+  await pick(win, "override-project", { label: "Alpha" });
+  await pick(win, "override-builder", "qa");
   await expect
     .poll(
       () =>

@@ -39,7 +39,7 @@ test("a day in the workbench: two agents, a needs-you, capture, ask the brain an
     .getByTestId("session-row")
     .filter({ hasText: "Alpha work" })
     .getByTestId("session-status");
-  await expect(alphaStatus).toContainText("needs-you", { timeout: 20000 });
+  await expect(alphaStatus).toContainText(/needs you/i, { timeout: 20000 });
   await win.getByTestId("rail-inbox").click();
   await expect(win.getByTestId("notification").first()).toContainText("Alpha work needs you");
 

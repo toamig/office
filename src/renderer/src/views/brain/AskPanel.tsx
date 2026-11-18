@@ -5,6 +5,7 @@ import { Markdown } from "../../components/Markdown";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { Select } from "../../components/Select";
 
 interface Turn {
   id: number;
@@ -72,7 +73,7 @@ export function AskPanel({ onOpenNote }: { onOpenNote: (path: string) => void })
     <Panel title="Ask the brain">
       <div className="mb-3 flex items-center gap-2">
         <span style={{ color: "var(--muted)" }}>Scope</span>
-        <select
+        <Select
           value={scope}
           onChange={(e) => setScope(e.target.value)}
           aria-label="Scope"
@@ -86,7 +87,7 @@ export function AskPanel({ onOpenNote }: { onOpenNote: (path: string) => void })
               {p.name}
             </option>
           ))}
-        </select>
+        </Select>
       </div>
       <div className="mb-3 max-h-[46vh] overflow-auto" data-testid="ask-turns">
         {turns.length === 0 && (

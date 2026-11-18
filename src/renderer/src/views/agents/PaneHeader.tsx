@@ -1,10 +1,8 @@
 import { GitBranch, MessageSquare, Square } from "lucide-react";
 import type { SessionRow } from "@shared/models";
-import { Chip } from "../../components/ui";
 import { office } from "../../lib/ipc";
-
-const tone = (s: SessionRow["status"]): "neutral" | "good" | "warn" | "bad" =>
-  s === "needs-you" || s === "failed" ? "bad" : s === "working" ? "good" : "neutral";
+import { Select } from "../../components/Select";
+import { StatusChip } from "../../components/StatusChip";
 
 /**
  * The strip above a session's terminal: its name (a picker when panes are split), status, branch and a Stop
@@ -27,7 +25,7 @@ export function PaneHeader({
   return (
     <div className="pane-header" data-testid="pane-header">
       {split ? (
-        <select
+        <Select
           value={session.id}
           onChange={(e) => onPick(e.target.value)}
           aria-label="Pane session"
@@ -38,11 +36,11 @@ export function PaneHeader({
               {o.title}
             </option>
           ))}
-        </select>
+        </Select>
       ) : (
         <span className="pane-title">{session.title ?? session.provider}</span>
       )}
-      <Chip tone={tone(session.status)}>{session.status}</Chip>
+      <StatusChip status={session.status} />
       {session.branch && (
         <span className="pane-branch">
           <GitBranch size={12} />

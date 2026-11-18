@@ -1,10 +1,12 @@
 import { Compass, Rocket } from "lucide-react";
 import { useState } from "react";
-import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
+import { Button, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { SpawnWizard } from "./explore/SpawnWizard";
 import { SessionSurface } from "./agents/SessionSurface";
+import { Select } from "../components/Select";
+import { StatusChip } from "../components/StatusChip";
 
 /** A general chat for exploring ideas, not tied to any project; one action turns an idea into a project. */
 export function Explore() {
@@ -38,7 +40,7 @@ export function Explore() {
         <Compass size={18} />
         <h1 className="m-0 mr-2 text-lg font-semibold">Explore</h1>
         <div className="flex-1" />
-        <select
+        <Select
           value={provider}
           onChange={(e) => setProvider(e.target.value)}
           aria-label="Explore with"
@@ -53,7 +55,7 @@ export function Explore() {
                 {p.label}
               </option>
             ))}
-        </select>
+        </Select>
         <Button variant="primary" onClick={() => void start()} data-testid="explore-start">
           New exploration
         </Button>
@@ -89,7 +91,7 @@ export function Explore() {
                 className="flex items-center gap-2 text-[12px]"
                 style={{ color: "var(--muted)" }}
               >
-                <Chip>{s.status}</Chip> {timeAgo(s.updatedAt)}
+                <StatusChip status={s.status} /> {timeAgo(s.updatedAt)}
               </div>
             </div>
           ))}

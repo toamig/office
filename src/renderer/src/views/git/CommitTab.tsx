@@ -3,6 +3,7 @@ import { useState } from "react";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { Select } from "../../components/Select";
 
 /** Stage the files you choose, write a message (no Co-Authored-By trailers), commit, and push. */
 export function CommitTab({ projectId }: { projectId: string }) {
@@ -57,7 +58,7 @@ export function CommitTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="grid gap-3" data-testid="commit-tab">
-      <select
+      <Select
         value={dir}
         onChange={(e) => setDir(e.target.value)}
         aria-label="Commit in"
@@ -73,7 +74,7 @@ export function CommitTab({ projectId }: { projectId: string }) {
               Worktree: {w.branch ?? w.path}
             </option>
           ))}
-      </select>
+      </Select>
       {(error || status.error) && (
         <div data-testid="commit-error">
           <ErrorBanner message={error ?? status.error ?? ""} />

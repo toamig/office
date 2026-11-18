@@ -6,6 +6,7 @@ import { office } from "../../lib/ipc";
 import { timeAgo, useQuery } from "../../lib/hooks";
 import { TaskDetail } from "./TaskDetail";
 import { useEscape } from "../../lib/escape";
+import { Select } from "../../components/Select";
 
 const columns: Array<{ id: string; title: string; match: (t: TaskView) => boolean }> = [
   { id: "running", title: "Running", match: (t) => t.status === "running" },
@@ -64,7 +65,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
         <div className="grid gap-2.5">
           <label className="grid grid-cols-[100px_1fr] items-center gap-2">
             Project
-            <select
+            <Select
               className={field}
               style={fieldStyle}
               value={projectId}
@@ -79,11 +80,11 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
                     {p.name}
                   </option>
                 ))}
-            </select>
+            </Select>
           </label>
           <label className="grid grid-cols-[100px_1fr] items-center gap-2">
             Pipeline
-            <select
+            <Select
               className={field}
               style={fieldStyle}
               value={chosen}
@@ -95,7 +96,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
                   {p.name}
                 </option>
               ))}
-            </select>
+            </Select>
           </label>
           <label className="grid grid-cols-[100px_1fr] items-center gap-2">
             Title
@@ -109,7 +110,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
           </label>
           <label className="grid grid-cols-[100px_1fr] items-center gap-2">
             Builders
-            <select
+            <Select
               className={field}
               style={fieldStyle}
               value={fanout}
@@ -120,7 +121,7 @@ function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
               <option value={2}>Run with 2 builders and compare</option>
               <option value={3}>Run with 3 builders and compare</option>
               <option value={4}>Run with 4 builders and compare</option>
-            </select>
+            </Select>
           </label>
           <label className="grid grid-cols-[100px_1fr] items-start gap-2">
             Description

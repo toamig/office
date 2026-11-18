@@ -28,7 +28,7 @@ test("a simulated hook POST moves a session to needs-you and raises an urgent no
   expect(await post("e2e-token")).toBe(200);
 
   await win.getByTestId("rail-agents").click();
-  await expect(win.getByTestId("session-status").first()).toContainText("needs-you");
+  await expect(win.getByTestId("session-status").first()).toContainText(/needs you/i);
   await win.getByTestId("rail-inbox").click();
   const note = win.getByTestId("notification");
   await expect(note).toHaveCount(1);
@@ -69,7 +69,7 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
   await win.locator(".xterm").click();
   await win.keyboard.type("ask can I");
   await win.keyboard.press("Enter");
-  await expect(win.getByTestId("session-status").first()).toContainText("needs-you", {
+  await expect(win.getByTestId("session-status").first()).toContainText(/needs you/i, {
     timeout: 20000,
   });
   await win.getByTestId("rail-inbox").click();

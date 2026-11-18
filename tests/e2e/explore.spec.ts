@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch, terminalText } from "./helpers";
+import { launch, terminalText, pick } from "./helpers";
 
 test("Explore runs a chat and the wizard turns it into a project with gh replaced by a fake", async () => {
   const { app, world, ghRemotes } = await launch({ world: true, fakeTools: true });
@@ -10,7 +10,7 @@ test("Explore runs a chat and the wizard turns it into a project with gh replace
   const win = await app.firstWindow();
 
   await win.getByTestId("rail-explore").click();
-  await win.getByTestId("explore-provider").selectOption({ label: "Fake agent" });
+  await pick(win, "explore-provider", { label: "Fake agent" });
   await win.getByTestId("explore-start").click();
   await expect(win.getByTestId("explore-row")).toHaveCount(1);
   await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
@@ -58,12 +58,12 @@ test("a public repo cannot be created without its own explicit checkbox", async 
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
   await win.getByTestId("rail-explore").click();
-  await win.getByTestId("explore-provider").selectOption({ label: "Fake agent" });
+  await pick(win, "explore-provider", { label: "Fake agent" });
   await win.getByTestId("explore-start").click();
   await expect(win.getByTestId("explore-row")).toHaveCount(1);
   await win.getByTestId("make-project").click();
   await win.getByTestId("spawn-name").fill("Open Thing");
-  await win.getByTestId("spawn-visibility").selectOption("public");
+  await pick(win, "spawn-visibility", "public");
   await win.getByTestId("spawn-review").click();
   await expect(win.getByTestId("spawn-steps")).toContainText("--public");
   await expect(win.getByTestId("spawn-run")).toBeDisabled();

@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { InventoryItem } from "@shared/models";
 import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { useQuery } from "../../lib/hooks";
+import { Select } from "../../components/Select";
 
 const kinds: Array<[InventoryItem["kind"], string]> = [
   ["model", "Models"],
@@ -21,7 +22,7 @@ export function InventoryPanel() {
     <Panel
       title="Inventory"
       action={
-        <select
+        <Select
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           aria-label="Inventory project"
@@ -34,7 +35,7 @@ export function InventoryPanel() {
               + {p.name}
             </option>
           ))}
-        </select>
+        </Select>
       }
     >
       {inventory.error && <ErrorBanner message={inventory.error} />}

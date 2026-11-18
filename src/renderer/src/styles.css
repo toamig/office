@@ -736,3 +736,79 @@ button,
 .mention-item:hover {
   background: var(--hover);
 }
+
+/* ---- the dropdown ---- */
+.select {
+  display: inline-flex;
+  min-width: 0;
+  max-width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 3px 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--text);
+  text-align: left;
+}
+.select:hover:not(:disabled) {
+  background: var(--hover);
+}
+.select:disabled {
+  opacity: 0.5;
+}
+.select-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.select-chevron {
+  flex: none;
+  color: var(--muted);
+}
+.select-menu {
+  position: fixed;
+  z-index: 80;
+  max-height: 280px;
+  padding: 4px;
+  overflow: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+.select-option {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 10px 0 4px;
+  border-radius: 5px;
+  white-space: nowrap;
+}
+.select-option[data-active="true"] {
+  background: var(--hover);
+}
+.select-option[aria-disabled="true"] {
+  color: var(--muted);
+}
+.select-check {
+  display: inline-flex;
+  width: 16px;
+  justify-content: center;
+  color: var(--accent);
+}
+
+/* A session's actions show on hover or focus, as in the Claude app's sidebar. */
+.session-row .session-actions {
+  opacity: 0;
+  transition: opacity var(--ease);
+}
+.session-row:hover .session-actions,
+.session-row:focus-within .session-actions {
+  opacity: 1;
+}
+.session-row:hover {
+  background: var(--hover);
+}

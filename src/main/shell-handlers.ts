@@ -17,6 +17,23 @@ export function registerShellHandlers(
   updates: UpdateService,
 ): void {
   ctx.ipc.handle("app.chrome", () => currentChrome());
+  ctx.ipc.handle("app.popupMenu", (req) => {
+    const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
+    if (!window || req.items.length === 0) return null;
+    return new Promise<string | null>((resolve) => {
+      let chosen: string | null = null;
+      const menu = Menu.buildFromTemplate(
+        req.items.map((item) => ({
+          label: item.label,
+          enabled: item.enabled !== false,
+          click: () => {
+            chosen = item.id;
+          },
+        })),
+      );
+      menu.popup({ window, callback: () => resolve(chosen) });
+    });
+  });
   ctx.ipc.handle("app.terminalMenu", (req) => {
     const window = BrowserWindow.getFocusedWindow() ?? BrowserWindow.getAllWindows()[0];
     if (!window) return;

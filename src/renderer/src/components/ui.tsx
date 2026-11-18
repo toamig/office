@@ -12,7 +12,15 @@ export function Button({
     primary: "border-transparent bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90",
     ghost: "border-transparent hover:bg-[var(--hover)]",
   }[variant];
-  return <button className={`${base} ${styles} ${className}`} {...props} />;
+  // An icon-only button gets its label as a tooltip too.
+  const tip = props.title ?? props["aria-label"];
+  return (
+    <button
+      className={`${base} ${styles} ${className}`}
+      {...props}
+      {...(tip ? { title: tip } : {})}
+    />
+  );
 }
 
 export function Chip({

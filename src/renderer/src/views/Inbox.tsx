@@ -5,6 +5,7 @@ import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi, type ViewId } from "../stores/ui";
+import { Select } from "../components/Select";
 
 /** Every notification in one place, with filters for unread, urgent and project. */
 export function Inbox() {
@@ -42,7 +43,7 @@ export function Inbox() {
           <input type="checkbox" checked={urgent} onChange={(e) => setUrgent(e.target.checked)} />{" "}
           Urgent
         </label>
-        <select
+        <Select
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           aria-label="Project"
@@ -55,7 +56,7 @@ export function Inbox() {
               {p.name}
             </option>
           ))}
-        </select>
+        </Select>
         <Button
           onClick={() => void office.invoke("notifications.markRead", {}).then(list.reload)}
           data-testid="mark-all-read"
