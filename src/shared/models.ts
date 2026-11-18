@@ -591,6 +591,8 @@ export const TaskView = z.object({
   stageIndex: z.number(),
   /** How many builders run in parallel on the build stage (1 means no fan-out). */
   fanout: z.number(),
+  /** True once the owner recorded the finished task in the project notes. */
+  recorded: z.boolean(),
   status: TaskStatus,
   createdAt: z.string(),
   updatedAt: z.string(),

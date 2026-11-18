@@ -183,6 +183,9 @@ export async function createContext(
     },
     resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
     tasksDir: tasksDir(),
+    recordNote: async (projectId, text) => {
+      await ops.addTodo(projectId, text, undefined, "Implementation notes");
+    },
   });
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => waiting.check());

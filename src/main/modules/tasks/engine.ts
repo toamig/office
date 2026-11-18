@@ -25,6 +25,8 @@ export interface TaskEngineDeps {
   /** Resolves a role id for a project, honouring its overrides. */
   resolveRole: (roleId: string, projectId: string) => Role;
   tasksDir: string;
+  /** Appends a dated line to the project's "Implementation notes" through the vault writer. */
+  recordNote: (projectId: string, text: string) => Promise<void>;
 }
 
 interface TaskRow {
@@ -37,6 +39,7 @@ interface TaskRow {
   worktree: string | null;
   stage_index: number;
   fanout: number;
+  recorded_at: string | null;
   status: TaskStatus;
   created_at: string;
   updated_at: string;
@@ -172,6 +175,7 @@ export class TaskEngine {
       worktree: t.worktree,
       stageIndex: t.stage_index,
       fanout: t.fanout,
+      recorded: t.recorded_at !== null,
       status: t.status,
       createdAt: t.created_at,
       updatedAt: t.updated_at,
@@ -304,6 +308,27 @@ export class TaskEngine {
     this.lastError.delete(`${id}:${t.stage_index}`);
     this.setTask(id, { status: "running" });
     void this.drive(id);
+  }
+
+  /** Writes a one-line hand-off record of a finished task into the project notes. Only when asked. */
+  async record(id: string): Promise<void> {
+    const t = this.task(id);
+    if (t.status !== "done")
+      throw new IpcFailure("not-done", "Only a finished task can be recorded");
+    if (t.recorded_at)
+      throw new IpcFailure("already-recorded", "This task is already recorded in the notes");
+    const ws = this.deps.workspace();
+    const stages = this.stages(id)
+      .map((s) => s.stage_id)
+      .join(", ");
+    const name = ws?.pipelines[t.pipeline]?.name ?? t.pipeline;
+    const where = t.branch ? ` on ${t.branch}` : "";
+    await this.deps.recordNote(
+      t.project_id,
+      `Task "${t.title}" (${name}) finished${where}; stages: ${stages}.`,
+    );
+    this.deps.db.prepare("UPDATE tasks SET recorded_at = ? WHERE id = ?").run(nowIso(), id);
+    this.changed(id);
   }
 
   /** Keeps one builder of a fan-out stage: merges it into the task branch and removes the others. */

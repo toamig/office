@@ -1,4 +1,6 @@
 import { expect, test } from "@playwright/test";
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { launch } from "./helpers";
 
 test("a Feature task runs plan, build and review with only the owner's approvals", async () => {
@@ -34,6 +36,13 @@ test("a Feature task runs plan, build and review with only the owner's approvals
   await expect(win.getByTestId("column-done").getByTestId("task-card")).toHaveCount(1, {
     timeout: 60000,
   });
+
+  // Nothing is written to the notes until the owner asks for it.
+  const notes = join(world.hub, "Alpha", "OpenItems.md");
+  expect(readFileSync(notes, "utf8")).not.toContain("Add the sheep counter");
+  await win.getByTestId("task-record").click();
+  await expect(win.getByText("Recorded in the project notes")).toBeVisible();
+  expect(readFileSync(notes, "utf8")).toContain('Task "Add the sheep counter" (Feature) finished');
   await app.close();
 });
 

@@ -10,6 +10,9 @@ import { loadWorkspaceFile } from "../../src/main/core/workspace";
 import { ProviderRegistry } from "../../src/main/modules/providers/registry";
 import { RunService } from "../../src/main/modules/runs/service";
 import { TaskEngine } from "../../src/main/modules/tasks/engine";
+import { VaultOps } from "../../src/main/modules/vault/ops";
+import { VaultService } from "../../src/main/modules/vault/service";
+import { VaultWriter } from "../../src/main/modules/vault/writer";
 import { renderTemplate } from "../../src/main/modules/tasks/templates";
 import type { TaskView } from "../../src/shared/models";
 import type { Role, Workspace } from "../../src/shared/types";
@@ -52,6 +55,13 @@ function harness(): Harness {
   const bus = new Bus();
   const notifier = new Notifier({ db, bus, workspace: () => ws, quietHours: () => undefined });
   const providers = new ProviderRegistry();
+  const vault = new VaultService({ bus, workspace: () => ws, workspaceRoot: () => world.hub });
+  const writer = new VaultWriter({
+    hubRoot: () => world.hub,
+    onWarning: () => undefined,
+    today: () => "2026-11-19",
+  });
+  const ops = new VaultOps({ vault, writer, workspace: () => ws });
   const make = (): TaskEngine => {
     const runs = new RunService({ db, bus, providers, runsDir: join(world.root, "runs") });
     return new TaskEngine({
@@ -67,6 +77,9 @@ function harness(): Harness {
         return role;
       },
       tasksDir: join(world.root, "tasks"),
+      recordNote: async (projectId, text) => {
+        await ops.addTodo(projectId, text, undefined, "Implementation notes");
+      },
     });
   };
   return { world, db, bus, notifier, ws, engine: make(), restart: make };
@@ -350,5 +363,44 @@ describe("fan-out", () => {
     expect(first.length).toBe(2);
     await expect(h.engine.keep(t.id, 9)).rejects.toThrow(/not available/);
     h.engine.cancel(t.id);
+  });
+});
+
+describe("hand-off records", () => {
+  it("records a finished task in the project notes only when asked, once, through the writer", async () => {
+    const h = harness();
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "feature",
+      title: "Record me",
+      description: "x",
+    });
+    await expect(h.engine.record(t.id)).rejects.toThrow(/Only a finished task/);
+    await waitFor(h.engine, t.id, "waiting-gate");
+    h.engine.approve(t.id);
+    await until(
+      () => h.engine.list()[0]?.stageIndex === 2 && h.engine.list()[0]?.status === "waiting-gate",
+    );
+    h.engine.approve(t.id);
+    await waitFor(h.engine, t.id, "done");
+
+    const file = join(h.world.hub, "Alpha", "OpenItems.md");
+    const before = readFileSync(file, "utf8");
+    expect(before).not.toContain("Record me");
+    expect(h.engine.list()[0]?.recorded).toBe(false);
+
+    await h.engine.record(t.id);
+    const after = readFileSync(file, "utf8");
+    const record = after.split("\n").find((l) => l.includes("Record me")) ?? "";
+    expect(record).toMatch(
+      /^- 2026-11-19 Task "Record me" \(Feature\) finished on office\/record-me-[0-9a-f]{4}; stages: plan, build, review\.$/,
+    );
+    expect(after).toContain("## Implementation notes\n\n- 2026-11-01 A dated note.\n" + record);
+    expect(after.split("\n").length - before.split("\n").length).toBe(1);
+    expect(sh(join(h.world.hub, "Alpha"), "log", "-1", "--format=%s")).toContain(
+      'Alpha: todo: Task "Record me"',
+    );
+    expect(h.engine.list()[0]?.recorded).toBe(true);
+    await expect(h.engine.record(t.id)).rejects.toThrow(/already recorded/);
   });
 });

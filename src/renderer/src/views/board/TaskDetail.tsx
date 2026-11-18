@@ -276,6 +276,20 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
             </div>
           </div>
         )}
+        {t.status === "done" && (
+          <div className="mt-3">
+            {t.recorded ? (
+              <Chip tone="good">Recorded in the project notes</Chip>
+            ) : (
+              <Button
+                onClick={() => void run(() => office.invoke("tasks.record", { id }))}
+                data-testid="task-record"
+              >
+                Record it in the project notes
+              </Button>
+            )}
+          </div>
+        )}
         <div className="mt-3 flex gap-2">
           {t.status === "failed" && (
             <Button
