@@ -168,3 +168,48 @@ export const WriteResult = z.object({
   validateErrors: z.array(z.string()),
 });
 export type WriteResult = z.infer<typeof WriteResult>;
+
+export const NotificationKind = z.enum([
+  "agent.needs-you",
+  "agent.done",
+  "agent.failed",
+  "git.conflict",
+  "git.push-failed",
+  "git.behind",
+  "ci.failed",
+  "pr.review-requested",
+  "vault.waiting-new",
+  "vault.write-failed",
+  "task.gate",
+  "task.done",
+  "automation.done",
+  "brief.ready",
+]);
+export type NotificationKind = z.infer<typeof NotificationKind>;
+
+export const NotificationLink = z.object({
+  view: z.string(),
+  params: z.record(z.string(), z.string()).optional(),
+});
+export type NotificationLink = z.infer<typeof NotificationLink>;
+
+export const NotificationRow = z.object({
+  id: z.string(),
+  kind: z.string(),
+  projectId: z.string().nullable(),
+  title: z.string(),
+  body: z.string().nullable(),
+  link: NotificationLink.nullable(),
+  urgent: z.boolean(),
+  createdAt: z.string(),
+  readAt: z.string().nullable(),
+});
+export type NotificationRow = z.infer<typeof NotificationRow>;
+
+export const NotificationFilter = z.object({
+  unread: z.boolean().optional(),
+  urgent: z.boolean().optional(),
+  projectId: z.string().optional(),
+  limit: z.number().int().positive().optional(),
+});
+export type NotificationFilter = z.infer<typeof NotificationFilter>;

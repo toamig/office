@@ -19,6 +19,13 @@ export function registerHandlers(ctx: AppContext): void {
   });
   ctx.ipc.handle("git.syncAll", () => ctx.sync());
 
+  ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
+  ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
+  ctx.ipc.handle("notifications.counts", () => ({
+    unread: ctx.notifier.unreadCount(),
+    urgentUnread: ctx.notifier.unreadUrgentCount(),
+  }));
+
   ctx.ipc.handle("vault.openItems", (req) => ctx.vault.read(req.projectId));
   ctx.ipc.handle("vault.waiting", () => ctx.vault.allWaiting());
   ctx.ipc.handle("vault.tickWaiting", (req) => ctx.ops.tickWaiting(req.projectId, req.raw));

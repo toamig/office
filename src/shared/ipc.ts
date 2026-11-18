@@ -1,6 +1,8 @@
 import { z } from "zod";
 import {
   HealthView,
+  NotificationFilter,
+  NotificationRow,
   OpenItemsView,
   ProjectDetail,
   ProjectSummary,
@@ -19,8 +21,10 @@ export const eventTypes = [
   "run.progress",
   "run.done",
   "notification.new",
+  "notification.read",
   "vault.changed",
   "task.changed",
+  "app.navigate",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
 
@@ -58,6 +62,15 @@ export const channels = {
   "vault.addNote": {
     req: z.object({ projectId: z.string(), text: z.string().min(1) }),
     res: WriteResult,
+  },
+  "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
+  "notifications.markRead": {
+    req: z.object({ ids: z.array(z.string()).optional() }),
+    res: z.void(),
+  },
+  "notifications.counts": {
+    req: z.void(),
+    res: z.object({ unread: z.number(), urgentUnread: z.number() }),
   },
   "vault.health": { req: z.void(), res: HealthView },
   "projects.refresh": { req: z.object({ id: z.string().optional() }), res: z.void() },

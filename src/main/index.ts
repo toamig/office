@@ -1,7 +1,9 @@
-import { app, BrowserWindow, ipcMain, shell } from "electron";
+import { app, BrowserWindow, ipcMain, Notification, nativeImage, shell } from "electron";
 import { join } from "node:path";
+import type { NotificationRow } from "../shared/models";
 import { IPC_EVENT, IPC_INVOKE } from "../shared/ipc";
 import { createContext, type AppContext } from "./context";
+import { badgePng } from "./core/badge";
 import { registerHandlers } from "./handlers";
 
 const CSP =
@@ -58,33 +60,66 @@ function createWindow(): BrowserWindow {
   return win;
 }
 
+function focusWindow(): void {
+  if (!mainWindow) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+/** Desktop alert for an urgent notification; clicking it opens the place it links to. */
+function showDesktopNotification(row: NotificationRow): void {
+  if (!Notification.isSupported()) return;
+  const note = new Notification({ title: row.title, body: row.body ?? "" });
+  note.on("click", () => {
+    focusWindow();
+    if (row.link && ctx) ctx.bus.emit("app.navigate", row.link, row.projectId ?? undefined);
+  });
+  note.show();
+}
+
+function updateBadge(count: number): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (process.platform === "win32") {
+    mainWindow.setOverlayIcon(
+      count > 0 ? nativeImage.createFromBuffer(badgePng(count)) : null,
+      count > 0 ? `${count} unread urgent` : "",
+    );
+  } else {
+    app.setBadgeCount(count);
+  }
+}
+
+async function boot(): Promise<void> {
+  app.setAppUserModelId("com.toamig.office");
+  const context = await createContext(!app.isPackaged);
+  ctx = context;
+  registerHandlers(context);
+  ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
+    context.ipc.dispatch(channel, payload),
+  );
+  context.bus.on("*", (event) => {
+    for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC_EVENT, event);
+  });
+  context.notifier.addChannel({ id: "desktop", send: showDesktopNotification });
+  context.notifier.onUnreadUrgentChange = updateBadge;
+  mainWindow = createWindow();
+  mainWindow.webContents.once("did-finish-load", () => context.notifier.reportUnread());
+  app.on("browser-window-focus", () => void context.projects.refreshAll());
+  await context.start();
+}
+
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();
 } else {
-  app.on("second-instance", () => {
-    if (mainWindow) {
-      if (mainWindow.isMinimized()) mainWindow.restore();
-      mainWindow.focus();
-    }
-  });
-  void app.whenReady().then(async () => {
-    app.setAppUserModelId("com.toamig.office");
-    ctx = await createContext(!app.isPackaged);
-    registerHandlers(ctx);
-    const registry = ctx.ipc;
-    ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
-      registry.dispatch(channel, payload),
-    );
-    ctx.bus.on("*", (event) => {
-      for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC_EVENT, event);
-    });
-    mainWindow = createWindow();
-    app.on("activate", () => {
-      if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
-    });
+  app.on("second-instance", focusWindow);
+  void app.whenReady().then(boot);
+  app.on("activate", () => {
+    if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
   });
   app.on("window-all-closed", () => {
     if (process.platform !== "darwin") app.quit();
   });
+  app.on("before-quit", () => void ctx?.stop());
 }

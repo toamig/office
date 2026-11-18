@@ -5,17 +5,19 @@ import {
   FolderKanban,
   GitBranch,
   Home,
-  Inbox,
+  Inbox as InboxIcon,
   KanbanSquare,
   RefreshCw,
   Search,
   Settings,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { useEffect, type ComponentType } from "react";
 import { SyncReportDialog } from "./components/SyncReportDialog";
 import { Button } from "./components/ui";
 import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
+import { useQuery } from "./lib/hooks";
+import { Inbox } from "./views/Inbox";
 import { Placeholder } from "./views/Placeholder";
 
 const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: number }> }> = [
@@ -25,13 +27,14 @@ const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: numb
   { id: "git", label: "Git", icon: GitBranch },
   { id: "board", label: "Board", icon: KanbanSquare },
   { id: "brain", label: "Brain", icon: Brain },
-  { id: "inbox", label: "Inbox", icon: Inbox },
+  { id: "inbox", label: "Inbox", icon: InboxIcon },
   { id: "explore", label: "Explore", icon: Compass },
   { id: "setup", label: "Setup", icon: Settings },
 ];
 
 function CurrentView() {
   const view = useUi((s) => s.view);
+  if (view === "inbox") return <Inbox />;
   const item = rail.find((r) => r.id === view);
   return <Placeholder title={item?.label ?? view} note="Coming in a later task." />;
 }
@@ -71,6 +74,18 @@ function TopBar() {
 
 export default function App() {
   const { view, navigate } = useUi();
+  const counts = useQuery("notifications.counts", undefined, [
+    "notification.new",
+    "notification.read",
+  ]);
+  useEffect(
+    () =>
+      office.on("app.navigate", (e) => {
+        const link = e.payload as { view: ViewId; params?: Record<string, string> };
+        navigate(link.view, link.params ?? {});
+      }),
+    [navigate],
+  );
   return (
     <div className="flex h-full">
       <nav
@@ -93,6 +108,15 @@ export default function App() {
           >
             <v.icon size={16} />
             {v.label}
+            {v.id === "inbox" && (counts.data?.unread ?? 0) > 0 && (
+              <span
+                data-testid="inbox-count"
+                className="ml-auto rounded-full px-1.5 text-[11px] text-white"
+                style={{ background: "var(--accent)" }}
+              >
+                {counts.data?.unread}
+              </span>
+            )}
           </button>
         ))}
       </nav>
