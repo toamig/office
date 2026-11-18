@@ -10,11 +10,13 @@ test("theme, accent and density apply at once and are saved in the machine setti
   const win = await app.firstWindow();
   await win.getByTestId("rail-setup").click();
 
-  await win.getByTestId("theme-dark").check();
+  await win.getByTestId("theme-dark").click();
+  await expect(win.getByTestId("theme-dark")).toHaveAttribute("aria-checked", "true");
   await expect(win.locator("html")).toHaveAttribute("data-theme", "dark");
-  await win.getByTestId("theme-light").check();
+  await win.getByTestId("theme-light").click();
+  await expect(win.getByTestId("theme-light")).toHaveAttribute("aria-checked", "true");
   await expect(win.locator("html")).toHaveAttribute("data-theme", "light");
-  await win.getByTestId("density-compact").check();
+  await win.getByTestId("density-compact").click();
   await expect(win.locator("html")).toHaveAttribute("data-density", "compact");
   await win.getByTestId("accent").fill("#c0392b");
   await expect(win.locator("html")).toHaveCSS("--accent", "#c0392b");

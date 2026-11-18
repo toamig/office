@@ -104,10 +104,35 @@ test("a session's actions show on hover or focus and not before", async () => {
   const actions = row.locator(".session-actions");
   await win.mouse.move(700, 500);
   await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe("0");
+  // The actions float over the row: they do not reserve height of their own.
+  expect(await actions.evaluate((el) => getComputedStyle(el).position)).toBe("absolute");
+  const compact = (await row.boundingBox())?.height ?? 999;
+  expect(compact).toBeLessThan(64);
   await row.hover();
+  expect((await row.boundingBox())?.height).toBe(compact);
   await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
   await win.mouse.move(700, 500);
   await row.getByTestId("close-session").focus();
   await expect.poll(() => actions.evaluate((el) => getComputedStyle(el).opacity)).toBe("1");
+  await app.close();
+});
+
+test("the shortcuts sheet fits the window without scrolling, and its note is whole", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  await expect(win.getByTestId("topbar")).toBeVisible();
+  await app.evaluate(({ BrowserWindow }) => {
+    BrowserWindow.getAllWindows()[0]?.setBounds({ x: 40, y: 40, width: 1360, height: 860 });
+  });
+  await win.keyboard.press("Control+/");
+  const sheet = win.getByTestId("shortcuts-sheet");
+  await expect(sheet).toBeVisible();
+  const note = win.getByTestId("shortcuts-terminal-note");
+  await expect(note).toBeInViewport({ ratio: 1 });
+  const dialog = sheet.locator(".dialog");
+  const box = await dialog.boundingBox();
+  expect(box?.y).toBeGreaterThanOrEqual(0);
+  expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(860);
+  expect(await dialog.evaluate((el) => el.scrollHeight <= el.clientHeight + 1)).toBe(true);
   await app.close();
 });

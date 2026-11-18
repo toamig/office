@@ -48,7 +48,7 @@ export function PermissionRequests({
           style={{ borderColor: "var(--warn)", background: "var(--panel)" }}
         >
           <div className="flex flex-wrap items-center gap-2">
-            <Chip tone="warn">waiting for you</Chip>
+            <Chip tone="warn">Waiting for you</Chip>
             <span className="font-medium">{r.subject}</span>
             <span style={{ color: "var(--muted)" }}>wants to run</span>
           </div>

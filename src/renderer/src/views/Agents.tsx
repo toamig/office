@@ -81,7 +81,7 @@ function SessionList({
             {s.role && <span>role {s.role}</span>}
             <span>{timeAgo(s.updatedAt)}</span>
           </div>
-          <div className="session-actions mt-1 flex gap-1.5">
+          <div className="session-actions flex gap-1.5">
             {!s.running && s.mode !== "chat" && (
               <Button
                 onClick={(e) => {

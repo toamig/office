@@ -12,20 +12,22 @@ export function ShortcutsSheet() {
   if (!open) return null;
   return (
     <div className="dialog-backdrop" data-testid="shortcuts-sheet" onClick={() => setOpen(false)}>
-      <div className="dialog w-[460px]" onClick={(e) => e.stopPropagation()}>
+      <div className="dialog w-[740px]" onClick={(e) => e.stopPropagation()}>
         <header className="dialog-header">
           <span className="font-semibold">Keyboard shortcuts</span>
           <Button variant="ghost" aria-label="Close" onClick={() => setOpen(false)}>
             <X size={14} />
           </Button>
         </header>
-        <div className="max-h-[70vh] overflow-auto p-4 text-selectable">
-          {SHORTCUTS.map((s) => (
-            <div key={s.keys} className="flex items-center gap-3 py-1">
-              <span className="flex-1">{s.label}</span>
-              <kbd className="kbd">{s.keys}</kbd>
-            </div>
-          ))}
+        <div className="p-4 text-selectable">
+          <div className="grid grid-cols-2 gap-x-8">
+            {SHORTCUTS.map((s) => (
+              <div key={s.keys} className="flex items-center gap-3 py-1">
+                <span className="flex-1">{s.label}</span>
+                <kbd className="kbd">{s.keys}</kbd>
+              </div>
+            ))}
+          </div>
           <p
             className="mt-3 text-[12px]"
             style={{ color: "var(--muted)" }}

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { AppSettingsPatch } from "@shared/models";
+import { Segmented } from "../../components/Segmented";
 import { Button, Chip, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
@@ -35,7 +36,22 @@ export function PreferencesPanel() {
   const [note, setNote] = useState<string | null>(null);
   const [topic, setTopic] = useState<string | null>(null);
   const [artRoot, setArtRoot] = useState<string | null>(null);
-  const s = settings.data;
+  // What was just chosen shows at once; it is dropped when the saved settings catch up, or when saving fails.
+  const [draft, setDraft] = useState<Pick<AppSettingsPatch, "theme" | "accent" | "density">>({});
+  const saved = settings.data;
+  const s = saved && { ...saved, ...draft };
+  const [seen, setSeen] = useState(saved);
+  if (saved !== seen) {
+    // The saved settings changed: drop the choices they have caught up with.
+    setSeen(saved);
+    if (saved) {
+      const next = { ...draft };
+      for (const key of ["theme", "accent", "density"] as const) {
+        if (next[key] !== undefined && next[key] === saved[key]) delete next[key];
+      }
+      setDraft(next);
+    }
+  }
   const theme = document.documentElement.getAttribute("data-theme") === "light" ? "light" : "dark";
   const rules = workspace.data?.workspace?.notifications;
 
@@ -50,12 +66,27 @@ export function PreferencesPanel() {
       setError((err as Error).message);
     }
   };
-  const set = (patch: AppSettingsPatch): Promise<void> =>
-    run(async () => {
-      await office.invoke("settings.set", patch);
+  const set = (patch: AppSettingsPatch): Promise<void> => {
+    const look: Pick<AppSettingsPatch, "theme" | "accent" | "density"> = {};
+    if (patch.theme !== undefined) look.theme = patch.theme;
+    if (patch.accent !== undefined) look.accent = patch.accent;
+    if (patch.density !== undefined) look.density = patch.density;
+    setDraft((d) => ({ ...d, ...look }));
+    return run(async () => {
+      try {
+        await office.invoke("settings.set", patch);
+      } catch (err) {
+        setDraft((d) => {
+          const next = { ...d };
+          for (const key of Object.keys(look) as Array<keyof typeof look>) delete next[key];
+          return next;
+        });
+        throw err;
+      }
       // Re-render the shell so the new theme shows at once.
       window.dispatchEvent(new Event("office-settings"));
     });
+  };
   const toggle = (list: string[], item: string): string[] =>
     list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 
@@ -68,17 +99,16 @@ export function PreferencesPanel() {
           <div className="grid gap-2.5">
             <div className="flex items-center gap-4">
               <span className="w-28">Theme</span>
-              {(["system", "light", "dark"] as const).map((t) => (
-                <label key={t} className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    checked={s.theme === t}
-                    onChange={() => void set({ theme: t })}
-                    data-testid={`theme-${t}`}
-                  />{" "}
-                  {t}
-                </label>
-              ))}
+              <Segmented
+                label="Theme"
+                value={s.theme}
+                onChange={(t) => void set({ theme: t })}
+                options={[
+                  { value: "system", label: "System", testId: "theme-system" },
+                  { value: "light", label: "Light", testId: "theme-light" },
+                  { value: "dark", label: "Dark", testId: "theme-dark" },
+                ]}
+              />
             </div>
             <div className="flex items-center gap-4">
               <span className="w-28">Accent colour</span>
@@ -92,17 +122,15 @@ export function PreferencesPanel() {
             </div>
             <div className="flex items-center gap-4">
               <span className="w-28">Density</span>
-              {(["comfortable", "compact"] as const).map((d) => (
-                <label key={d} className="flex items-center gap-1">
-                  <input
-                    type="radio"
-                    checked={s.density === d}
-                    onChange={() => void set({ density: d })}
-                    data-testid={`density-${d}`}
-                  />{" "}
-                  {d}
-                </label>
-              ))}
+              <Segmented
+                label="Density"
+                value={s.density}
+                onChange={(v) => void set({ density: v })}
+                options={[
+                  { value: "comfortable", label: "Comfortable", testId: "density-comfortable" },
+                  { value: "compact", label: "Compact", testId: "density-compact" },
+                ]}
+              />
             </div>
           </div>
         )}

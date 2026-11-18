@@ -800,8 +800,17 @@ button,
   color: var(--accent);
 }
 
-/* A session's actions show on hover or focus, as in the Claude app's sidebar. */
+/* A session's actions float over the bottom right of its row on hover or focus, so the row stays compact. */
+.session-row {
+  position: relative;
+}
 .session-row .session-actions {
+  position: absolute;
+  right: 8px;
+  bottom: 4px;
+  padding-left: 8px;
+  background: inherit;
+  border-radius: 6px;
   opacity: 0;
   transition: opacity var(--ease);
 }
@@ -811,4 +820,28 @@ button,
 }
 .session-row:hover {
   background: var(--hover);
+}
+
+/* A few choices side by side (theme, density). */
+.segmented {
+  display: inline-flex;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  overflow: hidden;
+}
+.segmented-option {
+  padding: 3px 12px;
+  background: var(--bg);
+  color: var(--text);
+  cursor: default;
+}
+.segmented-option + .segmented-option {
+  border-left: 1px solid var(--line);
+}
+.segmented-option:hover {
+  background: var(--hover);
+}
+.segmented-option[aria-checked="true"] {
+  background: var(--accent);
+  color: var(--on-accent);
 }
