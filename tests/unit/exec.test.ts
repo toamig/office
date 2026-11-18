@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { resolveTool, run, spawnStream } from "../../src/main/core/exec";
+import { quoteForCmd, resolveTool, run, spawnStream } from "../../src/main/core/exec";
 
 describe("exec", () => {
   it("runs a command without a shell and captures output", async () => {
@@ -43,5 +43,15 @@ describe("exec", () => {
     for await (const line of stream.lines) lines.push(line);
     expect(lines).toEqual(["a", "b", "c"]);
     expect((await stream.exit).code).toBe(0);
+  });
+});
+
+describe("cmd.exe quoting", () => {
+  it("quotes ordinary arguments and refuses ones that cmd would expand or break", () => {
+    expect(quoteForCmd("plain")).toBe('"plain"');
+    expect(quoteForCmd('say "hi"')).toBe('"say ""hi"""');
+    expect(() => quoteForCmd("%PATH%")).toThrow(/percent sign/);
+    expect(() => quoteForCmd("100%")).toThrow(/percent sign/);
+    expect(() => quoteForCmd("two\nlines")).toThrow(/line break/);
   });
 });

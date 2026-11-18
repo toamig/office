@@ -29,7 +29,6 @@ import { Inbox } from "./views/Inbox";
 import { Setup } from "./views/Setup";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
-import { Placeholder } from "./views/Placeholder";
 
 const rail: Array<{ id: ViewId; label: string; icon: ComponentType<{ size?: number }> }> = [
   { id: "home", label: "Home", icon: Home },
@@ -70,9 +69,7 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "brain") return <Brain />;
   if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;
-  if (view === "setup") return <Setup />;
-  const item = rail.find((r) => r.id === view);
-  return <Placeholder title={item?.label ?? view} note="Coming in a later task." />;
+  return <Setup />;
 }
 
 function TopBar() {

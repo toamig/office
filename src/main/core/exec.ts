@@ -79,8 +79,18 @@ export function resolveCommand(file: string, args: string[]): { file: string; ar
   return { file, args };
 }
 
-function quoteForCmd(arg: string): string {
-  return `"${arg.replace(/"/g, '""').replace(/%/g, "%%")}"`;
+/**
+ * Quotes one argument for `cmd.exe /d /s /c "..."`. cmd expands `%NAME%` even inside quotes and, on the
+ * command line (unlike in a batch file), `%%` does not escape it, so an argument with a percent sign or a
+ * line break cannot be passed safely and is refused instead of being silently changed or expanded.
+ */
+export function quoteForCmd(arg: string): string {
+  if (/[%\r\n]/.test(arg)) {
+    throw new Error(
+      "An argument with a percent sign or a line break cannot be passed safely to a .cmd or .bat file",
+    );
+  }
+  return `"${arg.replace(/"/g, '""')}"`;
 }
 
 /** npm shims call `node "%dp0%\node_modules\pkg\bin\tool.js" %*`; find that script. */

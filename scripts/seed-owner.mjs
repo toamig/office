@@ -28,6 +28,10 @@ if (!planPath || !root || !projectsRoot) {
 const plan = readFileSync(planPath, "utf8").replace(/\r\n/g, "\n");
 const section = plan.slice(plan.indexOf("### 5.3"), plan.indexOf("### 5.4"));
 
+// "Pin `a`, `b` and `c`." names the pinned projects, so no project id lives in this public repo.
+const pinLine = /^Pin (.+)\.$/m.exec(section)?.[1] ?? "";
+const pinnedIds = [...pinLine.matchAll(/`([^`]+)`/g)].map((m) => m[1]);
+
 const projects = [];
 const dropped = [];
 for (const line of section.split("\n")) {
@@ -46,7 +50,7 @@ for (const line of section.split("\n")) {
     path,
     vault,
     group,
-    pinned: ["lucky-flock", "obrajusta", "office"].includes(id),
+    pinned: pinnedIds.includes(id),
     archived: false,
   });
 }
