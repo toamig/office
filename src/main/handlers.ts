@@ -286,6 +286,7 @@ export function registerHandlers(ctx: AppContext): void {
       density: s.density,
       quietHours: s.quietHours ?? null,
       editorCommand: s.editorCommand,
+      artVaultRoot: s.artVaultRoot,
     };
   };
   ctx.ipc.handle("settings.get", () => appSettings());

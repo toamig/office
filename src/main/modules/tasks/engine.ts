@@ -13,6 +13,7 @@ import { git } from "../git/run";
 import { createWorktree } from "../git/worktrees";
 import type { RunService } from "../runs/service";
 import { FanOut } from "./fanout";
+import { fileArtTask } from "./file-art";
 import { integrateTask } from "./integrate";
 import { renderTemplate } from "./templates";
 
@@ -27,6 +28,8 @@ export interface TaskEngineDeps {
   /** Resolves a role id for a project, honouring its overrides. */
   resolveRole: (roleId: string, projectId: string) => Role;
   tasksDir: string;
+  /** The Art vault folder from the settings (empty when not set). */
+  artVaultRoot: () => string;
   /** Appends a dated line to the project's "Implementation notes" through the vault writer. */
   recordNote: (projectId: string, text: string) => Promise<void>;
 }
@@ -367,7 +370,7 @@ export class TaskEngine {
       if (t.status !== "running") return;
       const pipeline = this.deps.workspace()?.pipelines[t.pipeline];
       if (!pipeline || t.stage_index >= pipeline.stages.length) {
-        const note = await this.integrate(t);
+        const note = await this.finish(t);
         this.setTask(id, { status: "done" });
         this.deps.notifier.notify({
           kind: "task.done",
@@ -383,6 +386,25 @@ export class TaskEngine {
       if (outcome !== "continue") return;
       this.setTask(id, { stage_index: t.stage_index + 1 });
     }
+  }
+
+  /** What happens after the final approval: a Feature task is merged, an Art request is filed. */
+  private async finish(t: TaskRow): Promise<string | null> {
+    const notes: Array<string | null> = [await this.integrate(t)];
+    if (t.pipeline === "art") {
+      const project = this.deps.workspace()?.projects.find((p) => p.id === t.project_id);
+      notes.push(
+        fileArtTask({
+          artVaultRoot: this.deps.artVaultRoot(),
+          projectName: project?.name ?? t.project_id,
+          title: t.title,
+          taskId: t.id,
+          taskFolder: join(this.deps.tasksDir, t.id),
+        }).note,
+      );
+    }
+    const text = notes.filter(Boolean).join(" ");
+    return text === "" ? null : text;
   }
 
   /** After the final approval: merge the task branch and remove its worktree. Returns a note when something was left. */

@@ -28,7 +28,7 @@ export class VaultOps {
       for (const note of ["Overview.md", "_index.md"]) {
         const path = join(dirname(file), note);
         const found = existsSync(path)
-          ? /^domain:[ 	]*(S+)/m.exec(readFileSync(path, "utf8"))?.[1]
+          ? /^domain:[ \t]*(\S+)/m.exec(readFileSync(path, "utf8"))?.[1]
           : undefined;
         if (found) {
           domain = found;

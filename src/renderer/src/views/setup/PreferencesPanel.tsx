@@ -32,6 +32,7 @@ export function PreferencesPanel() {
   const [error, setError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [topic, setTopic] = useState<string | null>(null);
+  const [artRoot, setArtRoot] = useState<string | null>(null);
   const s = settings.data;
   const rules = workspace.data?.workspace?.notifications;
 
@@ -100,6 +101,36 @@ export function PreferencesPanel() {
                 </label>
               ))}
             </div>
+          </div>
+        )}
+      </Panel>
+      <Panel title="Art vault">
+        {s && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="w-28">Folder</span>
+            <input
+              className={`${field} min-w-[280px] flex-1`}
+              style={fieldStyle}
+              placeholder="A folder outside your project repos"
+              value={artRoot ?? s.artVaultRoot}
+              onChange={(e) => setArtRoot(e.target.value)}
+              aria-label="Art vault folder"
+              data-testid="art-vault"
+            />
+            <Button
+              onClick={() =>
+                void set({ artVaultRoot: (artRoot ?? s.artVaultRoot).trim() }).then(() => {
+                  setArtRoot(null);
+                  setNote("Saved.");
+                })
+              }
+              data-testid="art-vault-save"
+            >
+              Save
+            </Button>
+            <span className="w-full text-[12px]" style={{ color: "var(--muted)" }}>
+              A finished Art request is copied to a folder named after its project in here.
+            </span>
           </div>
         )}
       </Panel>

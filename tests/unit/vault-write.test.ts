@@ -89,11 +89,15 @@ describe("vault writer", () => {
     sh(betaRepo, "commit", "-q", "-m", "remove OpenItems");
     sh(betaRepo, "push", "-q");
     expect(existsSync(join(betaRepo, "OpenItems.md"))).toBe(false);
+    // The starter takes the domain from the folder's own notes.
+    const index = join(betaRepo, "_index.md");
+    writeFileSync(index, readFileSync(index, "utf8").replace("domain: meta", "domain: saas"));
 
     const result = await ops.addWaiting("beta", "First item");
     expect(result).toMatchObject({ committed: true, pushed: true });
     const text = readFileSync(join(betaRepo, "OpenItems.md"), "utf8");
     expect(text).toContain("type: openitems");
+    expect(text).toContain("domain: saas");
     expect(text).toContain("## Waiting on you");
     expect(vault.read("beta").waiting).toHaveLength(1);
     await ops.addNote("beta", "and a note");

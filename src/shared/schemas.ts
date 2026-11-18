@@ -7,6 +7,8 @@ export const MachineSettings = z.object({
   workspaceConfigPath: z.string().default(""),
   projectsRoot: z.string().default(""),
   editorCommand: z.string().default("code"),
+  /** Where a finished Art request is filed (one folder per project inside it). Empty: nowhere. */
+  artVaultRoot: z.string().default(""),
   relay: z.object({ port: z.number().int(), token: z.string() }),
   quietHours: z.object({ from: z.string(), to: z.string() }).optional(),
   window: z.object({ x: z.number(), y: z.number(), w: z.number(), h: z.number() }).optional(),

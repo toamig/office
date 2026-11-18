@@ -42,6 +42,8 @@ interface Harness {
   notifier: Notifier;
   ws: Workspace;
   engine: TaskEngine;
+  /** The Art vault folder the engine files into; empty means not set. */
+  art: { root: string };
   /** Builds another engine on the same database, as after a restart. */
   restart: () => TaskEngine;
 }
@@ -62,6 +64,7 @@ function harness(): Harness {
     today: () => "2026-11-19",
   });
   const ops = new VaultOps({ vault, writer, workspace: () => ws });
+  const art = { root: join(world.root, "Art") };
   const make = (): TaskEngine => {
     const runs = new RunService({ db, bus, providers, runsDir: join(world.root, "runs") });
     return new TaskEngine({
@@ -77,12 +80,13 @@ function harness(): Harness {
         return role;
       },
       tasksDir: join(world.root, "tasks"),
+      artVaultRoot: () => art.root,
       recordNote: async (projectId, text) => {
         await ops.addTodo(projectId, text, undefined, "Implementation notes");
       },
     });
   };
-  return { world, db, bus, notifier, ws, engine: make(), restart: make };
+  return { world, db, bus, notifier, ws, art, engine: make(), restart: make };
 }
 
 async function until(cond: () => boolean, ms = 60_000): Promise<void> {
@@ -242,6 +246,57 @@ describe("task engine with fake providers", () => {
     expect(h.notifier.list().find((n) => n.kind === "task.done")?.body).toMatch(
       /conflicts with main/,
     );
+  });
+
+  /** An Art-style pipeline with a single planner stage, which is enough to reach the final approval. */
+  function addArtPipeline(h: Harness): void {
+    h.ws.pipelines["art"] = {
+      name: "Art request",
+      stages: [
+        {
+          id: "brief",
+          role: "planner",
+          gate: true,
+          worktree: false,
+          prompt: "Write an art brief for: {{task.description}} to {{stage.outputPath}}.",
+        },
+      ],
+    };
+  }
+
+  it("files a finished Art request into the Art vault", async () => {
+    const h = harness();
+    addArtPipeline(h);
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "art",
+      title: "Sheep icon",
+      description: "A sheep icon.",
+    });
+    await waitFor(h.engine, t.id, "waiting-gate");
+    h.engine.approve(t.id);
+    await waitFor(h.engine, t.id, "done");
+    const folder = join(h.art.root, "Alpha", "Sheep icon");
+    expect(existsSync(join(folder, "brief.md"))).toBe(true);
+    expect(h.notifier.list().find((n) => n.kind === "task.done")?.body).toContain(
+      `Filed in ${folder}`,
+    );
+  });
+
+  it("says that an Art request was not filed when no Art vault folder is set", async () => {
+    const h = harness();
+    addArtPipeline(h);
+    h.art.root = "";
+    const t = h.engine.create({
+      projectId: "alpha",
+      pipeline: "art",
+      title: "Unfiled",
+      description: "x",
+    });
+    await waitFor(h.engine, t.id, "waiting-gate");
+    h.engine.approve(t.id);
+    await waitFor(h.engine, t.id, "done");
+    expect(h.notifier.list().find((n) => n.kind === "task.done")?.body).toContain("Not filed");
   });
 
   it("commits what the builder left uncommitted before merging it", async () => {

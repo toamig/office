@@ -192,6 +192,7 @@ export async function createContext(
     },
     resolveRole: (roleId, projectId) => sessions.resolveRole(roleId, projectId),
     tasksDir: tasksDir(),
+    artVaultRoot: () => current.artVaultRoot,
     recordNote: async (projectId, text) => {
       await ops.addTodo(projectId, text, undefined, "Implementation notes");
     },

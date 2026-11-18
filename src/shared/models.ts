@@ -638,6 +638,7 @@ export const AppSettings = z.object({
   density: z.enum(["compact", "comfortable"]),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
   editorCommand: z.string(),
+  artVaultRoot: z.string(),
 });
 export type AppSettings = z.infer<typeof AppSettings>;
 
@@ -656,6 +657,8 @@ export const AppSettingsPatch = z.object({
     .nullable()
     .optional(),
   editorCommand: z.string().min(1).optional(),
+  /** An empty string clears the folder. */
+  artVaultRoot: z.string().optional(),
 });
 export type AppSettingsPatch = z.infer<typeof AppSettingsPatch>;
 
