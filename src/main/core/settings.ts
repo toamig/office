@@ -22,17 +22,31 @@ export function writeTextFile(path: string, text: string): void {
   renameSync(tmp, path);
 }
 
-/** Loads machine settings, creating the file with defaults on first run. */
-export function loadSettings(path: string = settingsPath()): MachineSettings {
-  let settings: MachineSettings;
+/** Reads settings from disk, creating the file with defaults on first run. No overrides applied. */
+export function readSettings(path: string = settingsPath()): MachineSettings {
   try {
-    settings = MachineSettingsSchema.parse(JSON.parse(readFileSync(path, "utf8")));
+    return MachineSettingsSchema.parse(JSON.parse(readFileSync(path, "utf8")));
   } catch {
-    settings = freshSettings();
+    const settings = freshSettings();
     saveSettings(settings, path);
+    return settings;
   }
+}
+
+/** Loads machine settings with the OFFICE_WORKSPACE override applied. Do not save the result. */
+export function loadSettings(path: string = settingsPath()): MachineSettings {
+  const settings = readSettings(path);
   const override = workspaceOverride();
   return override ? { ...settings, workspaceRoot: override } : settings;
+}
+
+/** Merges a patch into the settings on disk (without any override) and returns the loaded result. */
+export function updateSettings(
+  patch: Partial<MachineSettings>,
+  path: string = settingsPath(),
+): MachineSettings {
+  saveSettings({ ...readSettings(path), ...patch }, path);
+  return loadSettings(path);
 }
 
 export function saveSettings(settings: MachineSettings, path: string = settingsPath()): void {

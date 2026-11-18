@@ -1,6 +1,10 @@
 {
   "version": 1,
-  "vault": { "kind": "folder", "openItemsFile": "OpenItems.md", "waitingHeading": "Waiting on you" },
+  "vault": {
+    "kind": "folder",
+    "openItemsFile": "OpenItems.md",
+    "waitingHeading": "Waiting on you"
+  },
   "projects": [
     { "id": "my-app", "name": "My App", "path": "my-app", "group": "Products", "pinned": true },
     { "id": "side-project", "name": "Side Project", "path": "side-project", "group": "Ideas" }

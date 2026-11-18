@@ -5,7 +5,16 @@ import prettier from "eslint-config-prettier";
 import globals from "globals";
 
 export default tseslint.config(
-  { ignores: ["out/**", "release/**", "node_modules/**", ".dev/**", "resources/relay/**", "test-results/**"] },
+  {
+    ignores: [
+      "out/**",
+      "release/**",
+      "node_modules/**",
+      ".dev/**",
+      "resources/relay/**",
+      "test-results/**",
+    ],
+  },
   js.configs.recommended,
   ...tseslint.configs.recommended,
   {
@@ -20,8 +29,19 @@ export default tseslint.config(
   },
   {
     rules: {
-      "@typescript-eslint/no-unused-vars": ["error", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
-      "no-restricted-imports": ["error", { paths: [{ name: "child_process", message: "Use core/exec.ts" }, { name: "node:child_process", message: "Use core/exec.ts" }] }],
+      "@typescript-eslint/no-unused-vars": [
+        "error",
+        { argsIgnorePattern: "^_", varsIgnorePattern: "^_" },
+      ],
+      "no-restricted-imports": [
+        "error",
+        {
+          paths: [
+            { name: "child_process", message: "Use core/exec.ts" },
+            { name: "node:child_process", message: "Use core/exec.ts" },
+          ],
+        },
+      ],
     },
   },
   {

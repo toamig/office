@@ -12,7 +12,8 @@ export default defineConfig({
   },
   preload: {
     resolve: { alias: { "@shared": shared } },
-    build: { externalizeDeps: true },
+    // A sandboxed preload cannot require node_modules, so everything it imports is bundled.
+    build: { externalizeDeps: false },
   },
   renderer: {
     resolve: { alias: { "@shared": shared } },

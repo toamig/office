@@ -19,7 +19,9 @@ const root = arg("root");
 const projectsRoot = arg("projects");
 const configRel = arg("config", "Office/workspace.json");
 if (!planPath || !root || !projectsRoot) {
-  console.error("usage: seed-owner.mjs --plan <file> --root <dir> --projects <dir> [--config <rel>]");
+  console.error(
+    "usage: seed-owner.mjs --plan <file> --root <dir> --projects <dir> [--config <rel>]",
+  );
   process.exit(2);
 }
 
@@ -30,7 +32,10 @@ const projects = [];
 const dropped = [];
 for (const line of section.split("\n")) {
   if (!line.startsWith("| ") || line.startsWith("| id ") || line.startsWith("|---")) continue;
-  const [id, name, path, vault, group] = line.split("|").slice(1, 6).map((c) => c.trim());
+  const [id, name, path, vault, group] = line
+    .split("|")
+    .slice(1, 6)
+    .map((c) => c.trim());
   if (!existsSync(resolve(projectsRoot, path))) {
     dropped.push(`${id} (${path})`);
     continue;
@@ -63,7 +68,9 @@ const config = {
   briefTime: "08:00",
 };
 
-const { Workspace } = await import(pathToFileURL(resolve(import.meta.dirname, "../src/shared/schemas.ts")).href);
+const { Workspace } = await import(
+  pathToFileURL(resolve(import.meta.dirname, "../src/shared/schemas.ts")).href
+);
 const parsed = Workspace.parse(config);
 
 const target = join(root, configRel);

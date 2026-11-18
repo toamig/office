@@ -1,10 +1,14 @@
-import { app, BrowserWindow, shell } from "electron";
+import { app, BrowserWindow, ipcMain, shell } from "electron";
 import { join } from "node:path";
+import { IPC_EVENT, IPC_INVOKE } from "../shared/ipc";
+import { createContext, type AppContext } from "./context";
+import { registerHandlers } from "./handlers";
 
 const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'";
 
 let mainWindow: BrowserWindow | null = null;
+let ctx: AppContext | null = null;
 
 function isHttps(url: string): boolean {
   try {
@@ -64,8 +68,17 @@ if (!gotLock) {
       mainWindow.focus();
     }
   });
-  void app.whenReady().then(() => {
+  void app.whenReady().then(async () => {
     app.setAppUserModelId("com.toamig.office");
+    ctx = await createContext(!app.isPackaged);
+    registerHandlers(ctx);
+    const registry = ctx.ipc;
+    ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
+      registry.dispatch(channel, payload),
+    );
+    ctx.bus.on("*", (event) => {
+      for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC_EVENT, event);
+    });
     mainWindow = createWindow();
     app.on("activate", () => {
       if (BrowserWindow.getAllWindows().length === 0) mainWindow = createWindow();
