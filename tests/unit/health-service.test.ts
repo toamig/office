@@ -2,7 +2,13 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { HealthView } from "../../src/shared/models";
 import { HealthService } from "../../src/main/modules/vault/health-service";
 
-const OK: HealthView["validate"] = { ran: true, ok: true, errors: [], warnings: 0, summary: "hub: ok" };
+const OK: HealthView["validate"] = {
+  ran: true,
+  ok: true,
+  errors: [],
+  warnings: 0,
+  summary: "hub: ok",
+};
 
 function setup(kind: string | undefined = "brain-hub") {
   const validate = vi.fn(async () => OK);

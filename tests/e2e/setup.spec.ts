@@ -17,7 +17,9 @@ test("Setup shows the workspace, the tools with their problems and fixes, and th
   );
 
   // The tools table shows the Codex config problem with its fix.
-  const codex = win.getByTestId("tool-row").filter({ has: win.getByText("Codex", { exact: true }) });
+  const codex = win
+    .getByTestId("tool-row")
+    .filter({ has: win.getByText("Codex", { exact: true }) });
   await expect(codex).toContainText("Codex CLI is older than your config");
   await expect(codex).toContainText("npm i -g @openai/codex");
   await expect(

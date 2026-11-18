@@ -72,7 +72,9 @@ export function Welcome({ state }: { state: SetupState }) {
                 data-state={i === index ? "current" : i < index && s.met ? "done" : "todo"}
                 aria-current={i === index ? "step" : undefined}
               >
-                <span className="welcome-dot">{i < index && s.met ? <Check size={11} /> : i + 1}</span>
+                <span className="welcome-dot">
+                  {i < index && s.met ? <Check size={11} /> : i + 1}
+                </span>
                 {s.label}
                 {!s.required && <span className="welcome-optional"> (optional)</span>}
               </li>
@@ -91,7 +93,11 @@ export function Welcome({ state }: { state: SetupState }) {
             {step === "notifications" && <HooksPanel title="" />}
           </div>
           <footer className="welcome-footer">
-            <Button disabled={index <= 0} onClick={() => goTo(index - 1)} data-testid="welcome-back">
+            <Button
+              disabled={index <= 0}
+              onClick={() => goTo(index - 1)}
+              data-testid="welcome-back"
+            >
               Back
             </Button>
             <span className="welcome-reason" data-testid="welcome-reason">

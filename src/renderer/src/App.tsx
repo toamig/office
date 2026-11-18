@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Sidebar } from "./components/Sidebar";
 import { SyncReportDialog } from "./components/SyncReportDialog";
@@ -8,6 +8,7 @@ import { ViewBoundary } from "./components/ViewBoundary";
 import { TopBar } from "./components/TopBar";
 import { ErrorBanner } from "./components/ui";
 import { useQuery } from "./lib/hooks";
+import { prefetchStart } from "./lib/prefetch";
 import { useSidebarCollapsed } from "./lib/sidebar";
 import { useGlobalShortcuts } from "./lib/shortcuts";
 import { office } from "./lib/ipc";
@@ -24,6 +25,7 @@ import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
 import { Welcome } from "./views/welcome/Welcome";
 
+/** The views that are drawn fresh each time; the Agents view is kept alive by App and never comes through here. */
 function CurrentView({ configured }: { configured: boolean }) {
   const picked = useUi((s) => s.view);
   const view = configured ? picked : "setup";
@@ -40,12 +42,6 @@ function CurrentView({ configured }: { configured: boolean }) {
       />
     );
   }
-  if (view === "agents")
-    return (
-      <Agents
-        key={`${params["project"] ?? ""}-${params["session"] ?? ""}-${params["start"] ?? ""}-${params["cwd"] ?? ""}`}
-      />
-    );
   if (view === "git") return <Git key={params["project"] ?? ""} />;
   if (view === "board") return <Board key={params["task"] ?? ""} />;
   if (view === "brain") return <Brain />;
@@ -60,6 +56,9 @@ export default function App() {
   const [, toggleSidebar] = useSidebarCollapsed();
   useGlobalShortcuts(toggleSidebar);
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
+  // The Agents view is built the first time it is opened and then kept, hidden when the owner leaves it.
+  const [agentsOpened, setAgentsOpened] = useState(false);
+  if (view === "agents" && !agentsOpened) setAgentsOpened(true);
   const setup = useQuery("setup.state", undefined, [
     "setup.changed",
     "workspace.changed",
@@ -73,6 +72,9 @@ export default function App() {
       }),
     [navigate],
   );
+  useEffect(() => {
+    if (setup.data && !setup.data.welcome) prefetchStart();
+  }, [setup.data]);
   // Until setup is done Office is only the welcome flow: no sidebar, no views (spec 4.8).
   if (setup.data?.welcome) {
     return (
@@ -101,7 +103,14 @@ export default function App() {
               <ErrorBanner message={workspace.data.error} />
             </div>
           )}
-          {workspace.data && (
+          {agentsOpened && (
+            <div className="h-full" hidden={view !== "agents"} data-testid="agents-host">
+              <ViewBoundary>
+                <Agents active={view === "agents"} />
+              </ViewBoundary>
+            </div>
+          )}
+          {workspace.data && view !== "agents" && (
             <ViewBoundary key={view}>
               <CurrentView configured={workspace.data.configured} />
             </ViewBoundary>

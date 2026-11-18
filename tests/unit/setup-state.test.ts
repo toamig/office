@@ -32,11 +32,13 @@ describe("the tools step", () => {
     expect(toolsReason([tool("git", false), tool("claude-code", true, true)])).toContain("Git");
   });
   it("needs an agent tool, then a login", () => {
-    expect(toolsReason([tool("git", true), tool("claude-code", false), tool("codex", false)])).toContain(
-      "Install Claude Code or Codex",
-    );
+    expect(
+      toolsReason([tool("git", true), tool("claude-code", false), tool("codex", false)]),
+    ).toContain("Install Claude Code or Codex");
     expect(toolsReason([tool("git", true), tool("claude-code", true, false)])).toContain("Log in");
-    expect(toolsReason([tool("git", true), tool("claude-code", true, false), tool("codex", true, true)])).toBeNull();
+    expect(
+      toolsReason([tool("git", true), tool("claude-code", true, false), tool("codex", true, true)]),
+    ).toBeNull();
   });
 });
 
@@ -79,7 +81,10 @@ describe("computeSetupState", () => {
   });
 
   it("opens on the tools step once the workspace and the projects folder are set, and the notifications step is optional", () => {
-    const state = computeSetupState({ ...base, settings: { ...base.settings, welcomeDone: false } });
+    const state = computeSetupState({
+      ...base,
+      settings: { ...base.settings, welcomeDone: false },
+    });
     expect(state.current).toBe("tools");
     expect(state.welcome).toBe(true);
     expect(state.steps[3]?.required).toBe(false);
@@ -100,13 +105,16 @@ describe("computeSetupState", () => {
 
   it("sends the app back when the config file is missing or broken", () => {
     expect(computeSetupState({ ...base, fileExists: () => false }).current).toBe("workspace");
-    expect(computeSetupState({ ...base, workspaceError: "workspace.json is not valid" }).current).toBe(
-      "workspace",
-    );
+    expect(
+      computeSetupState({ ...base, workspaceError: "workspace.json is not valid" }).current,
+    ).toBe("workspace");
   });
 
   it("does not lock the owner out when a tool login lapses after the flow was finished", () => {
-    const state = computeSetupState({ ...base, tools: [tool("git", true), tool("claude-code", true, false)] });
+    const state = computeSetupState({
+      ...base,
+      tools: [tool("git", true), tool("claude-code", true, false)],
+    });
     expect(state.welcome).toBe(false);
     expect(state.steps[2]?.met).toBe(false);
   });

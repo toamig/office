@@ -45,7 +45,8 @@ export function ToolsStep() {
   };
 
   const close = (): void => {
-    if (terminal) void office.invoke("sessions.archive", { id: terminal.id }).catch(() => undefined);
+    if (terminal)
+      void office.invoke("sessions.archive", { id: terminal.id }).catch(() => undefined);
     setTerminal(null);
   };
 
@@ -54,7 +55,10 @@ export function ToolsStep() {
     if (!terminal) return;
     return office.on("session.status", (e) => {
       const payload = e.payload as { id?: string; status?: string };
-      if (payload.id === terminal.id && (payload.status === "exited" || payload.status === "failed"))
+      if (
+        payload.id === terminal.id &&
+        (payload.status === "exited" || payload.status === "failed")
+      )
         void recheck();
     });
   }, [terminal]);
@@ -123,7 +127,11 @@ export function ToolsStep() {
         ))}
       </div>
       {terminal && (
-        <div className="mt-3 rounded border" style={{ borderColor: "var(--line)" }} data-testid="tool-terminal">
+        <div
+          className="mt-3 rounded border"
+          style={{ borderColor: "var(--line)" }}
+          data-testid="tool-terminal"
+        >
           <div
             className="flex items-center border-b px-2 py-1"
             style={{ borderColor: "var(--line)" }}

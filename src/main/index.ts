@@ -301,7 +301,8 @@ if (isE2E()) {
 }
 // A run on its own data folder (tests, a trial) keeps Electron's own state there too. Otherwise it would share
 // the installed app's folder, find that app's single-instance lock taken, quit, and wake the owner's window.
-if (process.env["OFFICE_DATA"]) app.setPath("userData", join(process.env["OFFICE_DATA"], "electron"));
+if (process.env["OFFICE_DATA"])
+  app.setPath("userData", join(process.env["OFFICE_DATA"], "electron"));
 const gotLock = app.requestSingleInstanceLock();
 if (!gotLock) {
   app.quit();

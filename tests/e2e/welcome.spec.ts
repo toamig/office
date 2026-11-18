@@ -43,9 +43,7 @@ test("an empty app-data folder opens the welcome flow, with no sidebar, and walk
 
   // Step 3: the tools. The fake tools are ready (Git, and a Claude Code that is logged in).
   await expect(win.getByTestId("tools-step")).toBeVisible();
-  await expect(claudeRow(win)).toContainText(
-    "logged in",
-  );
+  await expect(claudeRow(win)).toContainText("logged in");
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();
   await win.getByTestId("welcome-continue").click();
 
@@ -82,20 +80,15 @@ test("a required step stays closed until it is met: tools missing, then not logg
 
   // The workspace and projects folder are set, so the flow opens on the tools step.
   await expect(win.getByTestId("welcome-step-tools")).toHaveAttribute("data-state", "current");
-  await expect(claudeRow(win)).toContainText(
-    "missing",
-  );
+  await expect(claudeRow(win)).toContainText("missing");
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();
   await expect(win.getByTestId("welcome-reason")).toContainText("Install Claude Code or Codex");
 
   // Installed, but not logged in: the reason changes and Log in appears.
-  await app.evaluate(
-    (_electron, claude) => {
-      process.env["OFFICE_BIN_CLAUDE"] = claude;
-      process.env["FAKE_LOGGED_IN"] = "0";
-    },
-    fakeClaude,
-  );
+  await app.evaluate((_electron, claude) => {
+    process.env["OFFICE_BIN_CLAUDE"] = claude;
+    process.env["FAKE_LOGGED_IN"] = "0";
+  }, fakeClaude);
   await win.getByTestId("tools-check").click();
   await expect(win.getByTestId("welcome-reason")).toContainText("Log in to Claude Code or Codex");
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();

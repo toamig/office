@@ -125,7 +125,7 @@ function BriefPanel() {
 function HealthPanel() {
   const navigate = useUi((s) => s.navigate);
   const projects = useQuery("projects.list", undefined, ["project.status"]);
-  const health = useQuery("vault.health", undefined, ["vault.changed", "notification.new"]);
+  const health = useQuery("vault.health", undefined, ["vault.health"]);
   const outOfSync = (projects.data ?? []).filter(
     (p) => !p.archived && (p.ahead > 0 || p.behind > 0),
   );

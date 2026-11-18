@@ -5,8 +5,24 @@ import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/u
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { Select } from "../../components/Select";
+import { VirtualList } from "../../components/VirtualList";
 
 type Mode = "working" | "staged" | "branch";
+
+type DiffHunk = DiffFile["hunks"][number];
+type DiffRow =
+  | { kind: "header"; key: string; header: string }
+  | { kind: "line"; key: string; h: DiffHunk; l: DiffHunk["lines"][number]; index: number };
+
+/** A file's hunks as one flat list of rows (a header, then its lines), so a long diff can be drawn in windows. */
+function diffRows(file: DiffFile): DiffRow[] {
+  const rows: DiffRow[] = [];
+  file.hunks.forEach((h, hi) => {
+    rows.push({ kind: "header", key: `h${hi}`, header: h.header });
+    h.lines.forEach((l, index) => rows.push({ kind: "line", key: `h${hi}-${index}`, h, l, index }));
+  });
+  return rows;
+}
 
 const bg = {
   add: "color-mix(in srgb, var(--good) 16%, transparent)",
@@ -124,24 +140,28 @@ export function DiffTab({ projectId }: { projectId: string }) {
             style={{ borderColor: "var(--line)", background: "var(--panel)" }}
             data-testid="diff-files"
           >
-            {files.map((f) => (
-              <div
-                key={f.path}
-                data-testid="diff-file"
-                onClick={() => setSelected(f.path)}
-                className="border-b px-2 py-1.5"
-                style={{
-                  borderColor: "var(--line)",
-                  background: file?.path === f.path ? "var(--rail)" : "transparent",
-                }}
-              >
-                <div className="truncate font-medium">{f.path}</div>
-                <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-                  {f.status}
-                  {f.binary ? ", binary" : ` +${f.additions} -${f.deletions}`}
+            <VirtualList
+              items={files}
+              estimate={50}
+              itemKey={(f) => f.path}
+              renderItem={(f) => (
+                <div
+                  data-testid="diff-file"
+                  onClick={() => setSelected(f.path)}
+                  className="border-b px-2 py-1.5"
+                  style={{
+                    borderColor: "var(--line)",
+                    background: file?.path === f.path ? "var(--rail)" : "transparent",
+                  }}
+                >
+                  <div className="truncate font-medium">{f.path}</div>
+                  <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+                    {f.status}
+                    {f.binary ? ", binary" : ` +${f.additions} -${f.deletions}`}
+                  </div>
                 </div>
-              </div>
-            ))}
+              )}
+            />
           </div>
           <div
             className="min-w-0 rounded border"
@@ -149,20 +169,28 @@ export function DiffTab({ projectId }: { projectId: string }) {
             data-testid="diff-view"
           >
             {file?.binary && <EmptyState>Binary file.</EmptyState>}
-            {file?.hunks.map((h) => (
-              <div key={h.header} className="font-mono text-[12.5px]">
-                <div
-                  className="px-2 py-0.5"
-                  style={{ color: "var(--muted)", background: "var(--rail)" }}
-                >
-                  {h.header}
-                </div>
-                {h.lines.map((l, index) => {
+            {file && (
+              <VirtualList
+                items={diffRows(file)}
+                estimate={20}
+                itemKey={(row) => row.key}
+                renderItem={(row) => {
+                  if (row.kind === "header") {
+                    return (
+                      <div
+                        className="px-2 py-0.5 font-mono text-[12.5px]"
+                        style={{ color: "var(--muted)", background: "var(--rail)" }}
+                      >
+                        {row.header}
+                      </div>
+                    );
+                  }
+                  const { h, l, index } = row;
                   const lineNo = l.newNo ?? l.oldNo ?? 0;
                   const here = comments.filter((c) => c.file === file.path && c.line === lineNo);
                   const open = editing?.file === file.path && editing.line === lineNo;
                   return (
-                    <div key={`${h.header}-${index}`}>
+                    <div key={`${h.header}-${index}`} className="font-mono text-[12.5px]">
                       <div
                         className="group flex"
                         style={{ background: bg[l.kind] }}
@@ -214,9 +242,9 @@ export function DiffTab({ projectId }: { projectId: string }) {
                       )}
                     </div>
                   );
-                })}
-              </div>
-            ))}
+                }}
+              />
+            )}
             {file?.truncated && (
               <EmptyState>This file is long; only its first 3000 lines are shown.</EmptyState>
             )}

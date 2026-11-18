@@ -4,6 +4,7 @@ import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/u
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { Select } from "../../components/Select";
+import { VirtualList } from "../../components/VirtualList";
 
 /** Stage the files you choose, write a message (no Co-Authored-By trailers), commit, and push. */
 export function CommitTab({ projectId }: { projectId: string }) {
@@ -98,13 +99,13 @@ export function CommitTab({ projectId }: { projectId: string }) {
         {files.length === 0 && (
           <EmptyState>Nothing to commit. The working tree is clean.</EmptyState>
         )}
-        <div data-testid="commit-files">
-          {files.map((f) => (
-            <label
-              key={f.path}
-              className="flex items-center gap-2 py-0.5"
-              data-testid="commit-file"
-            >
+        <VirtualList
+          testId="commit-files"
+          items={files}
+          estimate={26}
+          itemKey={(f) => f.path}
+          renderItem={(f) => (
+            <label className="flex items-center gap-2 py-0.5" data-testid="commit-file">
               <input
                 type="checkbox"
                 checked={!skipped.includes(f.path)}
@@ -116,8 +117,8 @@ export function CommitTab({ projectId }: { projectId: string }) {
               </span>
               {f.path}
             </label>
-          ))}
-        </div>
+          )}
+        />
       </Panel>
       <textarea
         value={message}

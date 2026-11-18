@@ -108,6 +108,8 @@ export function TerminalView({ id }: { id: string }) {
     const typed = term.onData((data) => office.pty.write(id, data));
 
     const refit = (): void => {
+      // A terminal that is kept alive while its view is hidden has no size: leave the program's size alone.
+      if (el.offsetWidth === 0 || el.offsetHeight === 0) return;
       try {
         fit.fit();
         office.pty.resize(id, term.cols, term.rows);

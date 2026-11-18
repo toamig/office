@@ -141,7 +141,11 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
       {inspection && (
         <>
           <p className="mb-3 mt-0">
-            {inspection.hasBrainHub ? <Chip tone="good">brain hub</Chip> : <Chip>plain folder</Chip>}{" "}
+            {inspection.hasBrainHub ? (
+              <Chip tone="good">brain hub</Chip>
+            ) : (
+              <Chip>plain folder</Chip>
+            )}{" "}
             Found {inspection.configs.length} config file(s) in {root}.
           </p>
           <label className="mb-2 flex items-center gap-2">

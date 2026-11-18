@@ -28,6 +28,8 @@ interface UiState {
   history: Place[];
   /** Index of the current place in `history`. */
   at: number;
+  /** Counts every move to a place, even to the one the owner is already at, so a view kept alive can tell a new link. */
+  visits: number;
   navigate: (view: ViewId, params?: Record<string, string>) => void;
   back: () => void;
   forward: () => void;
@@ -50,24 +52,26 @@ export const useUi = create<UiState>((set, get) => ({
   params: {},
   history: [{ view: "home", params: {} }],
   at: 0,
+  visits: 0,
   navigate: (view, params = {}) => {
     const next: Place = { view, params };
     const { history, at } = get();
     const here = history[at];
-    if (here && samePlace(here, next)) return set({ view, params });
+    const visits = get().visits + 1;
+    if (here && samePlace(here, next)) return set({ view, params, visits });
     // Going somewhere new drops whatever was ahead, like a browser's history, then keeps the last 100.
     const kept = [...history.slice(0, at + 1), next].slice(-MAX_HISTORY);
-    set({ view, params, history: kept, at: kept.length - 1 });
+    set({ view, params, history: kept, at: kept.length - 1, visits });
   },
   back: () => {
     const { history, at } = get();
     const to = history[at - 1];
-    if (to) set({ view: to.view, params: to.params, at: at - 1 });
+    if (to) set({ view: to.view, params: to.params, at: at - 1, visits: get().visits + 1 });
   },
   forward: () => {
     const { history, at } = get();
     const to = history[at + 1];
-    if (to) set({ view: to.view, params: to.params, at: at + 1 });
+    if (to) set({ view: to.view, params: to.params, at: at + 1, visits: get().visits + 1 });
   },
   sidebarCollapsed: false,
   setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),

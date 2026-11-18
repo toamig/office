@@ -30,13 +30,25 @@ const fail = (code: string, message: string): IpcEnvelope<never> => ({
 export class IpcRegistry {
   private readonly handlers: HandlerMap = {};
 
-  constructor(private readonly checkResponses = false) {}
+  /** `onTiming` hears how long each call took, so development and test runs can log it. */
+  constructor(
+    private readonly checkResponses = false,
+    private readonly onTiming?: (channel: string, ms: number, ok: boolean) => void,
+  ) {}
 
   handle<C extends ChannelName>(channel: C, handler: Handler<C>): void {
     (this.handlers as Record<string, unknown>)[channel] = handler;
   }
 
   async dispatch(channel: unknown, payload: unknown): Promise<IpcEnvelope<unknown>> {
+    const started = performance.now();
+    const envelope = await this.run(channel, payload);
+    if (this.onTiming && typeof channel === "string")
+      this.onTiming(channel, performance.now() - started, envelope.ok);
+    return envelope;
+  }
+
+  private async run(channel: unknown, payload: unknown): Promise<IpcEnvelope<unknown>> {
     if (typeof channel !== "string" || !(channel in channels)) {
       return fail("unknown-channel", `Unknown channel: ${String(channel)}`);
     }

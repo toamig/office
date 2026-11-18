@@ -65,10 +65,28 @@ export function computeSetupState(input: SetupInputs): SetupState {
 
   const toolsProblem = toolsReason(input.tools);
   const steps: SetupStep[] = [
-    { id: "workspace", label: "Workspace", required: true, met: !workspaceReason, reason: workspaceReason },
-    { id: "projects", label: "Projects folder", required: true, met: !projectsReason, reason: projectsReason },
+    {
+      id: "workspace",
+      label: "Workspace",
+      required: true,
+      met: !workspaceReason,
+      reason: workspaceReason,
+    },
+    {
+      id: "projects",
+      label: "Projects folder",
+      required: true,
+      met: !projectsReason,
+      reason: projectsReason,
+    },
     { id: "tools", label: "Tools", required: true, met: !toolsProblem, reason: toolsProblem },
-    { id: "notifications", label: "Agent notifications", required: false, met: input.hooksInstalled, reason: null },
+    {
+      id: "notifications",
+      label: "Agent notifications",
+      required: false,
+      met: input.hooksInstalled,
+      reason: null,
+    },
   ];
   const brokenBasics = !steps[0]!.met || !steps[1]!.met;
   const welcome = !welcomeDone || brokenBasics;

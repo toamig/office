@@ -21,7 +21,10 @@ export function Setup() {
     <div className="mx-auto grid max-w-4xl gap-4 p-6" data-testid="setup">
       <h1 className="m-0 text-lg font-semibold">Setup</h1>
       {showWizard && (
-        <Panel title="Change the workspace" action={<Button onClick={() => setRerun(false)}>Cancel</Button>}>
+        <Panel
+          title="Change the workspace"
+          action={<Button onClick={() => setRerun(false)}>Cancel</Button>}
+        >
           <WorkspaceStep
             onDone={() => {
               setRerun(false);

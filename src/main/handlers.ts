@@ -1,9 +1,10 @@
 import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
-import type { AppSettings } from "../shared/models";
+import type { AppSettings, GithubOverview, Inventory, ProviderStatus } from "../shared/models";
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { normPath } from "./core/util";
+import { BackgroundCache } from "./core/background-cache";
 import { IpcFailure } from "./core/ipc";
 import {
   cleanMergedBranches,
@@ -36,12 +37,7 @@ import {
   inspectWorkspaceFolder,
   prepareWorkspace,
 } from "./modules/setup/workspace-setup";
-import {
-  installSession,
-  installTool,
-  loginSession,
-  loginTool,
-} from "./modules/setup/tool-actions";
+import { installSession, installTool, loginSession, loginTool } from "./modules/setup/tool-actions";
 import { rememberCodexModel } from "./modules/providers/codex";
 
 /** Registers every IPC handler, one group at a time. */
@@ -56,7 +52,6 @@ export function registerHandlers(ctx: AppContext): void {
   registerVaultHandlers(ctx);
 }
 
-/** Projects, notes and the quick switcher. */
 const isDirectory = (path: string): boolean => {
   try {
     return statSync(path).isDirectory();
@@ -65,6 +60,7 @@ const isDirectory = (path: string): boolean => {
   }
 };
 
+/** Projects, notes and the quick switcher. */
 function registerProjectHandlers(ctx: AppContext): void {
   ctx.ipc.handle("app.ping", (req) => ({ text: req.text, at: new Date().toISOString() }));
   ctx.ipc.handle("workspace.get", () => workspaceView(ctx));
@@ -126,10 +122,19 @@ function registerSetupHandlers(ctx: AppContext): void {
     ctx.bus.emit("setup.changed", {});
     return workspaceView(ctx);
   });
-  ctx.ipc.handle("setup.inventory", (req) => {
-    const project = req.projectId ? ctx.projects.find(req.projectId) : undefined;
-    return readInventories(project ? ctx.projects.absPath(project) : undefined);
-  });
+  // Reading the inventory runs the tools' own list commands, so it is kept and refreshed behind the answer.
+  const inventory = new BackgroundCache<string | undefined, Inventory[]>(
+    (projectId) => {
+      const project = projectId ? ctx.projects.find(projectId) : undefined;
+      return readInventories(project ? ctx.projects.absPath(project) : undefined);
+    },
+    {
+      keyOf: (id) => id ?? "",
+      staleMs: 60_000,
+      onChange: () => ctx.bus.emit("setup.changed", { from: "cache" }),
+    },
+  );
+  ctx.ipc.handle("setup.inventory", (req) => inventory.get(req.projectId));
 
   const toolActions = {
     providers: ctx.providers,
@@ -140,22 +145,36 @@ function registerSetupHandlers(ctx: AppContext): void {
   ctx.ipc.handle("setup.install", (req) => installTool(toolActions, req.id));
   ctx.ipc.handle("setup.loginSession", (req) => loginSession(toolActions, req.id));
   ctx.ipc.handle("setup.installSession", (req) => installSession(toolActions, req.id));
-  ctx.ipc.handle("providers.list", () =>
-    Promise.all(
-      ctx.providers.all().map(async (p) => {
-        const [d, models] = await Promise.all([p.detect(), p.models()]);
-        return {
-          id: p.id,
-          label: p.label,
-          installed: d.installed,
-          loggedIn: d.installed ? d.loggedIn : null,
-          models,
-          ...(d.version ? { version: d.version } : {}),
-          ...(d.problem ? { problem: d.problem } : {}),
-        };
-      }),
-    ),
+  // Asking a provider runs its program, so the list is kept and refreshed behind the answer.
+  const providerList = new BackgroundCache<null, ProviderStatus[]>(
+    () =>
+      Promise.all(
+        ctx.providers.all().map(async (p) => {
+          const [d, models] = await Promise.all([p.detect(), p.models()]);
+          return {
+            id: p.id,
+            label: p.label,
+            installed: d.installed,
+            loggedIn: d.installed ? d.loggedIn : null,
+            models,
+            ...(d.version ? { version: d.version } : {}),
+            ...(d.problem ? { problem: d.problem } : {}),
+          };
+        }),
+      ),
+    {
+      keyOf: () => "all",
+      staleMs: 60_000,
+      onChange: () => ctx.bus.emit("setup.changed", { from: "cache" }),
+    },
   );
+  ctx.ipc.handle("providers.list", () => providerList.get(null));
+  // The tools were looked at again (Check again, the timer): the providers are asked again too.
+  ctx.bus.on("setup.changed", (event) => {
+    if ((event.payload as { from?: string } | null)?.from !== "cache") providerList.invalidate();
+  });
+  void providerList.refresh(null).catch(() => undefined);
+  void inventory.refresh(undefined).catch(() => undefined);
 }
 
 /** Agent sessions, their layout, hooks and end-of-session capture. */
@@ -164,7 +183,11 @@ function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.start", (req) => {
     const row = ctx.sessions.start(req);
     // Codex has no command that lists models, so a model the owner typed is kept for the next time.
-    if (req.model && row.provider === "codex") rememberCodexModel(req.model);
+    if (req.model && row.provider === "codex") {
+      rememberCodexModel(req.model);
+      // The provider list shows the remembered models, so it is asked again.
+      ctx.bus.emit("setup.changed", {});
+    }
     return row;
   });
   ctx.ipc.handle("sessions.startCommand", (req) => {
@@ -360,7 +383,17 @@ function registerChangeHandlers(ctx: AppContext): void {
     changed(req.projectId);
     return outcome.ok ? { pushed: true } : { pushed: false, error: outcome.error };
   });
-  ctx.ipc.handle("github.overview", (req) => ctx.github.overview(req.projectId));
+  // Pull requests and CI come from GitHub through gh, so they are kept and refreshed behind the answer.
+  const overviews = new BackgroundCache<string, GithubOverview>(
+    (projectId) => ctx.github.overview(projectId),
+    {
+      keyOf: (projectId) => projectId,
+      staleMs: 60_000,
+      onChange: (projectId) =>
+        ctx.bus.emit("project.status", { projectId, from: "cache" }, projectId),
+    },
+  );
+  ctx.ipc.handle("github.overview", (req) => overviews.get(req.projectId));
 }
 
 /** Edits to the workspace config, settings, automations and modules. */

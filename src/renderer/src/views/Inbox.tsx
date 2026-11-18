@@ -6,6 +6,7 @@ import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi, type ViewId } from "../stores/ui";
 import { Select } from "../components/Select";
+import { VirtualList } from "../components/VirtualList";
 
 /** Every notification in one place, with filters for unread, urgent and project. */
 export function Inbox() {
@@ -13,7 +14,9 @@ export function Inbox() {
   const [unread, setUnread] = useState(false);
   const [urgent, setUrgent] = useState(false);
   const [projectId, setProjectId] = useState("");
+  // A long history is drawn in windows (past about 200 rows), so it can be asked for in full.
   const filter = {
+    limit: 1000,
     ...(unread ? { unread: true } : {}),
     ...(urgent ? { urgent: true } : {}),
     ...(projectId ? { projectId } : {}),
@@ -71,38 +74,40 @@ export function Inbox() {
           Nothing here. Sync conflicts, agents that need you and new items for you will show up.
         </EmptyState>
       )}
-      <ul className="m-0 list-none p-0">
-        {/* An open permission question is drawn as its card above, so its row waits until it is answered. */}
-        {list.data
-          ?.filter((n) => !(n.kind === "permission.request" && n.readAt === null))
-          .map((n) => (
-            <li
-              key={n.id}
-              data-testid="notification"
-              className="mb-1.5 flex items-start gap-3 rounded border px-3 py-2"
-              style={{
-                borderColor: "var(--line)",
-                background: "var(--panel)",
-                opacity: n.readAt ? 0.6 : 1,
-              }}
-              onClick={() => void open(n.id, n.link)}
-            >
-              <div className="flex-1">
-                <div className="font-medium">{n.title}</div>
-                {n.body && (
-                  <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
-                    {n.body}
-                  </div>
-                )}
-              </div>
-              {n.urgent && <Chip tone="bad">urgent</Chip>}
-              <Chip>{n.kind}</Chip>
-              <span className="w-20 text-right text-[12px]" style={{ color: "var(--muted)" }}>
-                {timeAgo(n.createdAt)}
-              </span>
-            </li>
-          ))}
-      </ul>
+      {/* An open permission question is drawn as its card above, so its row waits until it is answered. */}
+      <VirtualList
+        items={(list.data ?? []).filter(
+          (n) => !(n.kind === "permission.request" && n.readAt === null),
+        )}
+        estimate={58}
+        itemKey={(n) => n.id}
+        renderItem={(n) => (
+          <div
+            data-testid="notification"
+            className="mb-1.5 flex items-start gap-3 rounded border px-3 py-2"
+            style={{
+              borderColor: "var(--line)",
+              background: "var(--panel)",
+              opacity: n.readAt ? 0.6 : 1,
+            }}
+            onClick={() => void open(n.id, n.link)}
+          >
+            <div className="flex-1">
+              <div className="font-medium">{n.title}</div>
+              {n.body && (
+                <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
+                  {n.body}
+                </div>
+              )}
+            </div>
+            {n.urgent && <Chip tone="bad">urgent</Chip>}
+            <Chip>{n.kind}</Chip>
+            <span className="w-20 text-right text-[12px]" style={{ color: "var(--muted)" }}>
+              {timeAgo(n.createdAt)}
+            </span>
+          </div>
+        )}
+      />
     </div>
   );
 }

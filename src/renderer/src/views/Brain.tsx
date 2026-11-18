@@ -78,7 +78,7 @@ function QuickNote() {
 }
 
 function BrainHealth() {
-  const health = useQuery("vault.health", undefined, ["vault.changed"]);
+  const health = useQuery("vault.health", undefined, ["vault.health"]);
   const audit = useQuery("vault.audit", undefined, ["vault.changed"]);
   const validate = health.data?.validate;
   const attention = (health.data?.repos ?? []).filter((r) => r.attention);

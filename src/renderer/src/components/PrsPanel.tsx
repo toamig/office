@@ -13,7 +13,7 @@ const toneOf = (conclusion: string | null, status: string): "good" | "bad" | "wa
 
 /** Open pull requests with their review state, and the last CI runs, with links out to GitHub. */
 export function PrsPanel({ projectId }: { projectId: string }) {
-  const overview = useQuery("github.overview", { projectId });
+  const overview = useQuery("github.overview", { projectId }, ["project.status"]);
   const d = overview.data;
   return (
     <Panel title="Pull requests and CI">

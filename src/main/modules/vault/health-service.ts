@@ -12,7 +12,13 @@ export interface HealthDeps {
   now?: () => Date;
 }
 
-const NOT_RUN: HealthView["validate"] = { ran: false, ok: true, errors: [], warnings: 0, summary: null };
+const NOT_RUN: HealthView["validate"] = {
+  ran: false,
+  ok: true,
+  errors: [],
+  warnings: 0,
+  summary: null,
+};
 
 /**
  * The brain's health: validation plus the hub's git status. Both take seconds, so nothing asks for them on
@@ -63,7 +69,10 @@ export class HealthService {
       this.validate = NOT_RUN;
       this.repos = [];
     } else {
-      const [validate, repos] = await Promise.all([this.deps.validate(root), this.deps.repos(root)]);
+      const [validate, repos] = await Promise.all([
+        this.deps.validate(root),
+        this.deps.repos(root),
+      ]);
       this.validate = validate;
       this.repos = repos;
     }

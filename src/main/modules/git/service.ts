@@ -18,15 +18,19 @@ export interface ProjectServiceDeps {
 interface Cached {
   status: RepoStatus | null;
   lastCommit: LastCommit | null;
+  origin: string | null;
   error?: string;
   at: string;
 }
 
 const FIVE_MINUTES = 5 * 60 * 1000;
+/** A cached read older than this is refreshed behind the answer that returns it. */
+const STALE_MS = 15_000;
 
 /** Reads and caches the git state of every project, and refreshes it by the rules of plan section 10. */
 export class ProjectService {
   private readonly cache = new Map<string, Cached>();
+  private readonly inflight = new Map<string, Promise<void>>();
   private readonly watchers = new Map<string, FSWatcher>();
   private timer: NodeJS.Timeout | undefined;
 
@@ -45,32 +49,54 @@ export class ProjectService {
     return this.deps.projects().map((p) => this.summarize(p));
   }
 
+  /**
+   * The project as last read. Git is only asked here for a project that was never read; otherwise the cached
+   * answer comes back at once and, when it is old, a refresh runs behind it and announces itself with an event.
+   */
   async get(id: string): Promise<ProjectDetail | null> {
     const project = this.find(id);
     if (!project) return null;
-    await this.refresh(id);
-    const cached = this.cache.get(id);
-    const path = this.absPath(project);
+    let cached = this.cache.get(id);
+    if (!cached) {
+      await this.refresh(id);
+      cached = this.cache.get(id);
+    } else if (Date.now() - Date.parse(cached.at) > STALE_MS) {
+      void this.refresh(id);
+    }
     return {
       summary: this.summarize(project),
       status: cached?.status ?? null,
       lastCommit: cached?.lastCommit ?? null,
-      origin: cached?.status ? await readOrigin(path) : null,
+      origin: cached?.origin ?? null,
     };
   }
 
-  async refresh(id: string): Promise<void> {
+  /** Reads the project's git state now. A read already under way is shared, never repeated. */
+  refresh(id: string): Promise<void> {
+    const running = this.inflight.get(id);
+    if (running) return running;
+    const work = this.read(id).finally(() => this.inflight.delete(id));
+    this.inflight.set(id, work);
+    return work;
+  }
+
+  private async read(id: string): Promise<void> {
     const project = this.find(id);
     if (!project) return;
     const path = this.absPath(project);
     let entry: Cached;
     if (!existsSync(path) || !isGitFolder(path)) {
-      entry = { status: null, lastCommit: null, at: nowIso() };
+      entry = { status: null, lastCommit: null, origin: null, at: nowIso() };
     } else {
       const status = await readStatus(path);
       entry = status.ok
-        ? { status: status.status, lastCommit: await readLastCommit(path), at: nowIso() }
-        : { status: null, lastCommit: null, error: status.error, at: nowIso() };
+        ? {
+            status: status.status,
+            lastCommit: await readLastCommit(path),
+            origin: await readOrigin(path),
+            at: nowIso(),
+          }
+        : { status: null, lastCommit: null, origin: null, error: status.error, at: nowIso() };
     }
     this.cache.set(id, entry);
     this.deps.bus.emit("project.status", { projectId: id }, id);

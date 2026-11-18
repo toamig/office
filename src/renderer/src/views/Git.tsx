@@ -16,7 +16,7 @@ type Tab = (typeof TABS)[number];
 export function Git() {
   const params = useUi((s) => s.params);
   const projects = useQuery("projects.list", undefined, ["project.status"]);
-  const health = useQuery("vault.health", undefined, ["vault.changed"]);
+  const health = useQuery("vault.health", undefined, ["vault.health"]);
   const [selected, setSelected] = useState(params["project"] ?? "");
   const [tab, setTab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "branches");
 

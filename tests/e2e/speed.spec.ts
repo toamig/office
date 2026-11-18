@@ -1,0 +1,265 @@
+import { expect, test, type Page } from "@playwright/test";
+import { randomUUID } from "node:crypto";
+import { writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { openDb } from "../../src/main/core/db";
+import { launch } from "./helpers";
+
+/** Each view's root element, and the rail button that opens it. */
+const VIEWS = [
+  ["home", "home"],
+  ["projects", "projects"],
+  ["agents", "agents"],
+  ["git", "git"],
+  ["board", "board"],
+  ["brain", "brain"],
+  ["inbox", "inbox"],
+  ["explore", "explore"],
+  ["setup", "setup"],
+] as const;
+
+/** Clicks a view's rail button, waits 150 ms, and reports what the view shows by then. */
+async function revisit(win: Page, rail: string, root: string) {
+  return win.evaluate(
+    ({ rail, root }) =>
+      new Promise<{ present: boolean; text: number; placeholder: boolean }>((resolve) => {
+        (document.querySelector(`[data-testid="rail-${rail}"]`) as HTMLElement).click();
+        setTimeout(() => {
+          const el = document.querySelector(`[data-testid="${root}"]`) as HTMLElement | null;
+          const text = el?.innerText ?? "";
+          resolve({
+            present: el !== null && el.offsetParent !== null,
+            text: text.length,
+            placeholder: /\bLoading\b|Checking tools|Checking for updates/i.test(text),
+          });
+        }, 150);
+      }),
+    { rail, root },
+  );
+}
+
+test("a view opened before shows its content within 150 ms, with no loading placeholder", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  await expect(win.getByTestId("home")).toBeVisible();
+
+  // A running agent and a chat, so the views have something to show.
+  await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Level work",
+    }),
+  );
+  await win.evaluate(() =>
+    window.office.invoke("tasks.create", {
+      projectId: "alpha",
+      pipeline: "feature",
+      title: "Add a sheep counter",
+      description: "Plan it.",
+      fanout: 1,
+    }),
+  );
+
+  // First pass: open every view and let it settle; remember how much each shows.
+  const settled = new Map<string, number>();
+  for (const [rail, root] of VIEWS) {
+    await win.getByTestId(`rail-${rail}`).click();
+    await expect(win.getByTestId(root)).toBeVisible();
+    await win.waitForTimeout(600);
+    settled.set(
+      rail,
+      await win.getByTestId(root).evaluate((el) => (el as HTMLElement).innerText.length),
+    );
+  }
+
+  // Second pass: every view again. The content is there within 150 ms, whole, with no placeholder.
+  for (const [rail, root] of VIEWS) {
+    const seen = await revisit(win, rail, root);
+    expect(seen.present, `${rail} is on screen`).toBe(true);
+    expect(seen.placeholder, `${rail} has no loading placeholder`).toBe(false);
+    expect(seen.text, `${rail} shows what it showed before`).toBeGreaterThanOrEqual(
+      Math.floor((settled.get(rail) ?? 0) * 0.8),
+    );
+    await win.waitForTimeout(200);
+  }
+  await app.close();
+});
+
+test("switching views keeps a running terminal's scrollback and a streaming chat, with no reload", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  await expect(win.getByTestId("home")).toBeVisible();
+  const terminal = await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Terminal one",
+      mode: "terminal",
+    }),
+  );
+  const chat = await win.evaluate(() =>
+    window.office.invoke("sessions.start", {
+      providerId: "fake",
+      projectId: "alpha",
+      title: "Chat one",
+      mode: "chat",
+    }),
+  );
+
+  await win.getByTestId("rail-agents").click();
+  await win.getByTestId("session-row").filter({ hasText: "Terminal one" }).click();
+  await expect(win.getByTestId("terminal")).toBeVisible();
+  await expect
+    .poll(() =>
+      win.evaluate(() => {
+        const host = document.querySelector('[data-testid="terminal"]') as HTMLElement & {
+          __term?: {
+            buffer: {
+              active: {
+                length: number;
+                getLine: (i: number) => { translateToString: (t: boolean) => string } | undefined;
+              };
+            };
+          };
+        };
+        const b = host.__term?.buffer.active;
+        if (!b) return "";
+        let out = "";
+        for (let i = 0; i < b.length; i++)
+          out += `${b.getLine(i)?.translateToString(true) ?? ""}\n`;
+        return out;
+      }),
+    )
+    .toContain("fake-claude ready");
+  void terminal;
+
+  // A chat that is streaming while the owner is away.
+  await win.getByTestId("session-row").filter({ hasText: "Chat one" }).click();
+  // Both side by side, so both are on screen and can be marked.
+  await win.getByTestId("split-columns").click();
+  await expect(win.getByTestId("chat")).toBeVisible();
+  await expect(win.getByTestId("terminal")).toBeVisible();
+  // Mark the live objects: if the view were rebuilt, the marks would be gone.
+  await win.evaluate(() => {
+    type Marked = HTMLElement & { __mark?: string };
+    (document.querySelector('[data-testid="chat"]') as Marked).__mark = "same-chat";
+    (document.querySelector('[data-testid="terminal"]') as Marked).__mark = "same-terminal";
+  });
+  await win.getByTestId("composer-input").fill("THINK READ src/a.ts");
+  await win.getByTestId("composer-input").press("Enter");
+  void chat;
+
+  // Away to Home and other views, then back.
+  await win.getByTestId("rail-home").click();
+  await expect(win.getByTestId("home")).toBeVisible();
+  await expect(win.getByTestId("agents")).toBeHidden();
+  await win.getByTestId("rail-projects").click();
+  await win.waitForTimeout(1500);
+  await win.getByTestId("rail-agents").click();
+  await expect(win.getByTestId("agents")).toBeVisible();
+
+  await expect(win.getByTestId("chat")).toContainText("echo: THINK READ src/a.ts", {
+    timeout: 30000,
+  });
+  expect(
+    await win.evaluate(
+      () =>
+        (document.querySelector('[data-testid="chat"]') as HTMLElement & { __mark?: string })
+          .__mark,
+    ),
+  ).toBe("same-chat");
+
+  await expect(win.getByTestId("terminal")).toBeVisible();
+  expect(
+    await win.evaluate(
+      () =>
+        (document.querySelector('[data-testid="terminal"]') as HTMLElement & { __mark?: string })
+          .__mark,
+    ),
+  ).toBe("same-terminal");
+  await expect
+    .poll(() =>
+      win.evaluate(() => {
+        const host = document.querySelector('[data-testid="terminal"]') as HTMLElement & {
+          __term?: {
+            buffer: {
+              active: {
+                length: number;
+                getLine: (i: number) => { translateToString: (t: boolean) => string } | undefined;
+              };
+            };
+          };
+        };
+        const b = host.__term?.buffer.active;
+        return b?.getLine(0)?.translateToString(true) ?? "";
+      }),
+    )
+    .toContain("fake-claude ready");
+  await app.close();
+});
+
+test("a long inbox and a long diff draw only the rows near the screen", async () => {
+  const first = await launch({ world: true, fakeTools: true });
+  const { world, base } = first;
+  if (!world) throw new Error("no world");
+  await first.app.firstWindow();
+  await first.app.close();
+
+  // 400 notifications, written to the app's database between two runs.
+  const db = openDb(join(base, "data", "office.db"));
+  const insert = db.prepare(
+    `INSERT INTO notifications (id, kind, project_id, title, body, link, urgent, created_at, read_at)
+     VALUES (?, 'agent.done', NULL, ?, NULL, NULL, 0, ?, NULL)`,
+  );
+  const start = Date.now();
+  db.transaction(() => {
+    for (let i = 0; i < 400; i++)
+      insert.run(
+        randomUUID(),
+        `Row ${String(i).padStart(3, "0")}`,
+        new Date(start - i * 1000).toISOString(),
+      );
+  })();
+  db.close();
+
+  // A diff of 700 changed lines in the Alpha repo.
+  const alpha = world.code["alpha"];
+  if (!alpha) throw new Error("no alpha");
+  writeFileSync(
+    join(alpha.work, "README.md"),
+    Array.from({ length: 700 }, (_, i) => `line ${i}`).join("\n") + "\n",
+  );
+
+  const second = await launch({ base, fakeTools: true });
+  const win = await second.app.firstWindow();
+  await win.getByTestId("rail-inbox").click();
+  await expect(win.getByTestId("notification").first()).toContainText("Row 000");
+  const drawn = await win.getByTestId("notification").count();
+  expect(drawn).toBeGreaterThan(5);
+  expect(drawn).toBeLessThan(120);
+  // Scrolling to the end brings the last rows into the page.
+  await expect
+    .poll(async () => {
+      await win.getByTestId("notification").last().scrollIntoViewIfNeeded();
+      return win.getByTestId("notification").last().innerText();
+    })
+    .toContain("Row 399");
+  expect(await win.getByTestId("notification").count()).toBeLessThan(120);
+
+  await win.getByTestId("rail-git").click();
+  await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+  await win.getByTestId("git-tab-changes").click();
+  await expect(win.getByTestId("diff-file")).toHaveCount(1);
+  await expect(win.getByTestId("diff-line").first()).toBeVisible();
+  const lines = await win.getByTestId("diff-line").count();
+  expect(lines).toBeGreaterThan(5);
+  expect(lines).toBeLessThan(250);
+  await expect
+    .poll(async () => {
+      await win.getByTestId("diff-line").last().scrollIntoViewIfNeeded();
+      return win.getByTestId("diff-line").last().innerText();
+    })
+    .toContain("line 699");
+  await second.app.close();
+});

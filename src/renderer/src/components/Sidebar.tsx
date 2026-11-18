@@ -11,6 +11,7 @@ import {
 } from "lucide-react";
 import type { ComponentType } from "react";
 import { useQuery } from "../lib/hooks";
+import { prefetchView } from "../lib/prefetch";
 import { useSidebarCollapsed } from "../lib/sidebar";
 import { VIEW_LABELS } from "../lib/views";
 import { useUi, type ViewId } from "../stores/ui";
@@ -48,6 +49,8 @@ export function Sidebar() {
         <button
           key={v.id}
           onClick={() => navigate(v.id)}
+          onPointerEnter={() => prefetchView(v.id)}
+          onFocus={() => prefetchView(v.id)}
           data-testid={`rail-${v.id}`}
           data-active={view === v.id}
           title={collapsed ? VIEW_LABELS[v.id] : undefined}

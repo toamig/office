@@ -11,6 +11,7 @@ import { StartAgentDialog } from "./agents/StartAgentDialog";
 import { SessionSurface } from "./agents/SessionSurface";
 import { Select } from "../components/Select";
 import { StatusChip } from "../components/StatusChip";
+import { VirtualList } from "../components/VirtualList";
 
 const EMPTY: Layout = { open: [], active: null, split: "single", panes: [] };
 const CAPACITY: Record<Layout["split"], number> = { single: 1, columns: 2, rows: 2, grid: 4 };
@@ -37,108 +38,126 @@ function SessionList({
       data-testid="session-list"
     >
       {sessions.length === 0 && <EmptyState>No sessions yet. Start an agent to begin.</EmptyState>}
-      {sessions.map((s) => (
-        <div
-          key={s.id}
-          data-testid="session-row"
-          onClick={() => onOpen(s)}
-          onContextMenu={(e) => {
-            e.preventDefault();
-            void office
-              .invoke("app.popupMenu", {
-                items: [
-                  { id: "resume", label: "Resume", enabled: !s.running && s.mode !== "chat" },
-                  { id: "stop", label: "Stop", enabled: s.running },
-                  { id: "close", label: "Close and wrap up" },
-                ],
-              })
-              .then((choice) => {
-                if (choice === "resume")
-                  void office.invoke("sessions.resume", { id: s.id }).then(onChanged);
-                else if (choice === "stop")
-                  void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
-                else if (choice === "close") onCloseSession(s);
-              });
-          }}
-          className="session-row border-b px-3 py-2"
-          style={{
-            borderColor: "var(--line)",
-            background: active === s.id ? "var(--panel)" : undefined,
-          }}
-        >
-          <div className="flex items-center gap-2">
-            <span className="flex-1 truncate font-medium">{s.title ?? s.provider}</span>
-            <span data-testid="session-status">
-              <StatusChip status={s.status} />
-            </span>
-          </div>
+      <VirtualList
+        items={sessions}
+        estimate={58}
+        itemKey={(s) => s.id}
+        renderItem={(s) => (
           <div
-            className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px]"
-            style={{ color: "var(--muted)" }}
+            data-testid="session-row"
+            onClick={() => onOpen(s)}
+            onContextMenu={(e) => {
+              e.preventDefault();
+              void office
+                .invoke("app.popupMenu", {
+                  items: [
+                    { id: "resume", label: "Resume", enabled: !s.running && s.mode !== "chat" },
+                    { id: "stop", label: "Stop", enabled: s.running },
+                    { id: "close", label: "Close and wrap up" },
+                  ],
+                })
+                .then((choice) => {
+                  if (choice === "resume")
+                    void office.invoke("sessions.resume", { id: s.id }).then(onChanged);
+                  else if (choice === "stop")
+                    void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
+                  else if (choice === "close") onCloseSession(s);
+                });
+            }}
+            className="session-row border-b px-3 py-2"
+            style={{
+              borderColor: "var(--line)",
+              background: active === s.id ? "var(--panel)" : undefined,
+            }}
           >
-            {name(s.projectId) && <span>{name(s.projectId)}</span>}
-            {s.branch && <span>{s.branch}</span>}
-            {s.role && <span>role {s.role}</span>}
-            <span>{timeAgo(s.updatedAt)}</span>
-          </div>
-          <div className="session-actions flex gap-0.5">
-            {!s.running && s.mode !== "chat" && (
-              <Button
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void office
-                    .invoke("sessions.resume", { id: s.id })
-                    .then(onChanged, () => undefined);
-                }}
-                aria-label="Resume"
-                data-testid="resume-session"
-              >
-                <Play size={12} />
-              </Button>
-            )}
-            {s.running && (
+            <div className="flex items-center gap-2">
+              <span className="flex-1 truncate font-medium">{s.title ?? s.provider}</span>
+              <span data-testid="session-status">
+                <StatusChip status={s.status} />
+              </span>
+            </div>
+            <div
+              className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px]"
+              style={{ color: "var(--muted)" }}
+            >
+              {name(s.projectId) && <span>{name(s.projectId)}</span>}
+              {s.branch && <span>{s.branch}</span>}
+              {s.role && <span>role {s.role}</span>}
+              <span>{timeAgo(s.updatedAt)}</span>
+            </div>
+            <div className="session-actions flex gap-0.5">
+              {!s.running && s.mode !== "chat" && (
+                <Button
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void office
+                      .invoke("sessions.resume", { id: s.id })
+                      .then(onChanged, () => undefined);
+                  }}
+                  aria-label="Resume"
+                  data-testid="resume-session"
+                >
+                  <Play size={12} />
+                </Button>
+              )}
+              {s.running && (
+                <Button
+                  variant="ghost"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
+                  }}
+                  aria-label="Stop"
+                  data-testid="stop-session"
+                >
+                  <Square size={12} />
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 onClick={(e) => {
                   e.stopPropagation();
-                  void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
+                  onCloseSession(s);
                 }}
-                aria-label="Stop"
-                data-testid="stop-session"
+                aria-label="Close and wrap up"
+                data-testid="close-session"
               >
-                <Square size={12} />
+                <Archive size={12} />
               </Button>
-            )}
-            <Button
-              variant="ghost"
-              onClick={(e) => {
-                e.stopPropagation();
-                onCloseSession(s);
-              }}
-              aria-label="Close and wrap up"
-              data-testid="close-session"
-            >
-              <Archive size={12} />
-            </Button>
+            </div>
           </div>
-        </div>
-      ))}
+        )}
+      />
     </div>
   );
 }
 
 /** Sessions on the left, terminals on the right in tabs with up to four panes; the layout is saved per project. */
-export function Agents() {
+export function Agents({ active: visible }: { active: boolean }) {
   const params = useUi((s) => s.params);
-  const [filter, setFilter] = useState(params["project"] ?? "");
+  const visits = useUi((s) => s.visits);
+  // The view stays alive when the owner leaves it (terminals and streams are never rebuilt), so a link that
+  // arrives later is applied when the view is on screen and the visit is a new one.
+  const [applied, setApplied] = useState<number | null>(null);
+  const [linked, setLinked] = useState<Record<string, string>>({});
+  const [filter, setFilter] = useState("");
   const key = filter || "all";
   const sessions = useQuery("sessions.list", filter ? { projectId: filter } : {}, [
     "session.status",
   ]);
   const projects = useQuery("projects.list");
   const [saved, setLayout] = useState<Layout>(EMPTY);
-  const [starting, setStarting] = useState(params["start"] === "1");
+  const [starting, setStarting] = useState(false);
   const [closing, setClosing] = useState<SessionRow | null>(null);
+  if (visible && applied !== visits) {
+    setApplied(visits);
+    // A plain click on Agents keeps the filter and the tabs as they were; only a link with parameters sets them.
+    if (Object.keys(params).length > 0) {
+      setLinked(params);
+      setFilter(params["project"] ?? "");
+      setStarting(params["start"] === "1");
+    }
+  }
 
   useEffect(() => {
     let alive = true;
@@ -159,7 +178,7 @@ export function Agents() {
   const list = sessions.data ?? [];
   const byId = new Map(list.map((s) => [s.id, s]));
   // A session named in the link opens as a tab even before the layout has it.
-  const wanted = params["session"];
+  const wanted = linked["session"];
   const layout: Layout =
     wanted !== undefined && byId.has(wanted) && !saved.open.includes(wanted)
       ? { ...saved, open: [...saved.open, wanted], active: wanted }
@@ -339,7 +358,7 @@ export function Agents() {
       {starting && (
         <StartAgentDialog
           {...(filter ? { projectId: filter } : {})}
-          {...(params["cwd"] ? { cwd: params["cwd"] } : {})}
+          {...(linked["cwd"] ? { cwd: linked["cwd"] } : {})}
           onClose={() => setStarting(false)}
           onStarted={(session) => {
             setStarting(false);
