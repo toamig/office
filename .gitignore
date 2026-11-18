@@ -8,3 +8,7 @@ release/
 !.env.example
 Thumbs.db
 .DS_Store
+.dev/
+test-results/
+playwright-report/
+.vite/
