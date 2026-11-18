@@ -1,10 +1,23 @@
 import { BrowserWindow, dialog, shell } from "electron";
 import type { AppContext } from "./context";
+import type { PreviewPane } from "./preview";
+import { detectDevServer } from "./core/dev-server";
 import { run } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
 
 /** Handlers that need Electron itself (opening folders and editors). Registered by the app only. */
-export function registerShellHandlers(ctx: AppContext): void {
+export function registerShellHandlers(ctx: AppContext, preview: PreviewPane): void {
+  ctx.ipc.handle("preview.open", async (req) => {
+    try {
+      return await preview.open(req.url);
+    } catch (err) {
+      throw new IpcFailure("bad-url", (err as Error).message);
+    }
+  });
+  ctx.ipc.handle("preview.bounds", (req) => preview.setBounds(req));
+  ctx.ipc.handle("preview.act", (req) => preview.act(req.action));
+  ctx.ipc.handle("preview.state", () => preview.state());
+  ctx.ipc.handle("preview.detect", () => detectDevServer());
   const folderOf = (id: string): string => {
     const project = ctx.projects.find(id);
     if (!project) throw new IpcFailure("not-found", `No project with id ${id}`);

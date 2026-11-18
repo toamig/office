@@ -11,6 +11,7 @@ import {
 import { createContext, type AppContext } from "./context";
 import { badgePng } from "./core/badge";
 import { registerHandlers } from "./handlers";
+import { PreviewPane } from "./preview";
 import { registerShellHandlers } from "./shell-handlers";
 
 const CSP =
@@ -110,7 +111,11 @@ async function boot(): Promise<void> {
   const context = await createContext(!app.isPackaged, relayScript);
   ctx = context;
   registerHandlers(context);
-  registerShellHandlers(context);
+  const preview = new PreviewPane(
+    () => mainWindow,
+    (state) => context.bus.emit("preview.state", state),
+  );
+  registerShellHandlers(context, preview);
   ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
     context.ipc.dispatch(channel, payload),
   );

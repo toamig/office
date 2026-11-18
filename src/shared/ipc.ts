@@ -24,6 +24,8 @@ import {
   ReviewComment,
   ModuleInfo,
   NotificationFilter,
+  PreviewBounds,
+  PreviewState,
   NotificationRules,
   NotificationRow,
   ProjectNote,
@@ -61,6 +63,7 @@ export const eventTypes = [
   "vault.changed",
   "task.changed",
   "app.navigate",
+  "preview.state",
 ] as const;
 export type EventType = (typeof eventTypes)[number];
 
@@ -286,6 +289,14 @@ export const channels = {
     req: z.object({ name: z.string(), enabled: z.boolean() }),
     res: z.array(ModuleInfo),
   },
+  "preview.open": { req: z.object({ url: z.string() }), res: PreviewState },
+  "preview.bounds": { req: PreviewBounds, res: z.void() },
+  "preview.act": {
+    req: z.object({ action: z.enum(["back", "forward", "reload", "stop", "external", "close"]) }),
+    res: PreviewState,
+  },
+  "preview.state": { req: z.void(), res: PreviewState },
+  "preview.detect": { req: z.void(), res: z.string().nullable() },
   "tasks.list": { req: z.object({ projectId: z.string().optional() }), res: z.array(TaskView) },
   "tasks.get": { req: z.object({ id: z.string() }), res: TaskDetail },
   "tasks.create": { req: CreateTask, res: TaskView },

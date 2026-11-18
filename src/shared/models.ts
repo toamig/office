@@ -676,3 +676,23 @@ export const ModuleInfo = z.object({
   error: z.string().optional(),
 });
 export type ModuleInfo = z.infer<typeof ModuleInfo>;
+
+export const PreviewState = z.object({
+  open: z.boolean(),
+  url: z.string(),
+  title: z.string(),
+  canGoBack: z.boolean(),
+  canGoForward: z.boolean(),
+  loading: z.boolean(),
+  error: z.string().nullable(),
+});
+export type PreviewState = z.infer<typeof PreviewState>;
+
+export const PreviewBounds = z.object({
+  x: z.number(),
+  y: z.number(),
+  width: z.number(),
+  height: z.number(),
+  visible: z.boolean(),
+});
+export type PreviewBounds = z.infer<typeof PreviewBounds>;

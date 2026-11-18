@@ -6,8 +6,9 @@ import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
+import { PreviewTab } from "./PreviewTab";
 
-type Tab = "overview" | "todos" | "agents" | "notes";
+type Tab = "overview" | "todos" | "agents" | "notes" | "preview";
 
 function Overview({ id }: { id: string }) {
   const detail = useQuery("projects.get", { id }, ["project.status"]);
@@ -269,6 +270,7 @@ export function ProjectPage({
     ["todos", "Todos"],
     ["agents", "Agents"],
     ["notes", "Notes"],
+    ["preview", "Preview"],
   ];
   return (
     <div className="p-4" data-testid="project-page">
@@ -318,6 +320,7 @@ export function ProjectPage({
       {tab === "overview" && <Overview id={id} />}
       {tab === "todos" && <Todos id={id} />}
       {tab === "agents" && <ProjectAgents id={id} />}
+      {tab === "preview" && <PreviewTab projectId={id} />}
       {tab === "notes" && <Notes id={id} {...(note ? { initial: note } : {})} />}
     </div>
   );
