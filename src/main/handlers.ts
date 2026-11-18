@@ -268,6 +268,10 @@ export function registerHandlers(ctx: AppContext): void {
   ctx.ipc.handle("github.overview", (req) => ctx.github.overview(req.projectId));
   ctx.ipc.handle("roles.save", (req) => ctx.editor.saveRole(req.id, req.role));
   ctx.ipc.handle("roles.remove", (req) => ctx.editor.removeRole(req.id));
+  ctx.ipc.handle("projects.update", (req) => {
+    const { id, ...patch } = req;
+    return ctx.editor.updateProject(id, patch);
+  });
   ctx.ipc.handle("roles.setOverride", (req) =>
     ctx.editor.setOverride(req.projectId, req.role, req.target),
   );

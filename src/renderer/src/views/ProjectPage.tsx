@@ -7,6 +7,7 @@ import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { PreviewTab } from "./PreviewTab";
+import { ProjectManage } from "./project/Manage";
 
 type Tab = "overview" | "todos" | "agents" | "notes" | "preview";
 
@@ -229,7 +230,7 @@ export function ProjectPage({
   note?: string;
 }) {
   const navigate = useUi((s) => s.navigate);
-  const projects = useQuery("projects.list", undefined, ["project.status"]);
+  const projects = useQuery("projects.list", undefined, ["project.status", "workspace.changed"]);
   const project = projects.data?.find((p) => p.id === id);
   const [tab, setTab] = useState<Tab>((initialTab as Tab | undefined) ?? "overview");
   const [message, setMessage] = useState<string | null>(null);
@@ -295,6 +296,7 @@ export function ProjectPage({
           <RefreshCw size={13} className={syncing ? "animate-spin" : ""} /> Sync
         </Button>
       </div>
+      <ProjectManage project={project} onError={setMessage} />
       {message && (
         <div className="mb-3" data-testid="project-message">
           <ErrorBanner message={message} />

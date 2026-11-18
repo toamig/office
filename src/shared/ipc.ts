@@ -274,6 +274,16 @@ export const channels = {
   "github.overview": { req: z.object({ projectId: z.string() }), res: GithubOverview },
   "roles.save": { req: z.object({ id: z.string(), role: Role }), res: z.void() },
   "roles.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "projects.update": {
+    req: z.object({
+      id: z.string(),
+      pinned: z.boolean().optional(),
+      /** null or an empty string removes the group. */
+      group: z.string().nullable().optional(),
+      archived: z.boolean().optional(),
+    }),
+    res: z.void(),
+  },
   "roles.setOverride": {
     req: z.object({ projectId: z.string(), role: z.string(), target: z.string().nullable() }),
     res: z.void(),

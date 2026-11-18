@@ -1,6 +1,8 @@
 import { GitBranch, Pin } from "lucide-react";
 import type { ProjectSummary } from "@shared/models";
-import { Chip, EmptyState, ErrorBanner } from "../components/ui";
+import { useState } from "react";
+import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
+import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 
@@ -50,6 +52,8 @@ export function Projects() {
   for (const p of list)
     groups.set(p.group ?? "Other", [...(groups.get(p.group ?? "Other") ?? []), p]);
   const pinned = list.filter((p) => p.pinned);
+  const archived = (projects.data ?? []).filter((p) => p.archived);
+  const [showArchived, setShowArchived] = useState(false);
   return (
     <div className="p-4" data-testid="projects">
       <h1 className="m-0 mb-3 text-lg font-semibold">Projects</h1>
@@ -61,6 +65,31 @@ export function Projects() {
       {[...groups.entries()].map(([name, items]) => (
         <Section key={name} title={name} items={items} />
       ))}
+      {archived.length > 0 && (
+        <section className="mb-5" data-testid="archived-projects">
+          <Button onClick={() => setShowArchived(!showArchived)} data-testid="toggle-archived">
+            {showArchived ? "Hide" : "Show"} archived ({archived.length})
+          </Button>
+          {showArchived &&
+            archived.map((p) => (
+              <div
+                key={p.id}
+                className="flex items-center gap-2 py-1"
+                data-testid="archived-project"
+              >
+                <span>{p.name}</span>
+                <Button
+                  onClick={() =>
+                    void office.invoke("projects.update", { id: p.id, archived: false })
+                  }
+                  data-testid="restore-project"
+                >
+                  Restore
+                </Button>
+              </div>
+            ))}
+        </section>
+      )}
     </div>
   );
 }

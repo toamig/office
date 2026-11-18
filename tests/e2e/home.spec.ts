@@ -23,6 +23,7 @@ test("Home lists live agents and task approvals next to the notes' waiting items
       pipeline: "feature",
       title: "Home task",
       description: "Plan something.",
+      fanout: 1,
     }),
   );
   await expect(win.getByTestId("waiting-gate")).toContainText("Home task", { timeout: 60000 });

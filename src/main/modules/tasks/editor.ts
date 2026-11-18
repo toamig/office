@@ -120,6 +120,25 @@ export class WorkspaceEditor {
     });
   }
 
+  /** Pins, unpins, groups, ungroups, archives or restores a project in the workspace config. */
+  async updateProject(
+    projectId: string,
+    patch: { pinned?: boolean; group?: string | null; archived?: boolean },
+  ): Promise<void> {
+    await this.edit(`Workspace: update project ${projectId}`, (json) => {
+      const projects = (json["projects"] ?? []) as Array<Record<string, unknown>>;
+      const project = projects.find((p) => p["id"] === projectId);
+      if (!project) throw new IpcFailure("not-found", `No project with id ${projectId}`);
+      if (patch.pinned !== undefined) project["pinned"] = patch.pinned;
+      if (patch.archived !== undefined) project["archived"] = patch.archived;
+      if (patch.group !== undefined) {
+        const group = patch.group === null ? "" : patch.group.trim();
+        if (group === "") delete project["group"];
+        else project["group"] = group;
+      }
+    });
+  }
+
   /** Sets (or clears, with null) a project's override: when it asks for `role`, it gets `target` instead. */
   async setOverride(projectId: string, role: string, target: string | null): Promise<void> {
     await this.edit(`Workspace: ${projectId} role override`, (json) => {

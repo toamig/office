@@ -100,3 +100,23 @@ describe("role editing", () => {
     await store.close();
   });
 });
+
+describe("project editing", () => {
+  it("pins, groups, archives and restores a project through the file, with one commit each", async () => {
+    const { world, store, editor } = await setup();
+    const find = () => store.state.workspace?.projects.find((p) => p.id === "alpha");
+    await editor.updateProject("alpha", { pinned: true });
+    expect(find()?.pinned).toBe(true);
+    await editor.updateProject("alpha", { group: " Games " });
+    expect(find()?.group).toBe("Games");
+    await editor.updateProject("alpha", { archived: true });
+    expect(find()?.archived).toBe(true);
+    await editor.updateProject("alpha", { archived: false, pinned: false, group: null });
+    expect(find()).toMatchObject({ archived: false, pinned: false });
+    expect(find()?.group).toBeUndefined();
+    expect(sh(join(world.hub, "Office"), "log", "-1", "--format=%s").trim()).toBe(
+      "Workspace: update project alpha",
+    );
+    await expect(editor.updateProject("nope", { pinned: true })).rejects.toThrow(/No project/);
+  });
+});
