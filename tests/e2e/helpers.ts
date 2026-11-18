@@ -7,27 +7,31 @@ export const repoRoot = resolve(__dirname, "../..");
 
 export interface Launched {
   app: ElectronApplication;
+  base: string;
   data: string;
   home: string;
 }
 
+const GIT_CONFIG = [
+  "[user]",
+  "\tname = Office E2E",
+  "\temail = e2e@example.invalid",
+  "[init]",
+  "\tdefaultBranch = main",
+  "[commit]",
+  "\tgpgsign = false",
+  "",
+].join("\n");
+
 /** Launches the built app against a fresh data folder and a fake home. Never touches real data. */
-export async function launch(env: Record<string, string> = {}): Promise<Launched> {
-  const base = mkdtempSync(join(tmpdir(), "office-e2e-"));
+export async function launch(
+  env: Record<string, string> = {},
+  base = mkdtempSync(join(tmpdir(), "office-e2e-")),
+): Promise<Launched> {
   const data = join(base, "data");
   const home = join(base, "home");
   const gitConfig = join(base, "gitconfig");
-  writeFileSync(
-    gitConfig,
-    "[user]
-	name = Office E2E
-	email = e2e@example.invalid
-[init]
-	defaultBranch = main
-[commit]
-	gpgsign = false
-",
-  );
+  writeFileSync(gitConfig, GIT_CONFIG);
   const app = await electron.launch({
     args: [repoRoot],
     env: {
@@ -39,5 +43,5 @@ export async function launch(env: Record<string, string> = {}): Promise<Launched
       ...env,
     } as Record<string, string>,
   });
-  return { app, data, home };
+  return { app, base, data, home };
 }
