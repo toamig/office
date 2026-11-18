@@ -3,8 +3,9 @@ import { Chip, EmptyState } from "../components/ui";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { BranchesTab } from "./git/BranchesTab";
+import { WorktreesTab } from "./git/WorktreesTab";
 
-type Tab = "branches";
+type Tab = "branches" | "worktrees";
 
 /** The Git desk: every repo at a glance, and branches, worktrees, diffs, commits and PRs for the chosen one. */
 export function Git() {
@@ -12,7 +13,7 @@ export function Git() {
   const projects = useQuery("projects.list", undefined, ["project.status"]);
   const health = useQuery("vault.health", undefined, ["vault.changed"]);
   const [selected, setSelected] = useState(params["project"] ?? "");
-  const [tab, setTab] = useState<Tab>("branches");
+  const [tab, setTab] = useState<Tab>(params["tab"] === "worktrees" ? "worktrees" : "branches");
 
   const repos = (projects.data ?? []).filter((p) => !p.archived && p.isRepo);
   const current = repos.find((p) => p.id === selected) ?? repos[0];
@@ -87,7 +88,12 @@ export function Git() {
               <Chip>{current.detached ? "detached HEAD" : current.branch}</Chip>
             </div>
             <div className="mb-3 flex gap-1 border-b" style={{ borderColor: "var(--line)" }}>
-              {([["branches", "Branches"]] as Array<[Tab, string]>).map(([id, label]) => (
+              {(
+                [
+                  ["branches", "Branches"],
+                  ["worktrees", "Worktrees"],
+                ] as Array<[Tab, string]>
+              ).map(([id, label]) => (
                 <button
                   key={id}
                   onClick={() => setTab(id)}
@@ -104,6 +110,7 @@ export function Git() {
               ))}
             </div>
             {tab === "branches" && <BranchesTab key={current.id} projectId={current.id} />}
+            {tab === "worktrees" && <WorktreesTab key={current.id} projectId={current.id} />}
           </>
         )}
       </div>

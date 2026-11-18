@@ -31,6 +31,7 @@ import {
   WorkspaceView,
   VaultFile,
   WorkspaceInspection,
+  WorktreeRow,
   WriteResult,
 } from "./models";
 
@@ -200,6 +201,23 @@ export const channels = {
   },
   "branches.delete": { req: z.object({ projectId: z.string(), name: z.string() }), res: z.void() },
   "branches.cleanMerged": { req: z.object({ projectId: z.string() }), res: z.array(z.string()) },
+  "worktrees.list": {
+    req: z.object({ projectId: z.string().optional() }),
+    res: z.array(WorktreeRow),
+  },
+  "worktrees.create": {
+    req: z.object({ projectId: z.string(), name: z.string(), base: z.string().optional() }),
+    res: z.object({ path: z.string(), branch: z.string() }),
+  },
+  "worktrees.remove": {
+    req: z.object({
+      projectId: z.string(),
+      path: z.string(),
+      confirmOther: z.boolean().optional(),
+    }),
+    res: z.void(),
+  },
+  "worktrees.cleanMerged": { req: z.object({ projectId: z.string() }), res: z.array(z.string()) },
   "notifications.list": { req: NotificationFilter, res: z.array(NotificationRow) },
   "notifications.markRead": {
     req: z.object({ ids: z.array(z.string()).optional() }),

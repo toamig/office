@@ -322,6 +322,7 @@ export function Agents() {
       {starting && (
         <StartAgentDialog
           {...(filter ? { projectId: filter } : {})}
+          {...(params["cwd"] ? { cwd: params["cwd"] } : {})}
           onClose={() => setStarting(false)}
           onStarted={(session) => {
             setStarting(false);

@@ -5,16 +5,19 @@ import { Button, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 
+const NEW_WORKTREE = "__new_worktree__";
 const field = "rounded border px-2 py-1";
 const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
 
 /** Start an agent: pick the project, a role or a provider and model, then an optional first prompt. */
 export function StartAgentDialog({
   projectId,
+  cwd,
   onClose,
   onStarted,
 }: {
   projectId?: string;
+  cwd?: string;
   onClose: () => void;
   onStarted: (session: SessionRow) => void;
 }) {
@@ -22,6 +25,9 @@ export function StartAgentDialog({
   const workspace = useQuery("workspace.get");
   const providers = useQuery("providers.list");
   const [project, setProject] = useState(projectId ?? "");
+  const [folder, setFolder] = useState(cwd ?? "");
+  const [newWorktree, setNewWorktree] = useState("");
+  const worktrees = useQuery("worktrees.list", { projectId: project || "__none__" });
   const [mode, setMode] = useState<"role" | "provider">("role");
   const [roleId, setRoleId] = useState("builder");
   const [providerId, setProviderId] = useState("claude-code");
@@ -37,8 +43,17 @@ export function StartAgentDialog({
     setBusy(true);
     setError(null);
     try {
+      let where = folder;
+      if (folder === NEW_WORKTREE) {
+        const made = await office.invoke("worktrees.create", {
+          projectId: project,
+          name: newWorktree.trim(),
+        });
+        where = made.path;
+      }
       const session = await office.invoke("sessions.start", {
         ...(project ? { projectId: project } : {}),
+        ...(where ? { cwd: where } : {}),
         ...(mode === "role" ? { roleId } : { providerId, ...(model ? { model } : {}) }),
         ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
       });
@@ -88,6 +103,39 @@ export function StartAgentDialog({
                 ))}
             </select>
           </label>
+          <label className="grid grid-cols-[110px_1fr] items-center gap-2">
+            Folder
+            <select
+              className={field}
+              style={fieldStyle}
+              value={folder}
+              onChange={(e) => setFolder(e.target.value)}
+              data-testid="agent-folder"
+            >
+              <option value="">Project folder</option>
+              {(worktrees.data ?? [])
+                .filter((w) => w.kind !== "main")
+                .map((w) => (
+                  <option key={w.path} value={w.path}>
+                    Worktree: {w.branch ?? w.path}
+                  </option>
+                ))}
+              <option value={NEW_WORKTREE}>New worktree...</option>
+            </select>
+          </label>
+          {folder === NEW_WORKTREE && (
+            <label className="grid grid-cols-[110px_1fr] items-center gap-2">
+              Worktree name
+              <input
+                className={field}
+                style={fieldStyle}
+                value={newWorktree}
+                placeholder="for example: fix login bug"
+                onChange={(e) => setNewWorktree(e.target.value)}
+                data-testid="agent-new-worktree"
+              />
+            </label>
+          )}
           <div className="grid grid-cols-[110px_1fr] items-center gap-2">
             Run as
             <div className="flex gap-4">
@@ -177,7 +225,7 @@ export function StartAgentDialog({
             <Button onClick={onClose}>Cancel</Button>
             <Button
               variant="primary"
-              disabled={busy || !project}
+              disabled={busy || !project || (folder === NEW_WORKTREE && !newWorktree.trim())}
               onClick={() => void start()}
               data-testid="agent-start"
             >

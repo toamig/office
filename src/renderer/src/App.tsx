@@ -58,7 +58,11 @@ function CurrentView({ configured }: { configured: boolean }) {
     );
   }
   if (view === "agents")
-    return <Agents key={`${params["project"] ?? ""}-${params["session"] ?? ""}`} />;
+    return (
+      <Agents
+        key={`${params["project"] ?? ""}-${params["session"] ?? ""}-${params["start"] ?? ""}-${params["cwd"] ?? ""}`}
+      />
+    );
   if (view === "git") return <Git key={params["project"] ?? ""} />;
   if (view === "brain") return <Brain />;
   if (view === "explore") return <Explore />;

@@ -8,6 +8,7 @@ import type { Notifier } from "../../core/notifier";
 import { nowIso } from "../../core/util";
 import type { ProviderRegistry } from "../providers/registry";
 import type { CommandSpec } from "../providers/types";
+import { readStatus } from "../git/status";
 import { PtyManager } from "./pty-manager";
 import {
   statusForClaudeHook,
@@ -169,7 +170,7 @@ export class SessionService {
       ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
     });
     const title = input.title ?? (input.roleId ? `${input.roleId}` : provider.label);
-    return this.launch({
+    const row = this.launch({
       id,
       provider: providerId,
       spec,
@@ -179,6 +180,11 @@ export class SessionService {
       title,
       ...(input.prompt ? { prompt: input.prompt } : {}),
     });
+    // The branch the session works on, shown in the session list (the folder may be a worktree).
+    void readStatus(cwd).then((status) => {
+      if (status.ok) this.setBranch(id, status.status.branch);
+    });
+    return row;
   }
 
   /** Starts any command in a terminal tab (logins, and tests). */
@@ -333,6 +339,7 @@ export class SessionService {
 
   setBranch(id: string, branch: string | null): void {
     this.deps.db.prepare("UPDATE sessions SET branch = ? WHERE id = ?").run(branch, id);
+    this.emitStatus(id);
   }
 
   // ---------- status ----------

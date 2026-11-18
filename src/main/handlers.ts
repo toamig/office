@@ -1,3 +1,5 @@
+import { existsSync } from "node:fs";
+import { join } from "node:path";
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
@@ -9,12 +11,19 @@ import {
   listBranches,
   switchBranch,
 } from "./modules/git/branches";
+import {
+  cleanMergedWorktrees,
+  createWorktree,
+  listWorktrees,
+  removeWorktree,
+} from "./modules/git/worktrees";
 import { readVaultFile } from "./modules/ask/ask";
 import { readAudit } from "./modules/vault/audit";
 import { captureSession } from "./modules/sessions/capture";
 import { getLayout, setLayout } from "./modules/sessions/layouts";
 import { userHome } from "./core/paths";
-import { noteAndProjectItems, readNote } from "./modules/notes/notes";
+import { readNote } from "./modules/notes/notes";
+import { buildSearchItems } from "./modules/search/items";
 import { detectTools } from "./modules/setup/detect";
 import { readInventories } from "./modules/setup/inventory";
 import {
@@ -45,7 +54,12 @@ export function registerHandlers(ctx: AppContext): void {
     readNote(ctx.store.state.workspace, ctx.settings().workspaceRoot, req.projectId, req.name),
   );
   ctx.ipc.handle("search.items", () =>
-    noteAndProjectItems(ctx.store.state.workspace, ctx.settings().workspaceRoot),
+    buildSearchItems({
+      workspace: ctx.store.state.workspace,
+      workspaceRoot: ctx.settings().workspaceRoot,
+      projects: ctx.projects,
+      sessions: ctx.sessions,
+    }),
   );
 
   ctx.ipc.handle("setup.detectTools", () => detectTools());
@@ -166,6 +180,41 @@ export function registerHandlers(ctx: AppContext): void {
   });
   ctx.ipc.handle("branches.cleanMerged", async (req) => {
     const removed = await cleanMergedBranches(repoOf(req.projectId));
+    changed(req.projectId);
+    return removed;
+  });
+  ctx.ipc.handle("worktrees.list", async (req) => {
+    const projects = (ctx.store.state.workspace?.projects ?? []).filter(
+      (p) => !p.archived && (!req.projectId || p.id === req.projectId),
+    );
+    const rows = await Promise.all(
+      projects.map(async (p) => {
+        const path = ctx.projects.absPath(p);
+        if (!existsSync(join(path, ".git"))) return [];
+        try {
+          return (await listWorktrees(path)).map((w) => ({
+            ...w,
+            projectId: p.id,
+            projectName: p.name,
+          }));
+        } catch {
+          return [];
+        }
+      }),
+    );
+    return rows.flat();
+  });
+  ctx.ipc.handle("worktrees.create", (req) =>
+    createWorktree(repoOf(req.projectId), req.name, req.base),
+  );
+  ctx.ipc.handle("worktrees.remove", async (req) => {
+    await removeWorktree(repoOf(req.projectId), req.path, {
+      ...(req.confirmOther ? { confirmOther: true } : {}),
+    });
+    changed(req.projectId);
+  });
+  ctx.ipc.handle("worktrees.cleanMerged", async (req) => {
+    const removed = await cleanMergedWorktrees(repoOf(req.projectId));
     changed(req.projectId);
     return removed;
   });

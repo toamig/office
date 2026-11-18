@@ -465,3 +465,20 @@ export const BranchCompare = z.object({
   stat: z.string(),
 });
 export type BranchCompare = z.infer<typeof BranchCompare>;
+
+export const WorktreeInfo = z.object({
+  path: z.string(),
+  branch: z.string().nullable(),
+  head: z.string(),
+  detached: z.boolean(),
+  locked: z.boolean(),
+  prunable: z.boolean(),
+  /** Number of changed files. */
+  dirty: z.number(),
+  /** main checkout, made by Office, made by the Claude app, or another tool. */
+  kind: z.enum(["main", "office", "claude", "other"]),
+});
+export type WorktreeInfo = z.infer<typeof WorktreeInfo>;
+
+export const WorktreeRow = WorktreeInfo.extend({ projectId: z.string(), projectName: z.string() });
+export type WorktreeRow = z.infer<typeof WorktreeRow>;

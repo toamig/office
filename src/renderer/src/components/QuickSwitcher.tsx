@@ -62,7 +62,11 @@ function SwitcherPanel() {
 
   const results = useMemo(() => {
     const scored = items
-      .map((item) => ({ item, score: fuzzyScore(query, `${item.label} ${item.detail ?? ""}`) }))
+      .map((item) => {
+        const raw = fuzzyScore(query, `${item.label} ${item.detail ?? ""}`);
+        // Projects win ties: typing a project name should open the project, not its branch.
+        return { item, score: raw < 0 ? -1 : raw + (item.kind === "project" ? 2 : 0) };
+      })
       .filter((r) => r.score >= 0);
     return scored.sort((a, b) => b.score - a.score).slice(0, 30);
   }, [items, query]);
