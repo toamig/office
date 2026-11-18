@@ -6,6 +6,8 @@ import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
 import { office } from "../lib/ipc";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
+import { GatesAndReviews, useUnreadOfKind } from "./home/Attention";
+import { LiveAgentsPanel, TodayPanel } from "./home/LiveAndToday";
 
 function groupByProject(entries: WaitingEntry[]): Array<[string, WaitingEntry[]]> {
   const groups = new Map<string, WaitingEntry[]>();
@@ -32,7 +34,8 @@ function WaitingPanel() {
       {error && <ErrorBanner message={error} />}
       {waiting.data?.length === 0 && (
         <EmptyState>
-          Nothing is waiting on you. Items agents add under &quot;Waiting on you&quot; show up here.
+          Nothing is waiting on you in the notes. Items agents add under &quot;Waiting on you&quot;
+          show up here, with task approvals and review requests.
         </EmptyState>
       )}
       {groups.map(([name, entries]) => (
@@ -71,14 +74,7 @@ function WaitingPanel() {
           ))}
         </div>
       ))}
-    </Panel>
-  );
-}
-
-function AgentsPanel() {
-  return (
-    <Panel title="Live agents">
-      <EmptyState>No agents running. Start one from a project page.</EmptyState>
+      <GatesAndReviews />
     </Panel>
   );
 }
@@ -133,11 +129,15 @@ function HealthPanel() {
   const outOfSync = (projects.data ?? []).filter(
     (p) => !p.archived && (p.ahead > 0 || p.behind > 0),
   );
+  const ci = useUnreadOfKind(["ci.failed"]);
+  const conflicts = useUnreadOfKind(["git.conflict"]);
   const hubAttention = (health.data?.repos ?? []).filter((r) => r.attention);
   const validate = health.data?.validate;
   const warnings = health.data?.warnings ?? [];
   const allGood =
     outOfSync.length === 0 &&
+    ci.rows.length === 0 &&
+    conflicts.rows.length === 0 &&
     hubAttention.length === 0 &&
     validate?.ok !== false &&
     warnings.length === 0;
@@ -157,6 +157,16 @@ function HealthPanel() {
           <span style={{ color: "var(--muted)" }}>
             {p.ahead > 0 ? `${p.ahead} to push` : ""} {p.behind > 0 ? `${p.behind} to pull` : ""}
           </span>
+        </div>
+      ))}
+      {ci.rows.map((n) => (
+        <div key={n.id} className="flex items-center gap-2 py-0.5" data-testid="health-ci">
+          <Chip tone="bad">CI</Chip> {n.title}
+        </div>
+      ))}
+      {conflicts.rows.map((n) => (
+        <div key={n.id} className="flex items-center gap-2 py-0.5" data-testid="health-conflict">
+          <Chip tone="bad">conflict</Chip> {n.title}
         </div>
       ))}
       {hubAttention.map((r) => (
@@ -185,7 +195,8 @@ export function Home() {
     <div className="grid gap-4 p-4 lg:grid-cols-3" data-testid="home">
       <WaitingPanel />
       <div className="grid content-start gap-4">
-        <AgentsPanel />
+        <LiveAgentsPanel />
+        <TodayPanel />
         <BriefPanel />
       </div>
       <HealthPanel />
