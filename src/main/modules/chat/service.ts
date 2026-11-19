@@ -161,9 +161,7 @@ export class ChatService {
 
   private role(row: SessionRow) {
     try {
-      return row.role
-        ? this.deps.sessions.resolveRole(row.role, row.projectId ?? undefined)
-        : undefined;
+      return this.deps.sessions.roleOfSession(row);
     } catch {
       return undefined;
     }

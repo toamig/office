@@ -73,6 +73,9 @@ const ENTER = String.fromCharCode(13);
 const normalize = (p: string): string => p.replace(/\\/g, "/").replace(/\/+$/, "").toLowerCase();
 
 /** Starts, tracks and ends interactive agent sessions and plain terminals. */
+/** What a session's `role` column holds when it is a label for the kind of session and not a workspace role. */
+export const SESSION_LABELS: ReadonlySet<string> = new Set(["explore"]);
+
 export class SessionService {
   readonly pty: PtyManager;
   /** Where terminal output goes (the renderer); set by the app shell. */
@@ -163,6 +166,15 @@ export class SessionService {
   }
 
   // ---------- starting and resuming ----------
+
+  /**
+   * The workspace role a session runs as, or nothing. A session's `role` column can also hold a label that is not a
+   * role at all (Explore's "explore"); a label is never looked up as a role.
+   */
+  roleOfSession(row: { role: string | null; projectId: string | null }): Role | undefined {
+    if (!row.role || SESSION_LABELS.has(row.role)) return undefined;
+    return this.resolveRole(row.role, row.projectId ?? undefined);
+  }
 
   /** Resolves a role id, honouring a project's override (plan 5.2). */
   resolveRole(roleId: string, projectId?: string): Role {
@@ -382,7 +394,7 @@ export class SessionService {
       : provider.interactiveCommand({
           cwd: row.cwd,
           officeSessionId: id,
-          ...(row.role ? { role: this.resolveRole(row.role, row.projectId ?? undefined) } : {}),
+          ...(this.roleOfSession(row) ? { role: this.roleOfSession(row) as Role } : {}),
         });
     if (!row.conversationStarted) this.markStarted(id);
     this.pty.release(id);

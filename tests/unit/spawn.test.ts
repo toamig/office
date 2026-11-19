@@ -181,6 +181,27 @@ describe("make this a project", () => {
     await h.store.close();
   });
 
+  it("an exploration is never looked up as a workspace role: it reopens and answers without an explore role", async () => {
+    const h = harness();
+    await h.store.open(h.world.hub, h.world.workspaceConfigPath);
+    expect(h.store.state.workspace?.roles["explore"]).toBeUndefined();
+    const exploration = h.explore.start("fake", "Fresh ideas");
+    expect(exploration.role).toBe("explore");
+    expect(h.sessions.roleOfSession(exploration)).toBeUndefined();
+    for (let i = 0; i < 100 && !h.sessions.history(exploration.id).data.includes("ready"); i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    // Ending it and sending in again is a resume, which used to look "explore" up as a role and fail.
+    h.sessions.kill(exploration.id);
+    for (let i = 0; i < 100 && h.sessions.get(exploration.id).running; i++) {
+      await new Promise((r) => setTimeout(r, 50));
+    }
+    expect(() => h.sessions.resume(exploration.id)).not.toThrow();
+    h.sessions.kill(exploration.id);
+    // A real role that is missing is still an error; only labels are exempt.
+    expect(() => h.sessions.resolveRole("explore")).toThrow(/no role called/);
+  });
+
   it("runs every step: repo, brain repo, hub registration, notes, workspace and session", async () => {
     const h = harness();
     await h.store.open(h.world.hub, h.world.workspaceConfigPath);
