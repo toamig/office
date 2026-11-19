@@ -32,7 +32,7 @@ export const MachineSettings = z.object({
   /** The sidebar's width in pixels when it is open (200 to 320). */
   sidebarWidth: z.number().int().min(200).max(320).default(240),
   /** The inspector's width in pixels when it is open (280 to 480). */
-  inspectorWidth: z.number().int().min(280).max(480).default(360),
+  inspectorWidth: z.number().int().min(280).max(480).default(320),
   /** The views whose inspector the owner hid. */
   inspectorHidden: z.record(z.string(), z.boolean()).default({}),
   /** Where the owner put each split-pane divider, by pane id, in pixels of the first pane. */

@@ -25,7 +25,7 @@ export function useInspector(view: ViewId): InspectorState {
   return {
     available,
     open: available && !hidden,
-    width: settings.data?.inspectorWidth ?? 360,
+    width: settings.data?.inspectorWidth ?? 320,
     toggle: () => {
       void office.invoke("settings.set", { inspectorHidden: { [view]: !hidden } });
     },

@@ -223,6 +223,8 @@ export function Agents({ active: visible }: { active: boolean }) {
   const [activeId, setActiveId] = useState<string | null>(null);
   const api = useRef<DockviewApi | null>(null);
   const opened = useRef<string | null>(null);
+  /** A session the owner asked to open before the dock had loaded its saved layout. */
+  const pendingOpen = useRef<SessionRow | null>(null);
   if (visible && applied !== visits) {
     setApplied(visits);
     // A plain click on Agents keeps the filter and the panels as they were; only a link with parameters sets them.
@@ -239,7 +241,10 @@ export function Agents({ active: visible }: { active: boolean }) {
   /** Opens a session as a panel, or brings its panel forward when it is open already. */
   const open = useCallback((s: SessionRow): void => {
     const dock = api.current;
-    if (!dock) return;
+    if (!dock) {
+      pendingOpen.current = s;
+      return;
+    }
     const existing = dock.getPanel(s.id);
     if (existing) existing.api.setActive();
     else
@@ -346,8 +351,8 @@ export function Agents({ active: visible }: { active: boolean }) {
       {sessions.error && <Banner tone="danger">{sessions.error}</Banner>}
       <SplitPane
         id="agents"
-        defaultSize={320}
-        min={240}
+        defaultSize={280}
+        min={220}
         minSecond={420}
         first={
           <SessionList
@@ -369,6 +374,11 @@ export function Agents({ active: visible }: { active: boolean }) {
             onReady={(dock) => {
               api.current = dock;
               opened.current = null;
+              if (pendingOpen.current) {
+                const waiting = pendingOpen.current;
+                pendingOpen.current = null;
+                open(waiting);
+              }
               // Whatever the saved layout had open, the sessions it names are still sessions.
               setActiveId(dock.activePanel?.id ?? null);
             }}

@@ -121,23 +121,9 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
           <PipelineDiagram
             stages={diagramStages(t)}
             picked={shown?.stageId}
+            buttonTestId="stage-tab"
             onPick={(id) => setStage(id)}
           />
-        </div>
-        <div className="mb-3 flex flex-wrap gap-1">
-          {t.stages.map((s) => (
-            <Button
-              key={s.stageId}
-              size="sm"
-              data-testid="stage-tab"
-              data-status={s.status}
-              aria-pressed={shown?.stageId === s.stageId}
-              variant={shown?.stageId === s.stageId ? "secondary" : "ghost"}
-              onClick={() => setStage(s.stageId)}
-            >
-              {s.stageId} <StatusBadge status={s.status} />
-            </Button>
-          ))}
         </div>
         {shown && (
           <div className="mb-3">

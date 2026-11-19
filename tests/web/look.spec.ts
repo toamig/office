@@ -203,3 +203,77 @@ test("the setup dialogs and the projects folder feedback", async () => {
   await shoot(win, "projects-missing", "light");
   await app.close();
 });
+
+// The M11 screens: the Board's editors, the pipeline diagram, the inspector and the docked workbenches.
+for (const only of ["light", "dark"] as const)
+  for (const [width, height] of [
+    [1366, 860],
+    [1920, 1080],
+  ] as const)
+    test(`the M11 screens in ${only} at ${width} wide`, async () => {
+      mkdirSync(out, { recursive: true });
+      const { app } = await launch({ world: true, fakeTools: true });
+      const win = await app.firstWindow();
+      await win.setViewportSize({ width, height });
+      await win.evaluate((t) => window.office.invoke("settings.set", { theme: t }), only);
+      await expect
+        .poll(() => win.evaluate(() => document.documentElement.getAttribute("data-theme")))
+        .toBe(only);
+      await win.evaluate(async () => {
+        await window.office.invoke("sessions.start", {
+          providerId: "fake",
+          projectId: "alpha",
+          title: "Level work",
+          mode: "terminal",
+        });
+        await window.office.invoke("sessions.start", {
+          providerId: "fake",
+          projectId: "alpha",
+          title: "Chat work",
+          mode: "chat",
+        });
+        await window.office.invoke("tasks.create", {
+          projectId: "alpha",
+          pipeline: "feature",
+          title: "Add a sheep counter",
+          description: "Plan it.",
+          fanout: 1,
+        });
+      });
+      // The Board: a task with its diagram, in the inspector too, then the three editors.
+      await win.getByTestId("rail-board").click();
+      await expect(win.getByTestId("task-card")).toHaveCount(1, { timeout: 60000 });
+      await win.getByTestId("task-card").click();
+      await expect(win.getByTestId("pipeline-diagram")).toBeVisible();
+      await shoot(win, "m11-board-task", only, width);
+      await win.getByTestId("board-tab-pipelines").click();
+      await shoot(win, "m11-board-pipelines", only, width);
+      await win.getByTestId("board-tab-roles").click();
+      await shoot(win, "m11-board-roles", only, width);
+      await win.getByTestId("board-tab-permissions").click();
+      await shoot(win, "m11-board-permissions", only, width);
+      // Agents as a dock, with the review layout and the inspector.
+      await win.getByTestId("rail-agents").click();
+      await win.getByTestId("session-row").filter({ hasText: "Level work" }).click();
+      await win.getByTestId("session-row").filter({ hasText: "Chat work" }).click();
+      await expect(win.getByTestId("chat")).toBeVisible();
+      await win.waitForTimeout(600);
+      await shoot(win, "m11-agents-dock", only, width);
+      await win.getByTestId("workbench-presets").click();
+      await win
+        .getByTestId("select-menu")
+        .getByRole("option", { name: "Review: conversation, changes and preview" })
+        .click();
+      await win.waitForTimeout(600);
+      await shoot(win, "m11-agents-review", only, width);
+      // The project page and the Git desk as docks.
+      await win.getByTestId("rail-projects").click();
+      await win.getByTestId("project-card").first().click();
+      await win.waitForTimeout(500);
+      await shoot(win, "m11-project-dock", only, width);
+      await win.getByTestId("rail-git").click();
+      await win.getByTestId("git-repo").first().click();
+      await win.waitForTimeout(500);
+      await shoot(win, "m11-git-dock", only, width);
+      await app.close();
+    });

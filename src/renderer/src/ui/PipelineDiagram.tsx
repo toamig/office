@@ -56,6 +56,7 @@ export function PipelineDiagram({
   onPick,
   picked,
   vertical = false,
+  buttonTestId,
   testId = "pipeline-diagram",
 }: {
   stages: DiagramStage[];
@@ -63,6 +64,8 @@ export function PipelineDiagram({
   picked?: string;
   /** Stages top to bottom, for a narrow place such as the inspector. */
   vertical?: boolean;
+  /** A test id for each stage's button, which also carries the stage's status. */
+  buttonTestId?: string;
   testId?: string;
 }) {
   const now = currentStage(stages);
@@ -89,6 +92,8 @@ export function PipelineDiagram({
               <button
                 type="button"
                 className="diagram-button"
+                data-testid={buttonTestId}
+                data-status={buttonTestId ? s.status : undefined}
                 onClick={() => onPick?.(s.id)}
                 disabled={!onPick}
                 aria-label={`${sentence(s.id)}: ${labelOf(s.status)}`}
