@@ -32,12 +32,20 @@ describe("role editing", () => {
       instructions: "Test everything.",
       readOnly: true,
     });
+    // What the old fields said is now a profile of its own, and the role is read through it.
     expect(store.state.workspace?.roles["qa"]).toEqual({
       provider: "fake",
       model: "haiku",
       effort: "low",
       instructions: "Test everything.",
+      permissionProfile: "qa",
       readOnly: true,
+      allowedCommands: [],
+      deniedCommands: [],
+      codexSandbox: "read-only",
+    });
+    expect(store.state.workspace?.permissionProfiles?.["qa"]).toMatchObject({
+      codexSandbox: "read-only",
       allowedCommands: [],
     });
     expect(JSON.parse(readFileSync(file, "utf8")).roles.qa.model).toBe("haiku");
@@ -162,6 +170,10 @@ describe("allowed commands on a role", () => {
       "Bash(git commit:*)",
       "Bash(npm test:*)",
     ]);
-    expect(JSON.parse(readFileSync(file, "utf8")).roles.ci.allowedCommands).toHaveLength(2);
+    // In the file the role names a profile, and the commands live in the profile.
+    const written = JSON.parse(readFileSync(file, "utf8"));
+    expect(written.roles.ci.permissionProfile).toBe("ci");
+    expect(written.roles.ci.allowedCommands).toBeUndefined();
+    expect(written.permissionProfiles.ci.allowedCommands).toHaveLength(2);
   });
 });

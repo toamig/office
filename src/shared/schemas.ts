@@ -54,15 +54,40 @@ export const Project = z.object({
   roles: z.record(z.string(), z.string()).optional(),
 });
 
+/** What agents may do: Claude Code's mode, Codex's sandbox, and rules for commands (plan Workbench 1.3). */
+export const PermissionProfile = z.object({
+  name: z.string(),
+  /** One plain sentence saying what an agent using it may do. */
+  description: z.string().default(""),
+  claudeMode: z.enum(["default", "acceptEdits", "plan", "auto", "bypassPermissions"]).optional(),
+  codexSandbox: z
+    .enum(["read-only", "workspace-write", "danger-full-access"])
+    .default("workspace-write"),
+  /** Claude Code rules an agent may use without asking, e.g. "Bash(git commit:*)". */
+  allowedCommands: z.array(z.string()).default([]),
+  /** Rules an agent may never use. */
+  deniedCommands: z.array(z.string()).default([]),
+  /** The owner confirmed Bypass permissions or Full access for this profile. */
+  confirmedUnsafe: z.boolean().optional(),
+});
+
 export const Role = z.object({
   provider: z.string(),
   model: z.string().optional(),
   effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
   instructions: z.string().default(""),
+  /** One line on what the role is for. */
+  purpose: z.string().optional(),
+  /** The id of a permission profile (built in, or one of the workspace's own). */
+  permissionProfile: z.string().optional(),
+  /** The fields below are what roles had before profiles; a role that has none of its own gets a profile at load. */
   permissionMode: z.string().optional(),
   readOnly: z.boolean().default(false),
   /** Claude Code permission rules a headless run may use without asking, e.g. "Bash(git commit:*)". */
   allowedCommands: z.array(z.string()).default([]),
+  /** Filled in from the profile: rules that are never allowed, and the Codex sandbox. */
+  deniedCommands: z.array(z.string()).optional(),
+  codexSandbox: z.enum(["read-only", "workspace-write", "danger-full-access"]).optional(),
 });
 
 export const Stage = z.object({
@@ -94,6 +119,7 @@ export const Workspace = z.object({
   }),
   projects: z.array(Project),
   roles: z.record(z.string(), Role),
+  permissionProfiles: z.record(z.string(), PermissionProfile).optional(),
   pipelines: z.record(z.string(), Pipeline),
   notifications: z.object({
     urgent: z.array(z.string()),

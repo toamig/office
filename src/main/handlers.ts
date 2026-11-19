@@ -151,7 +151,9 @@ function registerSetupHandlers(ctx: AppContext): void {
     ctx.bus.emit("workspace.changed", {});
   });
   ctx.ipc.handle("pointer.preview", (req) => ctx.onboarding.pointerPreview(req.id));
-  ctx.ipc.handle("pointer.apply", (req) => ctx.onboarding.pointerApply(req.ids, req.push, req.target));
+  ctx.ipc.handle("pointer.apply", (req) =>
+    ctx.onboarding.pointerApply(req.ids, req.push, req.target),
+  );
   ctx.ipc.handle("pointer.remove", (req) => ctx.onboarding.pointerRemove(req.ids));
   ctx.ipc.handle("setup.setProjectsRoot", (req) => {
     const path = resolve(req.path);
@@ -457,6 +459,10 @@ function registerChangeHandlers(ctx: AppContext): void {
 function registerConfigHandlers(ctx: AppContext): void {
   ctx.ipc.handle("roles.save", (req) => ctx.editor.saveRole(req.id, req.role));
   ctx.ipc.handle("roles.remove", (req) => ctx.editor.removeRole(req.id));
+  ctx.ipc.handle("profiles.save", (req) => ctx.editor.saveProfile(req.id, req.profile));
+  ctx.ipc.handle("profiles.remove", (req) => ctx.editor.removeProfile(req.id));
+  ctx.ipc.handle("pipelines.save", (req) => ctx.editor.savePipeline(req.id, req.pipeline));
+  ctx.ipc.handle("pipelines.remove", (req) => ctx.editor.removePipeline(req.id));
   ctx.ipc.handle("projects.update", (req) => {
     const { id, ...patch } = req;
     return ctx.editor.updateProject(id, patch);

@@ -82,7 +82,9 @@ export function codexHeadlessArgs(
   const flags = ["--json"];
   if (o.role?.model) flags.push("-m", o.role.model);
   if (o.role?.effort) flags.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
-  const sandbox = o.role ? (o.role.readOnly ? "read-only" : "workspace-write") : null;
+  const sandbox = o.role
+    ? (o.role.codexSandbox ?? (o.role.readOnly ? "read-only" : "workspace-write"))
+    : null;
   if (o.resumeId) {
     // `codex exec resume` takes neither -C nor -s (checked with --help); the process already runs in cwd.
     if (sandbox) flags.push("-c", `sandbox_mode="${sandbox}"`);

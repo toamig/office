@@ -149,7 +149,10 @@ export class ChatService {
       mode: row.mode,
       kind,
       working: this.working(id),
-      sandbox: kind === "codex" ? (role?.readOnly ? "read-only" : "workspace-write") : "",
+      sandbox:
+        kind === "codex"
+          ? (role?.codexSandbox ?? (role?.readOnly ? "read-only" : "workspace-write"))
+          : "",
       models: provider ? await provider.models() : [],
       permissionModes: kind === "claude" ? PERMISSION_MODES : [],
       options: this.options(id),

@@ -1,6 +1,18 @@
-import { Role as RoleSchema, Workspace as WorkspaceSchema } from "../../../shared/schemas";
+import {
+  BUILT_IN_PROFILES,
+  migrateLegacyRoles,
+  profileProblems,
+  resolveWorkspace,
+  roleForFile,
+} from "../../../shared/permissions";
+import {
+  PermissionProfile as ProfileSchema,
+  Pipeline as PipelineSchema,
+  Role as RoleSchema,
+  Workspace as WorkspaceSchema,
+} from "../../../shared/schemas";
 import type { z } from "zod";
-import type { Automation, Workspace } from "../../../shared/types";
+import type { Automation, PermissionProfile, Role, Workspace } from "../../../shared/types";
 import { validCron } from "../../core/scheduler";
 import { IpcFailure } from "../../core/ipc";
 import type { VaultWriter } from "../vault/writer";
@@ -15,10 +27,26 @@ export interface EditorDeps {
 
 type Json = Record<string, unknown>;
 
+/** Old roles (a permission mode, read only, allowed commands) become profiles named after the role, in the file. */
+function migrateJson(json: Json): void {
+  const parsed = WorkspaceSchema.safeParse(json);
+  if (!parsed.success) return;
+  const { roles, profiles, migrated } = migrateLegacyRoles(
+    parsed.data.roles,
+    parsed.data.permissionProfiles,
+  );
+  if (migrated.length === 0) return;
+  const out: Json = {};
+  for (const [id, role] of Object.entries(roles)) out[id] = roleForFile(role as Role);
+  json["roles"] = out;
+  json["permissionProfiles"] = profiles;
+}
+
 /** A role as the owner writes it: fields with defaults may be left out. */
 type RoleInput = z.input<typeof RoleSchema>;
 
 const ID_RE = /^[a-z0-9-]+$/;
+const BUILT_IN_IDS = new Set(Object.keys(BUILT_IN_PROFILES));
 
 /** Edits the workspace config through the vault writer: validated, committed and pushed like any note. */
 export class WorkspaceEditor {
@@ -27,7 +55,10 @@ export class WorkspaceEditor {
   private async edit(message: string, change: (json: Json) => void): Promise<void> {
     await this.deps.writer.edit(this.deps.workspaceFile(), message, (text) => {
       const json = JSON.parse(text) as Json;
+      migrateJson(json);
       change(json);
+      // A role that was written with the old fields (a permission mode, read only) becomes a profile too.
+      migrateJson(json);
       const checked = WorkspaceSchema.safeParse(json);
       if (!checked.success) {
         const issue = checked.error.issues[0];
@@ -38,7 +69,7 @@ export class WorkspaceEditor {
       }
       // The file is written right after this returns, but the commit and push come later; whoever reads
       // the workspace in between (the ntfy channel, for one) must already see the new config.
-      this.deps.adopt(checked.data);
+      this.deps.adopt(resolveWorkspace(checked.data));
       return `${JSON.stringify(json, null, 2)}\n`;
     });
     this.deps.reload();
@@ -57,7 +88,74 @@ export class WorkspaceEditor {
     }
     await this.edit(`Workspace: update role ${id}`, (json) => {
       const roles = (json["roles"] ??= {}) as Json;
-      roles[id] = parsed.data;
+      // A role with a profile is written without the fields the profile decides; one written with the old fields
+      // keeps them here and becomes a profile of its own right after (migrateJson).
+      roles[id] = parsed.data.permissionProfile ? roleForFile(parsed.data as Role) : parsed.data;
+    });
+  }
+
+  /** Adds or replaces a permission profile. Bypass permissions and Full access need the owner's confirmation. */
+  async saveProfile(id: string, profile: z.input<typeof ProfileSchema>): Promise<void> {
+    if (!ID_RE.test(id))
+      throw new IpcFailure("bad-id", "A profile id uses lowercase letters, digits and dashes");
+    if (BUILT_IN_IDS.has(id))
+      throw new IpcFailure("built-in", "A built-in profile cannot be changed; duplicate it first.");
+    const parsed = ProfileSchema.safeParse(profile);
+    if (!parsed.success)
+      throw new IpcFailure(
+        "invalid",
+        `That profile is not valid: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}`,
+      );
+    const problems = profileProblems(parsed.data as PermissionProfile);
+    if (problems.length > 0)
+      throw new IpcFailure("invalid", problems[0] ?? "That profile is not valid");
+    await this.edit(`Workspace: update permission profile ${id}`, (json) => {
+      const profiles = (json["permissionProfiles"] ??= {}) as Json;
+      profiles[id] = parsed.data;
+    });
+  }
+
+  /** Removes a custom profile, unless a role still uses it. */
+  async removeProfile(id: string): Promise<void> {
+    await this.edit(`Workspace: remove permission profile ${id}`, (json) => {
+      const roles = (json["roles"] ?? {}) as Record<string, { permissionProfile?: string }>;
+      for (const [rid, r] of Object.entries(roles))
+        if (r.permissionProfile === id)
+          throw new IpcFailure("in-use", `The profile "${id}" is used by the role "${rid}"`);
+      delete (json["permissionProfiles"] as Json | undefined)?.[id];
+    });
+  }
+
+  /** Adds or replaces a pipeline: its stages in order, each with a role. */
+  async savePipeline(id: string, pipeline: z.input<typeof PipelineSchema>): Promise<void> {
+    if (!ID_RE.test(id))
+      throw new IpcFailure("bad-id", "A pipeline id uses lowercase letters, digits and dashes");
+    const parsed = PipelineSchema.safeParse(pipeline);
+    if (!parsed.success)
+      throw new IpcFailure(
+        "invalid",
+        `That pipeline is not valid: ${parsed.error.issues[0]?.path.join(".")} ${parsed.error.issues[0]?.message}`,
+      );
+    await this.edit(`Workspace: update pipeline ${id}`, (json) => {
+      const roles = (json["roles"] ?? {}) as Json;
+      for (const s of parsed.data.stages)
+        if (!(s.role in roles))
+          throw new IpcFailure(
+            "no-role",
+            `The stage "${s.id}" uses the role "${s.role}", which does not exist`,
+          );
+      const ids = parsed.data.stages.map((s) => s.id);
+      if (new Set(ids).size !== ids.length)
+        throw new IpcFailure("invalid", "Two stages have the same id");
+      const pipelines = (json["pipelines"] ??= {}) as Json;
+      pipelines[id] = parsed.data;
+    });
+  }
+
+  /** Removes a pipeline. */
+  async removePipeline(id: string): Promise<void> {
+    await this.edit(`Workspace: remove pipeline ${id}`, (json) => {
+      delete (json["pipelines"] as Json | undefined)?.[id];
     });
   }
 

@@ -23,6 +23,9 @@ const READ_ONLY_TOOLS = ["Read", "Grep", "Glob"];
  */
 const allowedTools = (rules: string[]): string[] =>
   rules.length > 0 ? ["--allowedTools", ...rules] : [];
+/** `--disallowedTools`, the same way: rules an agent may never use, one argument each. */
+const disallowedTools = (rules: string[]): string[] =>
+  rules.length > 0 ? ["--disallowedTools", ...rules] : [];
 /** The name Claude Code gives Office's permission tool: mcp__<server>__<tool>. */
 export const PERMISSION_TOOL = "mcp__office__office_permission";
 
@@ -32,13 +35,16 @@ export const PERMISSION_TOOL = "mcp__office__office_permission";
  */
 export function permissionFlags(o: RunOptions): string[] {
   const allowed = o.role?.allowedCommands ?? [];
+  const denied = disallowedTools(o.role?.deniedCommands ?? []);
   const kind = o.permission?.kind;
   if (kind === "readonly")
-    return [...allowedTools(READ_ONLY_TOOLS), "--permission-prompts", "none"];
-  if (kind === "allowlist") return [...allowedTools(allowed), "--permission-prompts", "none"];
+    return [...allowedTools(READ_ONLY_TOOLS), ...denied, "--permission-prompts", "none"];
+  if (kind === "allowlist")
+    return [...allowedTools(allowed), ...denied, "--permission-prompts", "none"];
   if (kind === "ask") {
     return [
       ...allowedTools(allowed),
+      ...denied,
       ...(o.permission?.mcpConfig ? ["--mcp-config", o.permission.mcpConfig] : []),
       "--permission-prompts",
       "host",
@@ -47,7 +53,7 @@ export function permissionFlags(o: RunOptions): string[] {
     ];
   }
   // No kind given: the older behaviour, read-only roles get read tools.
-  return o.role?.readOnly ? allowedTools(READ_ONLY_TOOLS) : [];
+  return [...(o.role?.readOnly ? allowedTools(READ_ONLY_TOOLS) : []), ...denied];
 }
 
 /** The arguments of `claude -p` for one headless run. */

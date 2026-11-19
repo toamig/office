@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { Automation, Role } from "./schemas";
+import { Automation, PermissionProfile, Pipeline, Role } from "./schemas";
 import {
   AppSettings,
   AppSettingsPatch,
@@ -379,6 +379,11 @@ export const channels = {
   "github.overview": { req: z.object({ projectId: z.string() }), res: GithubOverview },
   "roles.save": { req: z.object({ id: z.string(), role: Role }), res: z.void() },
   "roles.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  /** Adds or replaces a custom permission profile; Bypass permissions and Full access need confirmedUnsafe. */
+  "profiles.save": { req: z.object({ id: z.string(), profile: PermissionProfile }), res: z.void() },
+  "profiles.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "pipelines.save": { req: z.object({ id: z.string(), pipeline: Pipeline }), res: z.void() },
+  "pipelines.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "chat.state": { req: z.object({ id: z.string() }), res: ChatState },
   "chat.history": { req: z.object({ id: z.string() }), res: z.array(ChatLine) },
   "chat.send": {

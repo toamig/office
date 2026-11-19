@@ -1,6 +1,7 @@
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
+import { resolveWorkspace } from "../../shared/permissions";
 import { Workspace as WorkspaceSchema } from "../../shared/schemas";
 import type { Workspace } from "../../shared/types";
 import { writeTextFile } from "./settings";
@@ -29,7 +30,7 @@ export function loadWorkspaceFile(path: string): WorkspaceLoad {
       .join("; ");
     return { ok: false, error: `Workspace config failed validation: ${issues}` };
   }
-  return { ok: true, workspace: parsed.data };
+  return { ok: true, workspace: resolveWorkspace(parsed.data) };
 }
 
 export interface WorkspaceState {
