@@ -1185,6 +1185,15 @@ input[type="radio"] {
   font-size: var(--text-md);
   font-weight: 600;
 }
+.inspector-empty {
+  display: none;
+  margin: 0;
+  padding: var(--space-3);
+}
+/* Shown only while no view has put anything in the panel. */
+.inspector-body:empty + .inspector-empty {
+  display: block;
+}
 .inspector-body {
   display: grid;
   min-height: 0;

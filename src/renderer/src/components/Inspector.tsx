@@ -66,6 +66,9 @@ export function Inspector({
         </IconButton>
       </header>
       <div className="inspector-body" ref={setNode} data-testid="inspector-body" />
+      <p className="inspector-empty ui-muted" data-testid="inspector-empty">
+        Select something to see its details here.
+      </p>
     </aside>
   );
 }

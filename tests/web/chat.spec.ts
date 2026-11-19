@@ -142,6 +142,8 @@ test("a Codex chat runs two turns on one thread and shows its sandbox", async ()
 test("a chat opens in a terminal and comes back on the same provider session, and a past chat reopens", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
+  // Wide enough that the chat panel shows Open in terminal itself instead of in its overflow menu.
+  await win.setViewportSize({ width: 1900, height: 950 });
   const id = await openChat(win, { providerId: "fake", title: "Switcher" });
   await say(win, "before the switch");
   await expect(win.getByTestId("chat-turn")).toBeVisible({ timeout: 30000 });

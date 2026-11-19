@@ -63,13 +63,42 @@ describe("a permission profile maps to the exact flags of each provider", () => 
     ]);
   });
 
-  it("Ask first: no mode flag at all, the project folder for Codex", () => {
+  it("Ask first: passes --permission-mode manual itself, the project folder for Codex", () => {
     const p = BUILT_IN_PROFILES["ask-first"] as PermissionProfile;
-    expect(claudeModeFlags(p)).toEqual([]);
+    expect(claudeModeFlags(p)).toEqual(["--permission-mode", "manual"]);
     expect(codexSandboxArgs(p)).toEqual(["-s", "workspace-write"]);
-    expect(claudeArgs(resolveRole(role({ permissionProfile: "ask-first" }), {}))).not.toContain(
+    expect(claudeArgs(resolveRole(role({ permissionProfile: "ask-first" }), {}))).toEqual([
+      "--session-id",
+      "s1",
       "--permission-mode",
-    );
+      "manual",
+      "--permission-prompts",
+      "none",
+    ]);
+  });
+
+  it('Allowed commands only: dontAsk, and a first-version Ask first ("default") is read as manual', () => {
+    const only: PermissionProfile = {
+      name: "Strict",
+      description: "",
+      claudeMode: "dontAsk",
+      codexSandbox: "workspace-write",
+      allowedCommands: ["Bash(npm test:*)"],
+      deniedCommands: [],
+    };
+    expect(claudeModeFlags(only)).toEqual(["--permission-mode", "dontAsk"]);
+    expect(claudeModeFlags({ ...only, claudeMode: "default" })).toEqual([
+      "--permission-mode",
+      "manual",
+    ]);
+    expect(CLAUDE_MODES.map((m) => m.id)).toEqual([
+      "manual",
+      "acceptEdits",
+      "plan",
+      "auto",
+      "dontAsk",
+      "bypassPermissions",
+    ]);
   });
 
   it("Plan only: plan mode and a read-only sandbox", () => {
@@ -104,11 +133,11 @@ describe("a permission profile maps to the exact flags of each provider", () => 
     expect(codex[codex.indexOf("-s") + 1]).toBe("workspace-write");
   });
 
-  it("Reviewer: no mode flag, reads and runs the tests and lint, and cannot edit", () => {
+  it("Reviewer: asks first, reads and runs the tests and lint, and cannot edit", () => {
     const r = resolveRole(role({ permissionProfile: "reviewer" }), {});
     expect(r.readOnly).toBe(true);
     const args = claudeArgs(r);
-    expect(args).not.toContain("--permission-mode");
+    expect(args.slice(2, 4)).toEqual(["--permission-mode", "manual"]);
     expect(args).toContain("Bash(npm run lint:*)");
     expect(args).toContain("Bash(npm test:*)");
     expect(args.some((a) => /Edit|Write/.test(a))).toBe(false);
@@ -200,9 +229,10 @@ describe("the migration of roles written with the old fields", () => {
 
   it("keeps what each old role did: the same flags before and after", () => {
     const { roles, profiles } = migrateLegacyRoles(OLD, {});
-    for (const [id, before] of Object.entries(OLD)) {
+    for (const [id, old] of Object.entries(OLD)) {
+      // Before, an old role with no mode asked first by leaving the flag out; now the flag is always passed.
+      const before = { ...old, permissionMode: old.permissionMode ?? "manual" };
       const after = resolveRole(roles[id] as Role, profiles);
-      expect(roles[id]?.permissionProfile, id).toBe(id in BUILT_IN_PROFILES ? `${id}-role` : id);
       expect(claudeArgs(after, "allowlist"), id).toEqual(claudeArgs(before, "allowlist"));
       expect(claudeArgs(after, "readonly"), id).toEqual(claudeArgs(before, "readonly"));
       const run = { cwd: "C:/work", officeSessionId: "s", prompt: "go" };
@@ -212,16 +242,36 @@ describe("the migration of roles written with the old fields", () => {
     }
   });
 
-  it("names each profile after its role, leaves roles that have a profile alone, and does it once", () => {
-    const { profiles, migrated } = migrateLegacyRoles(OLD, {});
+  it("uses a built-in profile where the old settings equal it, and makes one only where they differ", () => {
+    const { roles, profiles, matched, kept, migrated } = migrateLegacyRoles(OLD, {});
+    expect(migrated).toHaveLength(5);
+    expect(matched).toEqual(["plain"]);
+    expect(roles["plain"]?.permissionProfile).toBe("ask-first");
+    expect(kept).toEqual(["planner", "builder", "reviewer", "researcher"]);
     expect(Object.keys(profiles).sort()).toEqual([
       "builder-role",
-      "plain",
       "planner",
       "researcher",
       "reviewer-role",
     ]);
-    expect(migrated).toHaveLength(5);
+    expect(roles["builder"]?.permissionProfile).toBe("builder-role");
+  });
+
+  it("names a kept profile in sentence case and describes it with a real sentence", () => {
+    const { profiles } = migrateLegacyRoles(OLD, {});
+    expect(profiles["planner"]?.name).toBe("Planner's settings");
+    expect(profiles["builder-role"]?.name).toBe("Builder's settings");
+    for (const p of Object.values(profiles)) {
+      expect(p.description).toMatch(/^Claude Code: .+. Codex: .+./);
+      expect(p.description).not.toMatch(/\b(old|legacy|migrat\w*)\b/i);
+    }
+    expect(profiles["builder-role"]?.description).toContain(
+      "It may run 2 commands without asking.",
+    );
+  });
+
+  it("migrates once: roles that name a profile are left alone", () => {
+    const { profiles } = migrateLegacyRoles(OLD, {});
     const again = migrateLegacyRoles(
       Object.fromEntries(
         Object.entries(OLD).map(([id]) => [id, { ...OLD[id], permissionProfile: id } as Role]),

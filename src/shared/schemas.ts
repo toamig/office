@@ -63,7 +63,10 @@ export const PermissionProfile = z.object({
   name: z.string(),
   /** One plain sentence saying what an agent using it may do. */
   description: z.string().default(""),
-  claudeMode: z.enum(["default", "acceptEdits", "plan", "auto", "bypassPermissions"]).optional(),
+  // "default" is what the first version wrote for Ask first; it is read as "manual".
+  claudeMode: z
+    .enum(["manual", "default", "acceptEdits", "plan", "auto", "dontAsk", "bypassPermissions"])
+    .optional(),
   codexSandbox: z
     .enum(["read-only", "workspace-write", "danger-full-access"])
     .default("workspace-write"),

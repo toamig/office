@@ -1,7 +1,7 @@
 import { cpSync, mkdtempSync, readFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearToolCache } from "../../src/main/core/exec";
 import { ClaudeCodeProvider } from "../../src/main/modules/providers/claude-code";
 import {
@@ -142,6 +142,26 @@ describe("headless runs against the fake CLIs", () => {
     expect(done.providerSessionId).toBeTruthy();
     expect(seen).toContain("text");
     expect(seen.at(-1)).toBe("result");
+  });
+
+  it("runs an automation with allowed commands only, and a stage that asks with Ask first", async () => {
+    const modeOf = async (kind: "allowlist" | "ask"): Promise<string | undefined> => {
+      const p = new ClaudeCodeProvider({ id: "fake", bin: "fake-claude" });
+      const seen = vi.spyOn(p as never, "command" as never) as unknown as {
+        mock: { calls: Array<[string[]]> };
+      };
+      await p.headless({
+        cwd: tmpdir(),
+        officeSessionId: "s-mode",
+        prompt: "say hello",
+        permission: { kind },
+        role: role({ permissionMode: "acceptEdits" }),
+      }).done;
+      const args = seen.mock.calls[0]?.[0] ?? [];
+      return args[args.indexOf("--permission-mode") + 1];
+    };
+    expect(await modeOf("allowlist")).toBe("dontAsk");
+    expect(await modeOf("ask")).toBe("acceptEdits");
   });
 
   it("reports a failed claude run", async () => {

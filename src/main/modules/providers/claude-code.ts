@@ -120,12 +120,13 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   /** Flags that carry a role: model, effort, permission mode and standing instructions. */
-  private roleFlags(o: RunOptions): string[] {
+  private roleFlags(o: RunOptions, mode?: string): string[] {
     const role = o.role;
     const flags: string[] = [];
     if (role?.model) flags.push("--model", role.model);
     if (role?.effort) flags.push("--effort", role.effort);
-    if (role?.permissionMode) flags.push("--permission-mode", role.permissionMode);
+    const chosen = mode ?? role?.permissionMode;
+    if (chosen) flags.push("--permission-mode", chosen);
     if (role?.instructions) flags.push("--append-system-prompt", role.instructions);
     for (const dir of o.addDirs ?? []) flags.push("--add-dir", dir);
     return flags;
@@ -137,7 +138,12 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun {
-    const args = claudeHeadlessArgs(o, this.roleFlags(o));
+    // A run nobody watches (an automation, a brief) gets the allowed commands only: whatever is not on the list is
+    // refused without asking (plan 6.3). A stage that asks the owner, and a read-only run, keep their own mode.
+    const args = claudeHeadlessArgs(
+      o,
+      this.roleFlags(o, o.permission?.kind === "allowlist" ? "dontAsk" : undefined),
+    );
     const spec = this.command(args, o.env);
     const stream = spawnStream(spec.cmd, spec.args, {
       cwd: o.cwd,
@@ -166,7 +172,8 @@ export class ClaudeCodeProvider implements Provider {
           readOnly: false,
           allowedCommands: [],
           ...(o.model ? { model: o.model } : {}),
-          ...(o.permissionMode ? { permissionMode: o.permissionMode } : {}),
+          // Ask first is passed explicitly, so the owner's own default setting never decides.
+          permissionMode: o.permissionMode ?? "manual",
         };
     const runOptions: RunOptions = {
       cwd: o.cwd,

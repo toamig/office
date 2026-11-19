@@ -48,6 +48,8 @@ test("the result of Sync, Save and Go is a notification: it never draws a bar or
   await expect(saved).toHaveAttribute("data-tone", "success");
   await expect(bars).toHaveCount(0);
   expect(await pageY(win.getByTestId("art-vault"))).toBe(setupTop);
+  // A toast stays while the pointer is on it, so the pointer leaves the page first.
+  await win.mouse.move(2, 2);
   await expect(saved).toHaveCount(0, { timeout: 9000 });
 
   // Go, in the preview. This host has no preview pane, so the result is an error: it is a notification too,

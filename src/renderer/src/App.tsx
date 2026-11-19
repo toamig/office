@@ -25,7 +25,7 @@ import { Inbox } from "./views/Inbox";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
-import { Banner, NotificationStack } from "./ui";
+import { Banner, NotificationStack, notify } from "./ui";
 import { Welcome } from "./views/welcome/Welcome";
 
 /** The views that are drawn fresh each time; the Agents view is kept alive by App and never comes through here. */
@@ -91,6 +91,20 @@ export default function App() {
         navigate(link.view, link.params ?? {});
       }),
     [navigate],
+  );
+  // The first time the config is saved after the old per-role permissions became profiles, say what happened.
+  useEffect(
+    () =>
+      office.on("profiles.migrated", (e) => {
+        const m = e.payload as { total: number; matched: number; kept: number };
+        notify({
+          tone: "info",
+          title: `Your ${m.total} ${m.total === 1 ? "role now uses" : "roles now use"} profiles`,
+          detail: `${m.matched} match built-ins, ${m.kept} keep their own settings. See Board, Permissions.`,
+          subject: "profiles-migrated",
+        });
+      }),
+    [],
   );
   useEffect(() => {
     if (setup.data && !setup.data.welcome) prefetchStart();

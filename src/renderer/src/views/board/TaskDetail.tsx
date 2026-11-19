@@ -8,12 +8,15 @@ import {
   IconButton,
   PipelineDiagram,
   StatusBadge,
+  providerName,
+  sentence,
   Textarea,
   notifyError,
 } from "../../ui";
 import { diagramStages } from "./diagram";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { useInspector } from "../../lib/inspector";
 
 function BuildDiff({
   projectId,
@@ -71,6 +74,8 @@ function BuildDiff({
 /** One task: each stage's output as markdown, the diff for build stages, and Approve, Reject, Cancel and Retry. */
 export function TaskDetail({ id, onClose }: { id: string; onClose: () => void }) {
   const task = useQuery("tasks.get", { id }, ["task.changed"]);
+  // While the inspector shows this task's pipeline, the detail keeps only a row of stages to pick from.
+  const inspectorOpen = useInspector("board").open;
   const [stage, setStage] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [rejecting, setRejecting] = useState(false);
@@ -118,17 +123,35 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
         </div>
         <p className="mt-0 ui-muted">{t.description}</p>
         <div className="mb-3">
-          <PipelineDiagram
-            stages={diagramStages(t)}
-            picked={shown?.stageId}
-            buttonTestId="stage-tab"
-            onPick={(id) => setStage(id)}
-          />
+          {inspectorOpen ? (
+            <div className="ui-badges" role="tablist" aria-label="Stages" data-testid="stage-tabs">
+              {t.stages.map((s) => (
+                <Button
+                  key={s.stageId}
+                  role="tab"
+                  aria-selected={shown?.stageId === s.stageId}
+                  variant={shown?.stageId === s.stageId ? "primary" : "secondary"}
+                  onClick={() => setStage(s.stageId)}
+                  data-testid="stage-tab"
+                  data-status={s.status}
+                >
+                  {sentence(s.stageId)}
+                </Button>
+              ))}
+            </div>
+          ) : (
+            <PipelineDiagram
+              stages={diagramStages(t)}
+              picked={shown?.stageId}
+              buttonTestId="stage-tab"
+              onPick={(id) => setStage(id)}
+            />
+          )}
         </div>
         {shown && (
           <div className="mb-3">
             <div className="mb-1 text-[length:var(--text-xs)] ui-muted">
-              {shown.role} on {shown.provider ?? "an unknown provider"}
+              {sentence(shown.role)}, {providerName(shown.provider)}
             </div>
             {shown.error && <p className="ui-bad">{shown.error}</p>}
             {t.outputs[shown.stageId] ? (

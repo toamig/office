@@ -1,5 +1,11 @@
 import { expect, test, type Page } from "@playwright/test";
-import { launch, pick } from "./helpers";
+import { launch } from "./helpers";
+
+/** Opens the Layout menu in the page header and picks one of its items by name. */
+async function layout(win: Page, item: string): Promise<void> {
+  await win.getByTestId("workbench-layout").click();
+  await win.getByTestId("workbench-layout-menu").getByRole("menuitem", { name: item }).click();
+}
 
 /** Two sessions of the fake provider in Alpha: a chat and a terminal. */
 async function twoSessions(win: Page): Promise<void> {
@@ -37,7 +43,7 @@ test("a chat is docked beside a terminal, a diff is floated, and the layout is f
   await expect(win.getByTestId("terminal")).toBeHidden();
 
   // The review layout adds the changes and a preview; the changes are floated.
-  await pick(win, "workbench-presets", { label: "Review: conversation, changes and preview" });
+  await layout(win, "Arrange: Review: conversation, changes and preview");
   await expect(win.getByTestId("dock-tab").filter({ hasText: "Changes" })).toBeVisible();
   await win.getByTestId("dock-tab").filter({ hasText: "Changes" }).click();
   await win.getByTestId("dock-float").last().click();
@@ -120,8 +126,8 @@ test("a terminal moved between groups keeps its scrollback, and a chat keeps str
   await win.getByTestId("composer-input").fill("THINK READ src/sheep.ts EDIT TODO");
   await win.getByTestId("composer-input").press("Enter");
   await win.getByTestId("dock-split-right").first().click();
-  await pick(win, "workbench-presets", { label: "Focus: one panel at a time" });
-  await pick(win, "workbench-presets", { label: "Side by side" });
+  await layout(win, "Arrange: Focus: one panel at a time");
+  await layout(win, "Arrange: Side by side");
   await expect(win.getByTestId("terminal")).toBeVisible();
   await expect(win.getByTestId("chat")).toBeVisible();
 
@@ -152,18 +158,18 @@ test("a layout can be saved under a name, left, and switched back to; Reset goes
   const overview = win.getByTestId("panel-git-state");
   await expect(overview).toBeVisible();
 
-  await pick(win, "workbench-presets", { label: "Overview beside Todos" });
+  await layout(win, "Arrange: Overview beside Todos");
   await expect(win.getByTestId("panel-project-waiting")).toBeVisible();
   await expect(overview).toBeVisible();
-  await win.getByTestId("workbench-save-as").click();
+  await layout(win, "Save layout as...");
   await win.getByTestId("layout-name").fill("Overview and todos");
   await win.getByTestId("layout-name-save").click();
 
-  await win.getByTestId("workbench-reset").click();
+  await layout(win, "Reset layout");
   await expect(win.getByTestId("panel-project-waiting")).toBeHidden();
   await expect(overview).toBeVisible();
 
-  await pick(win, "workbench-saved", { label: "Overview and todos" });
+  await layout(win, "Open layout: Overview and todos");
   await expect(win.getByTestId("panel-project-waiting")).toBeVisible();
   await expect(overview).toBeVisible();
   await app.close();

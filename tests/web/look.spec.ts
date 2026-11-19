@@ -172,34 +172,69 @@ for (const only of ["light", "dark"] as const)
     }
   });
 
-test("the setup dialogs and the projects folder feedback", async () => {
+/** Logs how long each step of a dialog test took, so a stall names the step it was in. */
+function stopwatch(name: string): (step: string) => void {
+  const start = Date.now();
+  return (step) => console.log(`[${name}] ${step} at ${Date.now() - start} ms`);
+}
+
+// One test per dialog, each waiting for its own dialog to be open, so a failure names the dialog.
+test("the hook install dialog, in plain words", async () => {
   mkdirSync(out, { recursive: true });
-  const { app, page: win, world, base } = await launch({ world: true, fakeTools: true });
-  if (!world) throw new Error("no world");
-  // The hook install dialog, in plain words.
+  const lap = stopwatch("hooks dialog");
+  const { app, page: win } = await launch({ world: true, fakeTools: true });
   await win.getByTestId("rail-setup").click();
   await win.getByTestId("install-claude").click();
-  await expect(win.getByTestId("hooks-consent")).toBeVisible();
+  await expect(win.getByTestId("hooks-consent")).toBeVisible({ timeout: 30000 });
+  lap("open");
   await shoot(win, "hooks-dialog", "light");
   await win.getByTestId("hooks-diff-toggle").click();
   await shoot(win, "hooks-dialog-diff", "light");
   await win.getByTestId("hooks-cancel").click();
-  // The tool login dialog.
+  await expect(win.getByTestId("hooks-consent")).toBeHidden({ timeout: 30000 });
+  lap("closed");
+  await app.close();
+});
+
+test("the tool login dialog opens and closes, and the tools are checked again", async () => {
+  mkdirSync(out, { recursive: true });
+  const lap = stopwatch("tool dialog");
+  const { app, page: win } = await launch({ world: true, fakeTools: true });
+  await win.getByTestId("rail-setup").click();
   await app.setEnv({ FAKE_LOGGED_IN: "0" });
   await win.getByTestId("tools-check").click();
   await expect(win.getByTestId("tool-login").first()).toBeVisible({ timeout: 45000 });
+  lap("login offered");
   await win.getByTestId("tool-login").first().click();
-  await expect(win.getByTestId("tool-dialog")).toBeVisible();
+  await expect(win.getByTestId("tool-dialog")).toBeVisible({ timeout: 30000 });
+  lap("open");
   await shoot(win, "tool-dialog", "light");
   await win.getByTestId("tool-dialog-close").click();
-  // The projects folder with everything missing, and the Projects page.
+  await expect(win.getByTestId("tool-dialog")).toBeHidden({ timeout: 30000 });
+  // Closing checks the tools again; the button is disabled while that runs.
+  await expect(win.getByTestId("tools-check")).toBeEnabled({ timeout: 45000 });
+  lap("tools checked again");
+  await app.close();
+});
+
+test("the projects folder with everything missing, and the Projects page", async () => {
+  mkdirSync(out, { recursive: true });
+  const lap = stopwatch("projects folder");
+  const { app, page: win, world, base } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  await win.getByTestId("rail-setup").click();
   const empty = join(base, "nothing");
   mkdirSync(empty, { recursive: true });
   await win.getByTestId("setup-projects").fill(empty);
   await win.getByTestId("setup-projects").press("Enter");
+  // The folder holds none of the projects, so Office asks before using it.
+  await expect(win.getByTestId("projects-use-anyway")).toBeVisible({ timeout: 45000 });
+  lap("asked");
   await shoot(win, "projects-folder-none", "light");
   await win.getByTestId("projects-use-anyway").click();
   await win.getByTestId("rail-projects").click();
+  await expect(win.getByTestId("project-card").first()).toBeVisible({ timeout: 30000 });
+  lap("projects page");
   await shoot(win, "projects-missing", "light");
   await app.close();
 });
@@ -244,7 +279,7 @@ for (const only of ["light", "dark"] as const)
       await win.getByTestId("rail-board").click();
       await expect(win.getByTestId("task-card")).toHaveCount(1, { timeout: 60000 });
       await win.getByTestId("task-card").click();
-      await expect(win.getByTestId("pipeline-diagram")).toBeVisible();
+      await expect(win.getByTestId("inspector-diagram")).toBeVisible();
       await shoot(win, "m11-board-task", only, width);
       await win.getByTestId("board-tab-pipelines").click();
       await shoot(win, "m11-board-pipelines", only, width);
@@ -259,10 +294,10 @@ for (const only of ["light", "dark"] as const)
       await expect(win.getByTestId("chat")).toBeVisible();
       await win.waitForTimeout(600);
       await shoot(win, "m11-agents-dock", only, width);
-      await win.getByTestId("workbench-presets").click();
+      await win.getByTestId("workbench-layout").click();
       await win
-        .getByTestId("select-menu")
-        .getByRole("option", { name: "Review: conversation, changes and preview" })
+        .getByTestId("workbench-layout-menu")
+        .getByRole("menuitem", { name: "Arrange: Review: conversation, changes and preview" })
         .click();
       await win.waitForTimeout(600);
       await shoot(win, "m11-agents-review", only, width);

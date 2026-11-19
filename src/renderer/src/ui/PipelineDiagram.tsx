@@ -1,5 +1,5 @@
 import { Bot, Cpu, User } from "lucide-react";
-import { Fragment } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { labelOf } from "@shared/tone";
 import { StatusBadge } from "./Status";
 import { Time } from "./Text";
@@ -30,6 +30,9 @@ export const sentence = (id: string): string => {
 
 export const providerName = (id: string | null): string =>
   id ? (PROVIDERS[id] ?? sentence(id)) : "no provider yet";
+
+/** Below this width the stages stack top to bottom, so none is ever cut off. */
+const STACK_BELOW = 640;
 
 const CURRENT = new Set(["running", "waiting-gate", "waiting-permission"]);
 
@@ -69,69 +72,80 @@ export function PipelineDiagram({
   testId?: string;
 }) {
   const now = currentStage(stages);
+  const host = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = host.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(() => setNarrow(el.clientWidth < STACK_BELOW));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   return (
-    <ol
-      className="diagram"
-      data-vertical={vertical ? "true" : undefined}
-      data-testid={testId}
-      aria-label="Pipeline stages"
-    >
-      {stages.map((s, i) => {
-        const working = s.status === "running";
-        return (
-          <Fragment key={s.id}>
-            <li
-              className="diagram-node"
-              data-testid="diagram-stage"
-              data-stage={s.id}
-              data-status={s.status}
-              data-current={i === now ? "true" : undefined}
-              data-working={working ? "true" : undefined}
-              data-picked={picked === s.id ? "true" : undefined}
-            >
-              <button
-                type="button"
-                className="diagram-button"
-                data-testid={buttonTestId}
-                data-status={buttonTestId ? s.status : undefined}
-                onClick={() => onPick?.(s.id)}
-                disabled={!onPick}
-                aria-label={`${sentence(s.id)}: ${labelOf(s.status)}`}
+    <div ref={host} className="diagram-host">
+      <ol
+        className="diagram"
+        data-vertical={vertical || narrow ? "true" : undefined}
+        data-testid={testId}
+        aria-label="Pipeline stages"
+      >
+        {stages.map((s, i) => {
+          const working = s.status === "running";
+          return (
+            <Fragment key={s.id}>
+              <li
+                className="diagram-node"
+                data-testid="diagram-stage"
+                data-stage={s.id}
+                data-status={s.status}
+                data-current={i === now ? "true" : undefined}
+                data-working={working ? "true" : undefined}
+                data-picked={picked === s.id ? "true" : undefined}
               >
-                <span className="diagram-name">{sentence(s.id)}</span>
-                <span className="diagram-who">
-                  <ProviderIcon provider={s.provider} />
-                  {sentence(s.role)}
-                  {s.provider ? `, ${providerName(s.provider)}` : ""}
-                </span>
-                <StatusBadge status={s.status} />
-                {s.startedAt && (
-                  <span className="diagram-time">
-                    <Time iso={s.startedAt} />
+                <button
+                  type="button"
+                  className="diagram-button"
+                  data-testid={buttonTestId}
+                  data-status={buttonTestId ? s.status : undefined}
+                  onClick={() => onPick?.(s.id)}
+                  disabled={!onPick}
+                  aria-label={`${sentence(s.id)}: ${labelOf(s.status)}`}
+                >
+                  <span className="diagram-name">{sentence(s.id)}</span>
+                  <span className="diagram-who">
+                    <ProviderIcon provider={s.provider} />
+                    {sentence(s.role)}
+                    {s.provider ? `, ${providerName(s.provider)}` : ""}
                   </span>
-                )}
-                {s.variants && s.variants.length > 1 && (
-                  <span className="diagram-variants" data-testid="diagram-variants">
-                    <span className="diagram-count">{s.variants.length} builders</span>
-                    {s.variants.map((v) => (
-                      <span key={v.n} className="diagram-variant" data-status={v.status}>
-                        Builder {v.n}: {labelOf(v.status)}
-                      </span>
-                    ))}
-                  </span>
-                )}
-              </button>
-            </li>
-            {s.gate && (
-              <li className="diagram-you" data-testid="diagram-you" aria-label="You approve here">
-                <User size={13} aria-hidden /> You
+                  <StatusBadge status={s.status} />
+                  {s.startedAt && (
+                    <span className="diagram-time">
+                      <Time iso={s.startedAt} />
+                    </span>
+                  )}
+                  {s.variants && s.variants.length > 1 && (
+                    <span className="diagram-variants" data-testid="diagram-variants">
+                      <span className="diagram-count">{s.variants.length} builders</span>
+                      {s.variants.map((v) => (
+                        <span key={v.n} className="diagram-variant" data-status={v.status}>
+                          Builder {v.n}: {labelOf(v.status)}
+                        </span>
+                      ))}
+                    </span>
+                  )}
+                </button>
               </li>
-            )}
-            {i < stages.length - 1 && !s.gate && <li className="diagram-line" aria-hidden />}
-          </Fragment>
-        );
-      })}
-    </ol>
+              {s.gate && (
+                <li className="diagram-you" data-testid="diagram-you" aria-label="You approve here">
+                  <User size={13} aria-hidden /> You
+                </li>
+              )}
+              {i < stages.length - 1 && !s.gate && <li className="diagram-line" aria-hidden />}
+            </Fragment>
+          );
+        })}
+      </ol>
+    </div>
   );
 }
 

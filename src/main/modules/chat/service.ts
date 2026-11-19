@@ -30,8 +30,8 @@ export interface ChatServiceDeps {
   writeMcpConfig: (id: string, dir: string) => string;
 }
 
-/** Claude Code's permission modes a chat can use; "default" sends no flag. */
-export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "auto"];
+/** Claude Code's permission modes a chat can use, as `claude --permission-mode` lists them (bypass is not offered here). */
+export const PERMISSION_MODES = ["manual", "acceptEdits", "plan", "auto", "dontAsk"];
 
 /** How many times a start that the program refuses over the conversation flag is tried, flipping the flag each time. */
 const MAX_START_ATTEMPTS = 3;
@@ -237,8 +237,8 @@ export class ChatService {
       ...(role ? { role } : {}),
       permission,
       ...(picked.model ? { model: picked.model } : {}),
-      ...(picked.permissionMode && picked.permissionMode !== "default"
-        ? { permissionMode: picked.permissionMode }
+      ...(picked.permissionMode
+        ? { permissionMode: picked.permissionMode === "default" ? "manual" : picked.permissionMode }
         : {}),
       runDir: this.dir(id),
       addDirs: this.addDirs(id),

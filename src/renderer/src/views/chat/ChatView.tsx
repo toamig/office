@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatState, SessionRow } from "@shared/models";
 import { PermissionRequests } from "../../components/PermissionRequests";
-import { StatusBadge, notifyError } from "../../ui";
+import { OverflowMenu, StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
@@ -19,7 +19,8 @@ const SANDBOX_LABELS: Record<string, string> = {
 
 /** The permission modes in words, as the header shows them. */
 const PERMISSION_LABELS: Record<string, string> = {
-  default: "Ask first (default)",
+  manual: "Ask first (default)",
+  dontAsk: "Allowed commands only",
   acceptEdits: "Accept edits",
   plan: "Plan only",
   auto: "Auto",
@@ -102,11 +103,21 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
   };
 
   const options = state?.options ?? {};
+  // A narrow panel keeps the title and the status; model, permissions and Open in terminal go in a menu.
+  const header = useRef<HTMLElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const el = header.current;
+    if (!el) return;
+    const watch = new ResizeObserver(([e]) => setNarrow((e?.contentRect.width ?? 0) < 640));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
   const items = useMemo(() => conversation.items, [conversation.items]);
 
   return (
     <div className="chat" data-testid="chat" data-session={session.id}>
-      <header className="chat-header" data-testid="chat-header">
+      <header className="chat-header" data-testid="chat-header" ref={header}>
         <span className="pane-title">{session.title ?? session.provider}</span>
         <StatusChip status={session.status} />
         {session.branch && (
@@ -116,63 +127,6 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
           </span>
         )}
         <div className="flex-1" />
-        {state && state.kind === "claude" && (
-          <>
-            <Select
-              className="chat-select"
-              aria-label="Model"
-              data-testid="chat-model"
-              value={options.model ?? ""}
-              onChange={(e) => {
-                setState({ ...state, options: { ...options, model: e.target.value || undefined } });
-                void run(() =>
-                  office.invoke("chat.setOptions", {
-                    id: session.id,
-                    options: { model: e.target.value },
-                  }),
-                );
-              }}
-              title="Applies from the next message"
-            >
-              <option value="">Default model</option>
-              {state.models.map((m) => (
-                <option key={m} value={m}>
-                  {m}
-                </option>
-              ))}
-            </Select>
-            <Select
-              className="chat-select"
-              aria-label="Permission mode"
-              data-testid="chat-permission-mode"
-              value={options.permissionMode ?? "default"}
-              onChange={(e) => {
-                setState({ ...state, options: { ...options, permissionMode: e.target.value } });
-                void run(() =>
-                  office.invoke("chat.setOptions", {
-                    id: session.id,
-                    options: { permissionMode: e.target.value },
-                  }),
-                );
-              }}
-            >
-              {state.permissionModes.map((m) => (
-                <option key={m} value={m}>
-                  {PERMISSION_LABELS[m] ?? m}
-                </option>
-              ))}
-            </Select>
-          </>
-        )}
-        {state && state.kind === "codex" && (
-          <span data-testid="chat-sandbox">
-            <StatusBadge
-              status="info"
-              tone="attention"
-              label={`Sandbox: ${SANDBOX_LABELS[state.sandbox] ?? state.sandbox}`}
-            />
-          </span>
-        )}
         {conversation.working && (
           <button
             className="chat-link"
@@ -184,18 +138,125 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
             <Square size={12} /> Stop
           </button>
         )}
-        <button
-          className="chat-link"
-          onClick={() =>
-            void run(async () => {
-              await office.invoke("chat.toTerminal", { id: session.id });
-              onChanged();
-            })
-          }
-          data-testid="open-in-terminal"
-        >
-          <SquareTerminal size={13} /> Open in terminal
-        </button>
+        {state && state.kind === "codex" && (
+          <span data-testid="chat-sandbox">
+            <StatusBadge
+              status="info"
+              tone="attention"
+              label={`Sandbox: ${SANDBOX_LABELS[state.sandbox] ?? state.sandbox}`}
+            />
+          </span>
+        )}
+        {narrow ? (
+          <OverflowMenu
+            label="Model, permissions and more"
+            items={[
+              ...(state?.kind === "claude"
+                ? [
+                    ...["", ...state.models].map((m) => ({
+                      label: `Model: ${m === "" ? "Default model" : m}${(options.model ?? "") === m ? " (current)" : ""}`,
+                      onSelect: () => {
+                        setState({ ...state, options: { ...options, model: m || undefined } });
+                        void run(() =>
+                          office.invoke("chat.setOptions", {
+                            id: session.id,
+                            options: { model: m },
+                          }),
+                        );
+                      },
+                    })),
+                    ...state.permissionModes.map((m) => ({
+                      label: `Permissions: ${PERMISSION_LABELS[m] ?? m}${(options.permissionMode ?? "manual") === m ? " (current)" : ""}`,
+                      onSelect: () => {
+                        setState({ ...state, options: { ...options, permissionMode: m } });
+                        void run(() =>
+                          office.invoke("chat.setOptions", {
+                            id: session.id,
+                            options: { permissionMode: m },
+                          }),
+                        );
+                      },
+                    })),
+                  ]
+                : []),
+              {
+                label: "Open in terminal",
+                testId: "open-in-terminal",
+                onSelect: () =>
+                  void run(async () => {
+                    await office.invoke("chat.toTerminal", { id: session.id });
+                    onChanged();
+                  }),
+              },
+            ]}
+          />
+        ) : (
+          <>
+            {state && state.kind === "claude" && (
+              <>
+                <Select
+                  className="chat-select"
+                  aria-label="Model"
+                  data-testid="chat-model"
+                  value={options.model ?? ""}
+                  onChange={(e) => {
+                    setState({
+                      ...state,
+                      options: { ...options, model: e.target.value || undefined },
+                    });
+                    void run(() =>
+                      office.invoke("chat.setOptions", {
+                        id: session.id,
+                        options: { model: e.target.value },
+                      }),
+                    );
+                  }}
+                  title="Applies from the next message"
+                >
+                  <option value="">Default model</option>
+                  {state.models.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </Select>
+                <Select
+                  className="chat-select"
+                  aria-label="Permission mode"
+                  data-testid="chat-permission-mode"
+                  value={options.permissionMode ?? "manual"}
+                  onChange={(e) => {
+                    setState({ ...state, options: { ...options, permissionMode: e.target.value } });
+                    void run(() =>
+                      office.invoke("chat.setOptions", {
+                        id: session.id,
+                        options: { permissionMode: e.target.value },
+                      }),
+                    );
+                  }}
+                >
+                  {state.permissionModes.map((m) => (
+                    <option key={m} value={m}>
+                      {PERMISSION_LABELS[m] ?? m}
+                    </option>
+                  ))}
+                </Select>
+              </>
+            )}
+            <button
+              className="chat-link"
+              onClick={() =>
+                void run(async () => {
+                  await office.invoke("chat.toTerminal", { id: session.id });
+                  onChanged();
+                })
+              }
+              data-testid="open-in-terminal"
+            >
+              <SquareTerminal size={13} /> Open in terminal
+            </button>
+          </>
+        )}
       </header>
       <div
         className="chat-scroll"

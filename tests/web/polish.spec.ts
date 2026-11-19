@@ -39,6 +39,8 @@ test("the dropdown is Office's own: a button with a menu, keyboard navigable, an
 test("the chat header shows permission modes in words, and statuses are words in one colour everywhere", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
+  // Wide enough that the chat panel shows its model and permission controls instead of the overflow menu.
+  await win.setViewportSize({ width: 1900, height: 950 });
   await expect(win.getByTestId("topbar")).toBeVisible();
   const session = await win.evaluate(() =>
     window.office.invoke("sessions.start", {
@@ -57,6 +59,7 @@ test("the chat header shows permission modes in words, and statuses are words in
     "Accept edits",
     "Plan only",
     "Auto",
+    "Allowed commands only",
   ]);
   await win.keyboard.press("Escape");
   await expect(win.getByTestId("chat-permission-mode")).toContainText("Ask first (default)");

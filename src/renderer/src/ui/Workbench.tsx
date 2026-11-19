@@ -1,4 +1,4 @@
-import { Columns2, PictureInPicture2, RotateCcw, Save, X } from "lucide-react";
+import { Columns2, PictureInPicture2, X } from "lucide-react";
 import {
   DockviewReact,
   type DockviewApi,
@@ -8,15 +8,22 @@ import {
   type IDockviewPanelProps,
 } from "dockview-react";
 import "dockview-react/dist/styles/dockview.css";
-import { useCallback, useEffect, useRef, useState, type FunctionComponent } from "react";
+import {
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type FunctionComponent,
+} from "react";
+import { createPortal } from "react-dom";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
-import { Button } from "./Button";
+import { Button, IconButton } from "./Button";
 import { Dialog } from "./Dialog";
 import { Input } from "./Field";
-import { IconButton } from "./Button";
-import { Select as Dropdown } from "../components/Select";
 import { notifyDone, notifyError } from "./Notifications";
+import { OverflowMenu, PageActionsContext } from "./Page";
 
 export interface WorkbenchPreset {
   id: string;
@@ -214,54 +221,42 @@ export function Workbench({
     }
   };
 
-  return (
-    <div className="workbench" data-testid="workbench" data-workbench={workbench}>
-      <div className="workbench-bar">
-        <Dropdown
-          value=""
-          aria-label="Layout"
-          data-testid="workbench-presets"
-          onChange={(e) => {
-            const preset = presets.find((p) => p.id === e.target.value);
+  const slot = useContext(PageActionsContext);
+  const savedNames = saved.data ?? [];
+  const layoutMenu = (
+    <OverflowMenu
+      trigger="Layout"
+      testId="workbench-layout"
+      items={[
+        ...presets.map((p) => ({
+          label: `Arrange: ${p.label}`,
+          testId: `workbench-preset-${p.id}`,
+          onSelect: () => {
             const api = apiRef.current;
-            if (preset && api) {
-              preset.apply(api);
+            if (api) {
+              p.apply(api);
               save();
             }
-          }}
-        >
-          <option value="">Arrange as...</option>
-          {presets.map((p) => (
-            <option key={p.id} value={p.id}>
-              {p.label}
-            </option>
-          ))}
-        </Dropdown>
-        <Dropdown
-          value=""
-          aria-label="Saved layouts"
-          data-testid="workbench-saved"
-          disabled={(saved.data ?? []).length === 0}
-          onChange={(e) => e.target.value && void loadSaved(e.target.value)}
-        >
-          <option value="">
-            {(saved.data ?? []).length === 0 ? "No saved layouts" : "Saved layouts..."}
-          </option>
-          {(saved.data ?? []).map((k) => (
-            <option key={k} value={k}>
-              {k.slice(`set:${workbench}:`.length)}
-            </option>
-          ))}
-        </Dropdown>
-        <Button size="sm" onClick={() => setNaming(true)} data-testid="workbench-save-as">
-          <Save /> Save layout as...
-        </Button>
-        <Button size="sm" onClick={reset} data-testid="workbench-reset">
-          <RotateCcw /> Reset
-        </Button>
-        <div className="flex-1" />
-        {toolbar}
-      </div>
+          },
+        })),
+        ...savedNames.map((k) => ({
+          label: `Open layout: ${k.slice(`set:${workbench}:`.length)}`,
+          testId: `workbench-saved-${k.slice(`set:${workbench}:`.length)}`,
+          onSelect: () => void loadSaved(k),
+        })),
+        {
+          label: "Save layout as...",
+          testId: "workbench-save-as",
+          onSelect: () => setNaming(true),
+        },
+        { label: "Reset layout", testId: "workbench-reset", onSelect: reset },
+      ]}
+    />
+  );
+  return (
+    <div className="workbench" data-testid="workbench" data-workbench={workbench}>
+      {slot ? createPortal(layoutMenu, slot) : <div className="workbench-bar">{layoutMenu}</div>}
+      {toolbar && <div className="workbench-bar">{toolbar}</div>}
       <div className="workbench-dock">
         {count === 0 && empty && (
           <div className="workbench-empty" data-testid="workbench-empty">
@@ -299,7 +294,7 @@ export function Workbench({
             label="Name"
             value={name}
             onChange={(e) => setName(e.target.value)}
-            helper="You can switch back to it from the Saved layouts list."
+            helper="You can open it again from the Layout menu."
             data-testid="layout-name"
           />
         </Dialog>

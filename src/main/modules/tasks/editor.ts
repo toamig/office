@@ -1,6 +1,7 @@
 import {
   BUILT_IN_PROFILES,
   migrateLegacyRoles,
+  type Migration,
   profileProblems,
   resolveWorkspace,
   roleForFile,
@@ -23,23 +24,24 @@ export interface EditorDeps {
   reload: () => void;
   /** Makes the validated config the in-memory one as soon as it is written. */
   adopt: (workspace: Workspace) => void;
+  /** Called once when the old per-role permission fields were turned into profiles in the file. */
+  migrated?: (info: { total: number; matched: number; kept: number }) => void;
 }
 
 type Json = Record<string, unknown>;
 
 /** Old roles (a permission mode, read only, allowed commands) become profiles named after the role, in the file. */
-function migrateJson(json: Json): void {
+function migrateJson(json: Json): Migration | null {
   const parsed = WorkspaceSchema.safeParse(json);
-  if (!parsed.success) return;
-  const { roles, profiles, migrated } = migrateLegacyRoles(
-    parsed.data.roles,
-    parsed.data.permissionProfiles,
-  );
-  if (migrated.length === 0) return;
+  if (!parsed.success) return null;
+  const result = migrateLegacyRoles(parsed.data.roles, parsed.data.permissionProfiles);
+  const { roles, profiles, migrated } = result;
+  if (migrated.length === 0) return null;
   const out: Json = {};
   for (const [id, role] of Object.entries(roles)) out[id] = roleForFile(role as Role);
   json["roles"] = out;
   json["permissionProfiles"] = profiles;
+  return result;
 }
 
 /** A role as the owner writes it: fields with defaults may be left out. */
@@ -53,9 +55,11 @@ export class WorkspaceEditor {
   constructor(private readonly deps: EditorDeps) {}
 
   private async edit(message: string, change: (json: Json) => void): Promise<void> {
+    const found: { migration: Migration | null } = { migration: null };
     await this.deps.writer.edit(this.deps.workspaceFile(), message, (text) => {
       const json = JSON.parse(text) as Json;
-      migrateJson(json);
+      // Only what the file already held is reported; the role just saved is not news to the owner.
+      found.migration = migrateJson(json);
       change(json);
       // A role that was written with the old fields (a permission mode, read only) becomes a profile too.
       migrateJson(json);
@@ -73,6 +77,13 @@ export class WorkspaceEditor {
       return `${JSON.stringify(json, null, 2)}\n`;
     });
     this.deps.reload();
+    const migration = found.migration;
+    if (migration)
+      this.deps.migrated?.({
+        total: migration.migrated.length,
+        matched: migration.matched.length,
+        kept: migration.kept.length,
+      });
   }
 
   /** Adds or replaces a role. The role is checked against the schema before anything is written. */

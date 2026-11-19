@@ -174,14 +174,23 @@ function ProjectRow({ p }: { p: ProjectSummary }) {
             {p.detached ? "detached" : (p.branch ?? "unknown branch")}
           </span>
           <span>
-            {p.changed > 0 && <StatusBadge status="unsaved" label={`${p.changed} changed`} />}
+            {p.changed > 0 ? (
+              <StatusBadge status="unsaved" label={`${p.changed} changed`} />
+            ) : (
+              <span className="ui-muted">Clean</span>
+            )}
           </span>
           <span className="ui-badges">
             {p.ahead > 0 && <StatusBadge status="ahead" label={`${p.ahead} to push`} />}
             {p.behind > 0 && <StatusBadge status="behind" label={`${p.behind} to pull`} />}
+            {p.ahead === 0 && p.behind === 0 && <span className="ui-muted">In step</span>}
           </span>
           <span>
-            {p.waiting > 0 && <StatusBadge status="waiting" label={`${p.waiting} waiting`} />}
+            {p.waiting > 0 ? (
+              <StatusBadge status="waiting" label={`${p.waiting} waiting`} />
+            ) : (
+              <span className="ui-muted">None</span>
+            )}
           </span>
           <PrCell projectId={p.id} />
         </>

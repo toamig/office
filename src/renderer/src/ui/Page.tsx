@@ -1,6 +1,9 @@
-import { MoreHorizontal } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
-import { IconButton } from "./Button";
+import { ChevronDown, MoreHorizontal } from "lucide-react";
+import { createContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { Button, IconButton } from "./Button";
+
+/** The spot in a page header where a view's own controls go (a workbench puts its Layout menu there). */
+export const PageActionsContext = createContext<HTMLElement | null>(null);
 
 export interface MoreItem {
   label: string;
@@ -14,9 +17,14 @@ export interface MoreItem {
 export function OverflowMenu({
   items,
   label = "More actions",
+  trigger,
+  testId = "page-more",
 }: {
   items: MoreItem[];
   label?: string;
+  /** A word for the button, instead of the three dots. */
+  trigger?: string;
+  testId?: string;
 }) {
   const [open, setOpen] = useState(false);
   const box = useRef<HTMLDivElement>(null);
@@ -55,17 +63,28 @@ export function OverflowMenu({
   );
   return (
     <div className="ui-menu-host" ref={box}>
-      <IconButton
-        label={label}
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen(!open)}
-        data-testid="page-more"
-      >
-        <MoreHorizontal />
-      </IconButton>
+      {trigger ? (
+        <Button
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          data-testid={testId}
+        >
+          {trigger} <ChevronDown />
+        </Button>
+      ) : (
+        <IconButton
+          label={label}
+          aria-haspopup="menu"
+          aria-expanded={open}
+          onClick={() => setOpen(!open)}
+          data-testid={testId}
+        >
+          <MoreHorizontal />
+        </IconButton>
+      )}
       {open && (
-        <div className="ui-popover ui-menu" role="menu" data-testid="page-more-menu">
+        <div className="ui-popover ui-menu" role="menu" data-testid={`${testId}-menu`}>
           {calm.map(row)}
           {danger.length > 0 && calm.length > 0 && (
             <div className="ui-menu-rule" role="separator" />
@@ -88,6 +107,7 @@ export function PageHeader({
   primary,
   more,
   testId,
+  actionsRef,
 }: {
   title: string;
   breadcrumb?: Array<{ label: string; onClick?: () => void }>;
@@ -95,6 +115,7 @@ export function PageHeader({
   primary?: ReactNode;
   more?: MoreItem[];
   testId?: string;
+  actionsRef?: (node: HTMLElement | null) => void;
 }) {
   return (
     <header className="page-head" data-testid={testId ?? "page-header"}>
@@ -119,6 +140,7 @@ export function PageHeader({
         {subtitle && <p className="page-sub">{subtitle}</p>}
       </div>
       <div className="page-actions">
+        <span className="contents" ref={actionsRef} />
         {primary}
         {more && more.length > 0 && <OverflowMenu items={more} />}
       </div>
@@ -133,10 +155,13 @@ export function Page({
   testId,
   ...header
 }: Parameters<typeof PageHeader>[0] & { fill?: boolean; children: ReactNode }) {
+  const [slot, setSlot] = useState<HTMLElement | null>(null);
   return (
     <div className="page" data-fill={fill ? "true" : undefined} data-testid={testId}>
-      <PageHeader {...header} />
-      <div className="page-body">{children}</div>
+      <PageHeader {...header} actionsRef={setSlot} />
+      <PageActionsContext.Provider value={slot}>
+        <div className="page-body">{children}</div>
+      </PageActionsContext.Provider>
     </div>
   );
 }

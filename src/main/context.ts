@@ -308,6 +308,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     workspaceFile: () => store.filePath,
     reload: () => void store.reload(),
     adopt: (workspace) => store.adopt(workspace),
+    migrated: (info) => bus.emit("profiles.migrated", info),
   });
   const resolveRole = (roleId: string, projectId: string) =>
     sessions.resolveRole(roleId, projectId);

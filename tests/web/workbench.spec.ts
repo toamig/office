@@ -135,8 +135,9 @@ test("a Feature task shows its stages in a diagram, and the current stage moves 
   // The card carries the compact diagram: one mark per stage, and who is on the current one.
   const card = win.getByTestId("task-card").first();
   await expect(card.locator(".mark")).toHaveCount(3);
+  // With the inspector open the diagram is drawn there, and the detail keeps a row of stages to pick from.
   const detail = win.getByTestId("task-detail");
-  const diagram = detail.getByTestId("pipeline-diagram");
+  const diagram = win.getByTestId("inspector-diagram");
   const current = diagram.locator('[data-current="true"]');
   await expect(current).toHaveAttribute("data-stage", "plan", { timeout: 60000 });
   await expect(current).toHaveAttribute("data-status", "waiting-gate", { timeout: 60000 });
@@ -156,7 +157,7 @@ test("a Feature task shows its stages in a diagram, and the current stage moves 
   );
   await expect(card.getByTestId("marks-now")).toContainText("Review, Reviewer");
   // Clicking a stage opens its output.
-  await diagram.locator('[data-stage="plan"] button').click();
+  await detail.getByTestId("stage-tab").first().click();
   await expect(win.getByTestId("stage-output")).toContainText("Do the thing.");
   await win.getByTestId("task-approve").click();
   await expect(win.getByTestId("column-done").getByTestId("task-card")).toHaveCount(1, {

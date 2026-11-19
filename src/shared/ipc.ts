@@ -88,6 +88,7 @@ export const eventTypes = [
   "preview.state",
   "permission.changed",
   "settings.changed",
+  "profiles.migrated",
   "app.history",
   "app.terminal-action",
   "chat.event",

@@ -3,6 +3,7 @@ import { useState } from "react";
 import {
   allProfiles,
   CLAUDE_MODES,
+  describeSettings,
   CODEX_SANDBOXES,
   COMMAND_EXAMPLES,
   profileProblems,
@@ -10,9 +11,11 @@ import {
 } from "@shared/permissions";
 import type { PermissionProfile } from "@shared/types";
 import { useQuery } from "../../lib/hooks";
+import { InspectorSlot } from "../../components/Inspector";
 import { office } from "../../lib/ipc";
 import {
   Button,
+  Card,
   Dropdown,
   EmptyState,
   Group,
@@ -33,7 +36,7 @@ const slug = (name: string): string =>
 const BLANK: PermissionProfile = {
   name: "",
   description: "",
-  claudeMode: "default",
+  claudeMode: "manual",
   codexSandbox: "workspace-write",
   allowedCommands: [],
   deniedCommands: [],
@@ -145,7 +148,10 @@ function ProfileEditor({
     ...(profile.confirmedUnsafe ? { confirmedUnsafe: true } : {}),
   });
   const set = (patch: Partial<PermissionProfile>): void => setDraft((d) => ({ ...d, ...patch }));
-  const mode = CLAUDE_MODES.find((m) => m.id === (draft.claudeMode ?? "default"));
+  // What the owner picked, as it is: an unconfirmed Bypass stays on screen so the confirmation can be ticked.
+  const shownMode =
+    draft.claudeMode === undefined || draft.claudeMode === "default" ? "manual" : draft.claudeMode;
+  const mode = CLAUDE_MODES.find((m) => m.id === shownMode);
   const sandbox = CODEX_SANDBOXES.find((s) => s.id === draft.codexSandbox);
   const unsafe = Boolean(mode?.unsafe || sandbox?.unsafe);
   const problems = profileProblems(draft);
@@ -214,7 +220,7 @@ function ProfileEditor({
       <label className="grid gap-1">
         <span className="ui-label">Claude Code mode</span>
         <Dropdown
-          value={draft.claudeMode ?? "default"}
+          value={shownMode}
           disabled={builtIn}
           data-testid="profile-claude-mode"
           onChange={(e) => set({ claudeMode: e.target.value as PermissionProfile["claudeMode"] })}
@@ -354,8 +360,24 @@ export function PermissionsTab() {
     </div>
   );
 
+  const users = current ? usedBy(current.id) : [];
   return (
     <div className="min-h-0 flex-1" data-testid="permissions-tab">
+      <InspectorSlot view="board">
+        <Card title={current ? current.name : "Profile"} testId="profile-inspector">
+          {current ? (
+            <>
+              <p className="mt-0">{describeSettings(current)}</p>
+              <Group>Used by</Group>
+              <p className="mb-0 ui-muted">
+                {users.length > 0 ? users.join(", ") : "No role uses this profile yet."}
+              </p>
+            </>
+          ) : (
+            <p className="m-0 ui-muted">Select a profile to see where it is used.</p>
+          )}
+        </Card>
+      </InspectorSlot>
       <SplitPane
         id="permissions"
         defaultSize={380}

@@ -22,6 +22,34 @@ async function setup() {
   return { world, store, editor, file };
 }
 
+describe("the first save after the old per-role permissions", () => {
+  it("reports once how many roles moved to profiles, and how many matched a built-in", async () => {
+    const world = makeWorld();
+    const store = new WorkspaceStore();
+    await store.open(world.hub, world.workspaceConfigPath);
+    const told: Array<{ total: number; matched: number; kept: number }> = [];
+    const editor = new WorkspaceEditor({
+      writer: new VaultWriter({ hubRoot: () => world.hub, onWarning: () => undefined }),
+      workspaceFile: () => store.filePath,
+      reload: () => void store.reload(),
+      adopt: (workspace) => store.adopt(workspace),
+      migrated: (info) => told.push(info),
+    });
+    const roles = JSON.parse(readFileSync(store.filePath as string, "utf8")).roles as Record<
+      string,
+      unknown
+    >;
+    await editor.saveRole("scribe", { provider: "fake", instructions: "Write." });
+    expect(told).toHaveLength(1);
+    expect(told[0]?.total).toBeGreaterThanOrEqual(Object.keys(roles).length);
+    expect(told[0]?.matched).toBe(told[0] ? told[0].total - told[0].kept : -1);
+    // The file now uses profiles, so the next save says nothing.
+    await editor.saveRole("scribe", { provider: "fake", instructions: "Write more." });
+    expect(told).toHaveLength(1);
+    await store.close();
+  });
+});
+
 describe("role editing", () => {
   it("round-trips a role through the file, validation and a commit", async () => {
     const { world, store, editor, file } = await setup();
@@ -38,6 +66,7 @@ describe("role editing", () => {
       model: "haiku",
       effort: "low",
       instructions: "Test everything.",
+      permissionMode: "manual",
       permissionProfile: "qa",
       readOnly: true,
       allowedCommands: [],

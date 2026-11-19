@@ -413,6 +413,22 @@ button,
   padding: 0 10px 0 14px;
   border-bottom: 1px solid var(--line);
 }
+/* The title gives way first; the status and the buttons never get squeezed. */
+.chat-header .pane-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.chat-header > :not(.pane-title):not(.pane-branch) {
+  flex: none;
+}
+.chat-header .pane-branch {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .chat-select {
   max-width: 150px;
   padding: 2px 6px;

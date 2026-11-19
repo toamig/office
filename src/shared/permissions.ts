@@ -7,7 +7,11 @@ import type { PermissionProfile, Role, Workspace } from "./types";
 export type ClaudeMode = NonNullable<PermissionProfile["claudeMode"]>;
 export type CodexSandbox = PermissionProfile["codexSandbox"];
 
-/** Claude Code's permission modes, each with its explanation. Bypass is behind a confirmation and never a default. */
+/**
+ * Claude Code's permission modes, each with its explanation. The choices are those of `claude --permission-mode` in
+ * Claude Code 2.1.280 (acceptEdits, auto, bypassPermissions, manual, dontAsk, plan), as its help lists them.
+ * Bypass is behind a confirmation and never a default.
+ */
 export const CLAUDE_MODES: Array<{
   id: ClaudeMode;
   label: string;
@@ -15,7 +19,7 @@ export const CLAUDE_MODES: Array<{
   unsafe?: boolean;
 }> = [
   {
-    id: "default",
+    id: "manual",
     label: "Ask first",
     description: "Asks before it edits files or runs commands.",
   },
@@ -33,6 +37,12 @@ export const CLAUDE_MODES: Array<{
     id: "auto",
     label: "Auto",
     description: "Decides by itself, within the allowed commands.",
+  },
+  {
+    id: "dontAsk",
+    label: "Allowed commands only",
+    description:
+      "Never asks. Anything not on the allowed list is refused. This is what automations run with.",
   },
   {
     id: "bypassPermissions",
@@ -123,7 +133,7 @@ export const BUILT_IN_PROFILES: Record<string, PermissionProfile> = {
   "ask-first": profile({
     name: "Ask first",
     description: "Asks before it edits files or runs commands.",
-    claudeMode: "default",
+    claudeMode: "manual",
     codexSandbox: "workspace-write",
   }),
   "plan-only": profile({
@@ -142,7 +152,7 @@ export const BUILT_IN_PROFILES: Record<string, PermissionProfile> = {
   reviewer: profile({
     name: "Reviewer",
     description: "Reads the project, runs the tests and lint, and cannot edit.",
-    claudeMode: "default",
+    claudeMode: "manual",
     codexSandbox: "read-only",
     allowedCommands: REVIEWER_COMMANDS,
   }),
@@ -171,7 +181,7 @@ export function profileById(
  * without that it is Accept edits, so a hand-edited config can never turn it on by accident.
  */
 export function effectiveClaudeMode(p: PermissionProfile): ClaudeMode {
-  const mode = p.claudeMode ?? "default";
+  const mode = p.claudeMode === undefined || p.claudeMode === "default" ? "manual" : p.claudeMode;
   return mode === "bypassPermissions" && p.confirmedUnsafe !== true ? "acceptEdits" : mode;
 }
 
@@ -182,10 +192,9 @@ export function effectiveSandbox(p: PermissionProfile): CodexSandbox {
     : p.codexSandbox;
 }
 
-/** `claude --permission-mode <mode>` for a profile, or nothing for the default. */
+/** `claude --permission-mode <mode>` for a profile. Ask first is passed too, so the owner's own default never decides. */
 export function claudeModeFlags(p: PermissionProfile): string[] {
-  const mode = effectiveClaudeMode(p);
-  return mode === "default" ? [] : ["--permission-mode", mode];
+  return ["--permission-mode", effectiveClaudeMode(p)];
 }
 
 /** `codex exec -s <sandbox>` for a profile. */
@@ -216,7 +225,7 @@ export function resolveRole(
   const { permissionMode: _drop, ...rest } = role;
   return {
     ...rest,
-    ...(mode === "default" ? {} : { permissionMode: mode }),
+    permissionMode: mode,
     readOnly: sandbox === "read-only",
     allowedCommands: p.allowedCommands,
     deniedCommands: p.deniedCommands,
@@ -226,40 +235,95 @@ export function resolveRole(
 
 const CLAUDE_MODE_IDS = new Set<string>(CLAUDE_MODES.map((m) => m.id));
 
+/** "planner" reads "Planner"; "docs-writer" reads "Docs writer". */
+const sentenceCase = (id: string): string => {
+  const words = id.replaceAll(/[-_]+/g, " ").trim();
+  return words.charAt(0).toUpperCase() + words.slice(1);
+};
+
+const sameList = (a: string[], b: string[]): boolean =>
+  a.length === b.length && a.every((x, i) => x === b[i]);
+
+/** Whether two profiles run an agent with exactly the same flags. */
+function sameSettings(a: PermissionProfile, b: PermissionProfile): boolean {
+  return (
+    effectiveClaudeMode(a) === effectiveClaudeMode(b) &&
+    effectiveSandbox(a) === effectiveSandbox(b) &&
+    sameList(a.allowedCommands, b.allowedCommands) &&
+    sameList(a.deniedCommands, b.deniedCommands)
+  );
+}
+
+/** One real sentence about what a profile allows, built from its settings. */
+export function describeSettings(p: PermissionProfile): string {
+  const mode = CLAUDE_MODES.find((m) => m.id === effectiveClaudeMode(p));
+  const sandbox = CODEX_SANDBOXES.find((s) => s.id === effectiveSandbox(p));
+  const commands =
+    p.allowedCommands.length > 0
+      ? ` It may run ${p.allowedCommands.length} ${p.allowedCommands.length === 1 ? "command" : "commands"} without asking.`
+      : "";
+  return `Claude Code: ${(mode?.description ?? "").replace(/\.$/, "").toLowerCase()}. Codex: ${(sandbox?.description ?? "").replace(/\.$/, "").toLowerCase()}.${commands}`;
+}
+
+export interface Migration {
+  roles: Record<string, Role>;
+  profiles: Record<string, PermissionProfile>;
+  /** Every role that was migrated. */
+  migrated: string[];
+  /** The migrated roles whose old settings are exactly a built-in profile's, and so use that one. */
+  matched: string[];
+  /** The migrated roles that keep a profile of their own, because their settings differ from every built-in. */
+  kept: string[];
+}
+
 /**
- * Turns the old per-role fields (permission mode, read only, allowed commands) into a custom profile named after
- * the role, so every old role keeps exactly what it did. Roles that already name a profile are left alone.
+ * Turns the old per-role fields (permission mode, read only, allowed commands) into profiles, so every old role keeps
+ * exactly what it did: a role whose settings equal a built-in profile's uses that profile; any other gets a custom
+ * profile named after it. Roles that already name a profile are left alone.
  */
 export function migrateLegacyRoles(
   roles: Record<string, Role>,
   custom: Record<string, PermissionProfile> | undefined,
-): {
-  roles: Record<string, Role>;
-  profiles: Record<string, PermissionProfile>;
-  migrated: string[];
-} {
+): Migration {
   const profiles = { ...(custom ?? {}) };
   const out: Record<string, Role> = {};
   const migrated: string[] = [];
+  const matched: string[] = [];
+  const kept: string[] = [];
   for (const [id, role] of Object.entries(roles)) {
     if (role.permissionProfile) {
       out[id] = role;
       continue;
     }
-    const mode =
+    const mode: ClaudeMode =
       role.permissionMode && CLAUDE_MODE_IDS.has(role.permissionMode)
-        ? role.permissionMode
-        : undefined;
-    // The id never clashes with a built-in profile or another of the workspace's own.
-    const name = id in profiles || id in BUILT_IN_PROFILES ? `${id}-role` : id;
-    profiles[name] = {
+        ? (role.permissionMode as ClaudeMode)
+        : "manual";
+    const old: PermissionProfile = {
       name: id,
-      description: `What the ${id} role did before profiles existed.`,
-      ...(mode && mode !== "bypassPermissions" ? { claudeMode: mode as ClaudeMode } : {}),
+      description: "",
+      claudeMode: mode,
       codexSandbox: role.readOnly ? "read-only" : "workspace-write",
       allowedCommands: role.allowedCommands,
       deniedCommands: [],
+      // A role the owner wrote with Bypass permissions keeps it: that was their own choice.
+      ...(mode === "bypassPermissions" ? { confirmedUnsafe: true } : {}),
     };
+    const builtIn = Object.entries(BUILT_IN_PROFILES).find(([, p]) => sameSettings(p, old))?.[0];
+    let name: string;
+    if (builtIn) {
+      name = builtIn;
+      matched.push(id);
+    } else {
+      // The id never clashes with a built-in profile or another of the workspace's own.
+      name = id in profiles || id in BUILT_IN_PROFILES ? `${id}-role` : id;
+      profiles[name] = {
+        ...old,
+        name: `${sentenceCase(id)}'s settings`,
+        description: describeSettings(old),
+      };
+      kept.push(id);
+    }
     const { permissionMode: _m, readOnly: _r, allowedCommands: _a, ...rest } = role;
     out[id] = {
       ...rest,
@@ -270,7 +334,7 @@ export function migrateLegacyRoles(
     };
     migrated.push(id);
   }
-  return { roles: out, profiles, migrated };
+  return { roles: out, profiles, migrated, matched, kept };
 }
 
 /** The workspace as the app uses it: old roles migrated to profiles, and every role's profile resolved. */
