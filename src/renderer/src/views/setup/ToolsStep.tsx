@@ -1,9 +1,10 @@
-import { RefreshCw, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { RefreshCw } from "lucide-react";
+import { useState } from "react";
+import type { ToolStatus } from "@shared/models";
 import { Button, Chip, EmptyState, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { TerminalView } from "../agents/TerminalView";
+import { ToolRunDialog, type ToolRun } from "./ToolRunDialog";
 
 /** Which of the tools a first run cannot do without, as a short note next to each row. */
 const NEEDED: Record<string, string> = {
@@ -11,6 +12,12 @@ const NEEDED: Record<string, string> = {
   "claude-code": "One of Claude Code or Codex is required",
   codex: "One of Claude Code or Codex is required",
 };
+
+/** The command a tool's Fix line says to run, when Office knows how to run it (the Codex install and update). */
+function fixCommand(t: ToolStatus): string | null {
+  const found = /npm i -g @openai[/]codex/.exec(t.fix ?? "");
+  return t.id === "codex" && found ? found[0] : null;
+}
 
 /**
  * Which command-line tools are installed and logged in, with a fix for each problem. Logging in and installing
@@ -21,7 +28,7 @@ export function ToolsStep() {
   const tools = useQuery("setup.detectTools", undefined, ["setup.changed"]);
   const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
-  const [terminal, setTerminal] = useState<{ id: string; title: string } | null>(null);
+  const [run, setRun] = useState<ToolRun | null>(null);
 
   const recheck = async (): Promise<void> => {
     setChecking(true);
@@ -34,34 +41,25 @@ export function ToolsStep() {
     }
   };
 
-  const open = async (channel: "setup.loginSession" | "setup.installSession", id: string) => {
+  /** Opens the tool's login, or a command that fixes it, in a dialog of its own. */
+  const start = async (kind: "login" | "run", tool: ToolStatus): Promise<void> => {
     setError(null);
     try {
-      const session = await office.invoke(channel, { id });
-      setTerminal({ id: session.id, title: session.title ?? "Terminal" });
+      const session = await office.invoke(
+        kind === "login" ? "setup.loginSession" : "setup.installSession",
+        { id: tool.id },
+      );
+      setRun({
+        session,
+        kind,
+        toolId: tool.id,
+        toolLabel: tool.label,
+        again: () => void start(kind, tool),
+      });
     } catch (err) {
       setError((err as Error).message);
     }
   };
-
-  const close = (): void => {
-    if (terminal)
-      void office.invoke("sessions.archive", { id: terminal.id }).catch(() => undefined);
-    setTerminal(null);
-  };
-
-  // When the login or install ends, look at the tools again.
-  useEffect(() => {
-    if (!terminal) return;
-    return office.on("session.status", (e) => {
-      const payload = e.payload as { id?: string; status?: string };
-      if (
-        payload.id === terminal.id &&
-        (payload.status === "exited" || payload.status === "failed")
-      )
-        void recheck();
-    });
-  }, [terminal]);
 
   return (
     <div data-testid="tools-step">
@@ -108,43 +106,35 @@ export function ToolsStep() {
               {t.fix && <div style={{ color: "var(--muted)" }}>Fix: {t.fix}</div>}
             </div>
             {t.installed && t.loggedIn === false && (
-              <Button
-                onClick={() => void open("setup.loginSession", t.id)}
-                data-testid="tool-login"
-              >
+              <Button onClick={() => void start("login", t)} data-testid="tool-login">
                 Log in
               </Button>
             )}
-            {!t.installed && t.id === "codex" && (
+            {t.installed && t.loggedIn !== false && t.problem && fixCommand(t) !== null && (
               <Button
-                onClick={() => void open("setup.installSession", t.id)}
-                data-testid="tool-install"
+                onClick={() => void start("run", t)}
+                title={fixCommand(t) ?? undefined}
+                data-testid="tool-run"
               >
+                Run
+              </Button>
+            )}
+            {!t.installed && t.id === "codex" && (
+              <Button onClick={() => void start("run", t)} data-testid="tool-install">
                 Install (npm i -g @openai/codex)
               </Button>
             )}
           </div>
         ))}
       </div>
-      {terminal && (
-        <div
-          className="mt-3 rounded border"
-          style={{ borderColor: "var(--line)" }}
-          data-testid="tool-terminal"
-        >
-          <div
-            className="flex items-center border-b px-2 py-1"
-            style={{ borderColor: "var(--line)" }}
-          >
-            <span className="flex-1 font-medium">{terminal.title}</span>
-            <Button variant="ghost" onClick={close} aria-label="Close terminal">
-              <X size={14} />
-            </Button>
-          </div>
-          <div style={{ height: 260 }}>
-            <TerminalView id={terminal.id} />
-          </div>
-        </div>
+      {run && (
+        <ToolRunDialog
+          run={run}
+          onClose={() => {
+            setRun(null);
+            void recheck();
+          }}
+        />
       )}
     </div>
   );

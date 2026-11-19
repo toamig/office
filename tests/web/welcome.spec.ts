@@ -1,7 +1,7 @@
 import { expect, test, type Locator, type Page } from "@playwright/test";
 import { existsSync, readFileSync, rmSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, terminalText } from "./helpers";
 
 const claudeRow = (win: Page): Locator =>
   win.getByTestId("tool-row").filter({ has: win.getByText("Claude Code", { exact: true }) });
@@ -92,14 +92,42 @@ test("a required step stays closed until it is met: tools missing, then not logg
   const claude = claudeRow(win);
   await expect(claude).toContainText("not logged in");
 
-  // Log in opens the tool's own login in a terminal right here, inside the step.
+  // Log in opens a dialog of its own over the whole window, in plain words, with the raw output under Details.
   await claude.getByTestId("tool-login").click();
-  await expect(win.getByTestId("tool-terminal")).toBeVisible();
+  const dialog = win.getByTestId("tool-dialog");
+  await expect(dialog).toBeVisible();
+  await expect(win.getByTestId("tool-dialog-lead")).toContainText(
+    "A browser window opened to sign in",
+  );
+  await expect(win.getByTestId("tool-terminal")).toHaveCount(0);
+  const covered = await dialog.evaluate((el) => {
+    const box = el.getBoundingClientRect();
+    return box.width >= window.innerWidth - 1 && box.height >= window.innerHeight - 1;
+  });
+  expect(covered).toBe(true);
   await expect(win.getByTestId("rail")).toHaveCount(0);
 
-  // Logged in: Check again, and Continue is on.
+  // The program ends without having signed in: the dialog stays, says so, and offers Retry.
+  await win.getByTestId("tool-dialog-details").click();
+  await expect(win.getByTestId("tool-terminal")).toBeVisible();
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
+  await win.locator(".xterm").click();
+  await win.keyboard.type("quit");
+  await win.keyboard.press("Enter");
+  await expect(dialog).toHaveAttribute("data-phase", "failed");
+  await expect(win.getByTestId("tool-dialog-lead")).toContainText("That did not work");
+
+  // Retry starts it again; this time the login worked, so the dialog closes by itself and the tool shows Logged in.
   await app.setEnv({ FAKE_LOGGED_IN: "1" });
-  await win.getByTestId("tools-check").click();
+  await win.getByTestId("tool-dialog-retry").click();
+  await expect(dialog).toBeVisible();
+  await win.getByTestId("tool-dialog-details").click();
+  await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
+  await win.locator(".xterm").click();
+  await win.keyboard.type("quit");
+  await win.keyboard.press("Enter");
+  await expect(dialog).toHaveAttribute("data-phase", "done");
+  await expect(dialog).toHaveCount(0, { timeout: 10000 });
   await expect(claude).toContainText("logged in");
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();
   await app.close();

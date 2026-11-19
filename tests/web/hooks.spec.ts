@@ -44,6 +44,12 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
   await win.getByTestId("rail-setup").click();
   await win.getByTestId("install-claude").click();
   await expect(win.getByTestId("hooks-consent")).toBeVisible();
+  // The dialog leads with plain words; the exact change is behind a toggle.
+  await expect(win.getByTestId("hooks-plain")).toContainText("every Claude Code session");
+  await expect(win.getByTestId("hooks-plain")).toContainText("2 seconds");
+  await expect(win.getByTestId("hooks-plain")).toContainText("Chat sessions");
+  await expect(win.getByTestId("hooks-diff")).toHaveCount(0);
+  await win.getByTestId("hooks-diff-toggle").click();
   await expect(win.getByTestId("hooks-diff")).toContainText("office-relay.mjs");
   // Nothing is written until the owner confirms.
   expect(readFileSync(join(home, ".claude", "settings.json"), "utf8")).not.toContain(
