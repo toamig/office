@@ -29,7 +29,14 @@ import { sendReviewToAgent } from "./modules/sessions/review";
 import { readVaultFile } from "./modules/ask/ask";
 import { readAudit } from "./modules/vault/audit";
 import { captureSession } from "./modules/sessions/capture";
-import { getLayout, setLayout } from "./modules/sessions/layouts";
+import {
+  getDock,
+  getLayout,
+  listDock,
+  removeDock,
+  setDock,
+  setLayout,
+} from "./modules/sessions/layouts";
 import { userHome } from "./core/paths";
 import { readNote } from "./modules/notes/notes";
 import { buildSearchItems } from "./modules/search/items";
@@ -268,6 +275,10 @@ function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.rename", (req) => ctx.sessions.rename(req.id, req.title));
   ctx.ipc.handle("layout.get", (req) => getLayout(ctx.db, req.key));
   ctx.ipc.handle("layout.set", (req) => setLayout(ctx.db, req.key, req.layout));
+  ctx.ipc.handle("dock.get", (req) => getDock(ctx.db, req.key));
+  ctx.ipc.handle("dock.set", (req) => setDock(ctx.db, req.key, req.json));
+  ctx.ipc.handle("dock.list", (req) => listDock(ctx.db, req.prefix));
+  ctx.ipc.handle("dock.remove", (req) => removeDock(ctx.db, req.key));
   ctx.ipc.handle("hooks.status", () => ctx.hooks.status());
   ctx.ipc.handle("hooks.preview", (req) => ctx.hooks.preview(req.target, req.action));
   ctx.ipc.handle("hooks.apply", async (req) => {

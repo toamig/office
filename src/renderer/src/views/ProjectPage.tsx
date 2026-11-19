@@ -16,19 +16,73 @@ import {
   Input,
   Page,
   StatusBadge,
-  Tabs,
+  Workbench,
+  splitBeside,
+  tabsTogether,
+  type PanelComponent,
+  type WorkbenchPreset,
   Time,
   notify,
   notifyError,
   type MoreItem,
 } from "../ui";
 import { InspectorSlot } from "../components/Inspector";
+import { BranchesTab } from "./git/BranchesTab";
 import { PreviewTab } from "./PreviewTab";
 import { ProjectInspector } from "./project/ProjectInspector";
 import { useProjectManage } from "./project/Manage";
 import { RecentRuns } from "./project/RecentRuns";
 
-type Tab = "overview" | "todos" | "agents" | "notes" | "preview";
+type Tab = "overview" | "todos" | "agents" | "notes" | "preview" | "git";
+
+const TITLES: Record<Tab, string> = {
+  overview: "Overview",
+  todos: "Todos",
+  agents: "Agents",
+  notes: "Notes",
+  preview: "Preview",
+  git: "Git",
+};
+const TABS = Object.keys(TITLES) as Tab[];
+
+/** One panel of the project page: the part of the project it shows, drawn for the project in its params. */
+const ProjectPanel: PanelComponent = ({ params }) => {
+  const id = String(params["id"] ?? "");
+  const kind = String(params["kind"] ?? "overview") as Tab;
+  const note = typeof params["note"] === "string" ? params["note"] : undefined;
+  return (
+    <div className="dock-panel" data-flush={kind === "preview" ? "true" : undefined}>
+      {kind === "overview" && <Overview id={id} />}
+      {kind === "todos" && <Todos id={id} />}
+      {kind === "agents" && <ProjectAgents id={id} />}
+      {kind === "notes" && <Notes id={id} {...(note ? { initial: note } : {})} />}
+      {kind === "preview" && <PreviewTab projectId={id} />}
+      {kind === "git" && <BranchesTab key={id} projectId={id} />}
+    </div>
+  );
+};
+const PROJECT_COMPONENTS: Record<string, PanelComponent> = { project: ProjectPanel };
+
+const PROJECT_PRESETS: WorkbenchPreset[] = [
+  { id: "tabs", label: "Tabs: one at a time", apply: (api) => tabsTogether(api) },
+  {
+    id: "side",
+    label: "Overview beside Todos",
+    apply: (api) => {
+      tabsTogether(api);
+      splitBeside(api, "todos", "overview");
+    },
+  },
+  {
+    id: "review",
+    label: "Review: Overview, Git and Preview",
+    apply: (api) => {
+      tabsTogether(api);
+      splitBeside(api, "git", "overview");
+      splitBeside(api, "preview", "git", "below");
+    },
+  },
+];
 
 function Overview({ id }: { id: string }) {
   const detail = useQuery("projects.get", { id }, ["project.status"]);
@@ -301,7 +355,7 @@ function ProjectBody({
 }) {
   const id = project.id;
   const navigate = useUi((s) => s.navigate);
-  const [tab, setTab] = useState<Tab>((initialTab as Tab | undefined) ?? "overview");
+  const tab: Tab = TABS.includes(initialTab as Tab) ? (initialTab as Tab) : "overview";
   const unreal = useQuery("projects.unrealFile", { id }).data;
   const manage = useProjectManage(project);
 
@@ -358,6 +412,7 @@ function ProjectBody({
   return (
     <Page
       testId="project-page"
+      fill
       title={project.name}
       breadcrumb={[{ label: "Projects", onClick: () => navigate("projects") }]}
       subtitle={
@@ -383,23 +438,26 @@ function ProjectBody({
       <InspectorSlot view="project">
         <ProjectInspector id={id} />
       </InspectorSlot>
-      <Tabs
-        label="Project sections"
-        value={tab}
-        onChange={setTab}
-        items={[
-          { id: "overview", label: "Overview", testId: "tab-overview" },
-          { id: "todos", label: "Todos", testId: "tab-todos" },
-          { id: "agents", label: "Agents", testId: "tab-agents" },
-          { id: "notes", label: "Notes", testId: "tab-notes" },
-          { id: "preview", label: "Preview", testId: "tab-preview" },
-        ]}
-      />
-      {tab === "overview" && <Overview id={id} />}
-      {tab === "todos" && <Todos id={id} />}
-      {tab === "agents" && <ProjectAgents id={id} />}
-      {tab === "preview" && <PreviewTab projectId={id} />}
-      {tab === "notes" && <Notes id={id} {...(note ? { initial: note } : {})} />}
+      <div className="min-h-0 flex-1">
+        <Workbench
+          key={id}
+          workbench="project"
+          scope={id}
+          components={PROJECT_COMPONENTS}
+          presets={PROJECT_PRESETS}
+          initial={(api) => {
+            for (const kind of TABS)
+              api.addPanel({
+                id: kind,
+                component: "project",
+                title: TITLES[kind],
+                params: { kind, id, testId: `tab-${kind}`, ...(note ? { note } : {}) },
+              });
+            api.getPanel(tab)?.api.setActive();
+          }}
+          onReady={(api) => api.getPanel(tab)?.api.setActive()}
+        />
+      </div>
     </Page>
   );
 }

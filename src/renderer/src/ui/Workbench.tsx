@@ -1,0 +1,336 @@
+import { Columns2, PictureInPicture2, RotateCcw, Save, X } from "lucide-react";
+import {
+  DockviewReact,
+  type DockviewApi,
+  type DockviewReadyEvent,
+  type IDockviewHeaderActionsProps,
+  type IDockviewPanelHeaderProps,
+  type IDockviewPanelProps,
+} from "dockview-react";
+import "dockview-react/dist/styles/dockview.css";
+import { useCallback, useEffect, useRef, useState, type FunctionComponent } from "react";
+import { useQuery } from "../lib/hooks";
+import { office } from "../lib/ipc";
+import { Button } from "./Button";
+import { Dialog } from "./Dialog";
+import { Input } from "./Field";
+import { IconButton } from "./Button";
+import { Select as Dropdown } from "../components/Select";
+import { notifyDone, notifyError } from "./Notifications";
+
+export interface WorkbenchPreset {
+  id: string;
+  label: string;
+  /** Arranges the panels that are open; it may add the ones the layout needs. */
+  apply: (api: DockviewApi) => void;
+}
+
+export type PanelComponent = FunctionComponent<IDockviewPanelProps<Record<string, unknown>>>;
+
+/** A panel's tab: its title, a test id from the panel's params, and a close button unless the panel is permanent. */
+function WorkTab({ api, params }: IDockviewPanelHeaderProps<Record<string, unknown>>) {
+  const [title, setTitle] = useState(api.title ?? api.id);
+  useEffect(() => {
+    const d = api.onDidTitleChange((e) => setTitle(e.title));
+    return () => d.dispose();
+  }, [api]);
+  const testId = typeof params["testId"] === "string" ? params["testId"] : "dock-tab";
+  return (
+    <div className="dock-tab" data-testid={testId} data-panel={api.id}>
+      <span className="dock-tab-title">{title}</span>
+      {params["permanent"] !== true && (
+        <IconButton
+          label="Close tab"
+          size="sm"
+          onClick={(e) => {
+            e.stopPropagation();
+            api.close();
+          }}
+        >
+          <X />
+        </IconButton>
+      )}
+    </div>
+  );
+}
+
+/** What a group offers beside its tabs: split the active panel to the right, or float it. */
+function GroupActions({ containerApi, activePanel, group }: IDockviewHeaderActionsProps) {
+  if (!activePanel) return null;
+  return (
+    <div className="dock-actions">
+      <IconButton
+        label="Split to the right"
+        size="sm"
+        data-testid="dock-split-right"
+        onClick={() => {
+          const next = containerApi.addGroup({ referenceGroup: group, direction: "right" });
+          activePanel.api.moveTo({ group: next });
+        }}
+      >
+        <Columns2 />
+      </IconButton>
+      <IconButton
+        label="Float this panel"
+        size="sm"
+        data-testid="dock-float"
+        onClick={() =>
+          containerApi.addFloatingGroup(activePanel, {
+            position: { top: 96, left: 120 },
+            width: 560,
+            height: 380,
+          })
+        }
+      >
+        <PictureInPicture2 />
+      </IconButton>
+    </div>
+  );
+}
+
+/**
+ * A workbench: panels you can tab, split, drag to dock and float. Its layout is remembered per workbench and scope on
+ * this PC; you can save one under a name, switch between saved ones and the presets, and reset it. A panel that stays
+ * mounted ("always") is never restarted by a move, so a terminal keeps its scrollback and a chat its stream.
+ */
+export function Workbench({
+  workbench,
+  scope,
+  components,
+  initial,
+  presets,
+  onReady,
+  onActive,
+  toolbar,
+  empty,
+}: {
+  /** The kind of workbench: "agents", "project" or "git". */
+  workbench: string;
+  /** What the layout belongs to: a project id, or "all". */
+  scope: string;
+  components: Record<string, PanelComponent>;
+  /** The layout a fresh workbench starts with, and the one Reset goes back to. */
+  initial: (api: DockviewApi) => void;
+  presets: WorkbenchPreset[];
+  onReady?: (api: DockviewApi) => void;
+  /** The id of the panel that became active (or null when none is). */
+  onActive?: (panelId: string | null) => void;
+  toolbar?: React.ReactNode;
+  /** Shown over the dock while no panel is open. */
+  empty?: React.ReactNode;
+}) {
+  const key = `${workbench}:${scope}`;
+  const saved = useQuery("dock.list", { prefix: `set:${workbench}:` }, []);
+  const apiRef = useRef<DockviewApi | null>(null);
+  const loaded = useRef(false);
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState("");
+  const [count, setCount] = useState(1);
+
+  const save = useCallback((): void => {
+    const api = apiRef.current;
+    if (!api || !loaded.current) return;
+    if (timer.current) clearTimeout(timer.current);
+    timer.current = setTimeout(() => {
+      void office.invoke("dock.set", { key, json: JSON.stringify(api.toJSON()) });
+    }, 300);
+  }, [key]);
+
+  const ready = (e: DockviewReadyEvent): void => {
+    const api = e.api;
+    apiRef.current = api;
+    api.onDidLayoutChange(() => {
+      setCount(api.panels.length);
+      save();
+    });
+    api.onDidActivePanelChange((e) => onActive?.(e.panel?.id ?? null));
+    void office.invoke("dock.get", { key }).then(
+      (json) => {
+        try {
+          if (json) api.fromJSON(JSON.parse(json));
+          else initial(api);
+        } catch {
+          api.clear();
+          initial(api);
+        }
+        loaded.current = true;
+        setCount(api.panels.length);
+        onReady?.(api);
+      },
+      () => {
+        initial(api);
+        loaded.current = true;
+        onReady?.(api);
+      },
+    );
+  };
+  // A pending save is not lost when the workbench goes away.
+  useEffect(
+    () => () => {
+      if (timer.current) clearTimeout(timer.current);
+      const api = apiRef.current;
+      if (api && loaded.current)
+        void office.invoke("dock.set", { key, json: JSON.stringify(api.toJSON()) });
+    },
+    [key],
+  );
+
+  const reset = (): void => {
+    const api = apiRef.current;
+    if (!api) return;
+    api.clear();
+    initial(api);
+    save();
+  };
+  const loadSaved = async (full: string): Promise<void> => {
+    const api = apiRef.current;
+    if (!api) return;
+    try {
+      const json = await office.invoke("dock.get", { key: full });
+      if (json) {
+        api.fromJSON(JSON.parse(json));
+        save();
+      }
+    } catch (err) {
+      notifyError(err, "That layout could not be opened", `dock-${workbench}`);
+    }
+  };
+  const saveAs = async (): Promise<void> => {
+    const api = apiRef.current;
+    const clean = name.trim();
+    if (!api || !clean) return;
+    try {
+      await office.invoke("dock.set", {
+        key: `set:${workbench}:${clean}`,
+        json: JSON.stringify(api.toJSON()),
+      });
+      notifyDone("Layout saved", clean, `dock-${workbench}`);
+      setNaming(false);
+      setName("");
+      saved.reload();
+    } catch (err) {
+      notifyError(err, "That layout was not saved", `dock-${workbench}`);
+    }
+  };
+
+  return (
+    <div className="workbench" data-testid="workbench" data-workbench={workbench}>
+      <div className="workbench-bar">
+        <Dropdown
+          value=""
+          aria-label="Layout"
+          data-testid="workbench-presets"
+          onChange={(e) => {
+            const preset = presets.find((p) => p.id === e.target.value);
+            const api = apiRef.current;
+            if (preset && api) {
+              preset.apply(api);
+              save();
+            }
+          }}
+        >
+          <option value="">Arrange as...</option>
+          {presets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </Dropdown>
+        <Dropdown
+          value=""
+          aria-label="Saved layouts"
+          data-testid="workbench-saved"
+          disabled={(saved.data ?? []).length === 0}
+          onChange={(e) => e.target.value && void loadSaved(e.target.value)}
+        >
+          <option value="">
+            {(saved.data ?? []).length === 0 ? "No saved layouts" : "Saved layouts..."}
+          </option>
+          {(saved.data ?? []).map((k) => (
+            <option key={k} value={k}>
+              {k.slice(`set:${workbench}:`.length)}
+            </option>
+          ))}
+        </Dropdown>
+        <Button size="sm" onClick={() => setNaming(true)} data-testid="workbench-save-as">
+          <Save /> Save layout as...
+        </Button>
+        <Button size="sm" onClick={reset} data-testid="workbench-reset">
+          <RotateCcw /> Reset
+        </Button>
+        <div className="flex-1" />
+        {toolbar}
+      </div>
+      <div className="workbench-dock">
+        {count === 0 && empty && (
+          <div className="workbench-empty" data-testid="workbench-empty">
+            {empty}
+          </div>
+        )}
+        <DockviewReact
+          className="dockview-theme-office"
+          components={components as Record<string, FunctionComponent<IDockviewPanelProps>>}
+          defaultTabComponent={WorkTab as FunctionComponent<IDockviewPanelHeaderProps>}
+          rightHeaderActionsComponent={GroupActions}
+          onReady={ready}
+        />
+      </div>
+      {naming && (
+        <Dialog
+          title="Save this layout"
+          testId="layout-name-dialog"
+          onClose={() => setNaming(false)}
+          footer={
+            <>
+              <Button onClick={() => setNaming(false)}>Cancel</Button>
+              <Button
+                variant="primary"
+                disabled={!name.trim()}
+                onClick={() => void saveAs()}
+                data-testid="layout-name-save"
+              >
+                Save
+              </Button>
+            </>
+          }
+        >
+          <Input
+            label="Name"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            helper="You can switch back to it from the Saved layouts list."
+            data-testid="layout-name"
+          />
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+/** Moves every panel into one group, as tabs: the layout of "one thing at a time". */
+export function tabsTogether(api: DockviewApi): void {
+  const first = api.activePanel ?? api.panels[0];
+  if (!first) return;
+  for (const p of api.panels) if (p.group !== first.group) p.api.moveTo({ group: first.group });
+}
+
+/** Puts a panel in a new group beside or under another panel; the panel is moved, never remounted. */
+export function splitBeside(
+  api: DockviewApi,
+  panelId: string,
+  reference: string,
+  direction: "right" | "below" = "right",
+): void {
+  const panel = api.getPanel(panelId);
+  const ref = api.getPanel(reference);
+  if (!panel || !ref || panel.group === ref.group) {
+    if (panel && ref && panel.group === ref.group && api.panels.length > 1) {
+      const group = api.addGroup({ referenceGroup: ref.group, direction });
+      panel.api.moveTo({ group });
+    }
+    return;
+  }
+  const group = api.addGroup({ referenceGroup: ref.group, direction });
+  panel.api.moveTo({ group });
+}

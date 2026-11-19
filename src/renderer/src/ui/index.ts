@@ -30,3 +30,10 @@ export {
   sentence,
   type DiagramStage,
 } from "./PipelineDiagram";
+export {
+  splitBeside,
+  tabsTogether,
+  Workbench,
+  type PanelComponent,
+  type WorkbenchPreset,
+} from "./Workbench";

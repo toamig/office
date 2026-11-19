@@ -175,7 +175,8 @@
         "tests/web/polish.spec.ts",
         "tests/web/speed.spec.ts",
         "tests/web/m2-flow.spec.ts",
-        "tests/web/inspector.spec.ts"
+        "tests/web/inspector.spec.ts",
+        "tests/web/dock.spec.ts"
       ]
     },
     "src/renderer/src/views/agents": {
@@ -185,7 +186,8 @@
         "tests/web/capture.spec.ts",
         "tests/web/hooks.spec.ts",
         "tests/web/m2-flow.spec.ts",
-        "tests/web/inspector.spec.ts"
+        "tests/web/inspector.spec.ts",
+        "tests/web/dock.spec.ts"
       ]
     },
     "src/renderer/src/views/Board.tsx": {
@@ -222,14 +224,20 @@
       "web": ["tests/web/explore.spec.ts"]
     },
     "src/renderer/src/views/Git.tsx": {
-      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts", "tests/web/inspector.spec.ts"]
+      "web": [
+        "tests/web/git.spec.ts",
+        "tests/web/m3-flow.spec.ts",
+        "tests/web/inspector.spec.ts",
+        "tests/web/dock.spec.ts"
+      ]
     },
     "src/renderer/src/views/git": {
       "web": [
         "tests/web/git.spec.ts",
         "tests/web/m3-flow.spec.ts",
         "tests/web/speed.spec.ts",
-        "tests/web/inspector.spec.ts"
+        "tests/web/inspector.spec.ts",
+        "tests/web/dock.spec.ts"
       ]
     },
     "src/renderer/src/views/Home.tsx": {
@@ -254,7 +262,8 @@
         "tests/web/projects.spec.ts",
         "tests/web/board.spec.ts",
         "tests/web/git.spec.ts",
-        "tests/web/inspector.spec.ts"
+        "tests/web/inspector.spec.ts",
+        "tests/web/dock.spec.ts"
       ]
     },
     "src/renderer/src/views/project": {
@@ -262,7 +271,8 @@
         "tests/web/projects.spec.ts",
         "tests/web/tasks.spec.ts",
         "tests/web/onboarding.spec.ts",
-        "tests/web/inspector.spec.ts"
+        "tests/web/inspector.spec.ts",
+        "tests/web/dock.spec.ts"
       ]
     },
     "src/renderer/src/views/Projects.tsx": {
@@ -381,7 +391,8 @@
         "tests/web/polish.spec.ts",
         "tests/web/layout.spec.ts",
         "tests/web/notifications.spec.ts",
-        "tests/web/workbench.spec.ts"
+        "tests/web/workbench.spec.ts",
+        "tests/web/dock.spec.ts"
       ]
     },
     "src/renderer/src/views/Gallery.tsx": {
@@ -400,6 +411,9 @@
         "tests/web/notifications.spec.ts",
         "tests/web/gallery.spec.ts"
       ]
+    },
+    "src/renderer/src/components/VirtualList.tsx": {
+      "web": ["tests/web/dock.spec.ts"]
     }
   }
 }

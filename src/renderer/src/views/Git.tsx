@@ -3,7 +3,18 @@ import { useState } from "react";
 import { PrsPanel } from "../components/PrsPanel";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
-import { EmptyState, Group, Page, SplitPane, StatusBadge, Tabs } from "../ui";
+import {
+  EmptyState,
+  Group,
+  Page,
+  SplitPane,
+  StatusBadge,
+  Workbench,
+  splitBeside,
+  tabsTogether,
+  type PanelComponent,
+  type WorkbenchPreset,
+} from "../ui";
 import { InspectorSlot } from "../components/Inspector";
 import { BranchesTab } from "./git/BranchesTab";
 import { GitInspector } from "./git/GitInspector";
@@ -14,13 +25,59 @@ import { WorktreesTab } from "./git/WorktreesTab";
 const TABS = ["branches", "worktrees", "changes", "commit", "prs"] as const;
 type Tab = (typeof TABS)[number];
 
+const TITLES: Record<Tab, string> = {
+  branches: "Branches",
+  worktrees: "Worktrees",
+  changes: "Changes",
+  commit: "Commit",
+  prs: "Pull requests and CI",
+};
+
+/** One panel of the Git desk: the part of a repo it shows, drawn for the repo in its params. */
+const GitPanel: PanelComponent = ({ params }) => {
+  const projectId = String(params["projectId"] ?? "");
+  const kind = String(params["kind"] ?? "branches") as Tab;
+  return (
+    <div className="dock-panel" data-testid={`git-panel-${kind}`}>
+      {kind === "branches" && <BranchesTab key={projectId} projectId={projectId} />}
+      {kind === "worktrees" && <WorktreesTab key={projectId} projectId={projectId} />}
+      {kind === "changes" && <DiffTab key={projectId} projectId={projectId} />}
+      {kind === "commit" && <CommitTab key={projectId} projectId={projectId} />}
+      {kind === "prs" && <PrsPanel key={projectId} projectId={projectId} />}
+    </div>
+  );
+};
+const GIT_COMPONENTS: Record<string, PanelComponent> = { git: GitPanel };
+
+/** The layouts the Git desk offers besides your own. */
+const GIT_PRESETS: WorkbenchPreset[] = [
+  { id: "tabs", label: "Tabs: one at a time", apply: (api) => tabsTogether(api) },
+  {
+    id: "changes-commit",
+    label: "Changes beside Commit",
+    apply: (api) => {
+      tabsTogether(api);
+      splitBeside(api, "commit", "changes");
+    },
+  },
+  {
+    id: "review",
+    label: "Review: Changes, Pull requests and Branches",
+    apply: (api) => {
+      tabsTogether(api);
+      splitBeside(api, "prs", "changes");
+      splitBeside(api, "branches", "prs", "below");
+    },
+  },
+];
+
 /** The Git desk: every repo at a glance, and branches, worktrees, diffs, commits and PRs for the chosen one. */
 export function Git() {
   const params = useUi((s) => s.params);
   const projects = useQuery("projects.list", undefined, ["project.status"]);
   const health = useQuery("vault.health", undefined, ["vault.health"]);
   const [selected, setSelected] = useState(params["project"] ?? "");
-  const [tab, setTab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "branches");
+  const [tab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "branches");
 
   const repos = (projects.data ?? []).filter((p) => !p.archived && p.isRepo);
   const current = repos.find((p) => p.id === selected) ?? repos[0];
@@ -91,7 +148,7 @@ export function Git() {
   );
 
   const detail = (
-    <div className="grid content-start gap-4 p-4">
+    <div className="flex h-full min-h-0 flex-col gap-3 p-4">
       {!current && (
         <EmptyState title="Pick a repo">
           Choose one on the left to see its branches and changes.
@@ -106,23 +163,26 @@ export function Git() {
               {current.detached ? "Detached HEAD" : current.branch}
             </span>
           </div>
-          <Tabs
-            label="Git sections"
-            value={tab}
-            onChange={setTab}
-            items={[
-              { id: "branches", label: "Branches", testId: "git-tab-branches" },
-              { id: "worktrees", label: "Worktrees", testId: "git-tab-worktrees" },
-              { id: "changes", label: "Changes", testId: "git-tab-changes" },
-              { id: "commit", label: "Commit", testId: "git-tab-commit" },
-              { id: "prs", label: "Pull requests and CI", testId: "git-tab-prs" },
-            ]}
-          />
-          {tab === "branches" && <BranchesTab key={current.id} projectId={current.id} />}
-          {tab === "worktrees" && <WorktreesTab key={current.id} projectId={current.id} />}
-          {tab === "changes" && <DiffTab key={current.id} projectId={current.id} />}
-          {tab === "commit" && <CommitTab key={current.id} projectId={current.id} />}
-          {tab === "prs" && <PrsPanel key={current.id} projectId={current.id} />}
+          <div className="min-h-0 flex-1">
+            <Workbench
+              key={current.id}
+              workbench="git"
+              scope={current.id}
+              components={GIT_COMPONENTS}
+              presets={GIT_PRESETS}
+              initial={(api) => {
+                for (const kind of TABS)
+                  api.addPanel({
+                    id: kind,
+                    component: "git",
+                    title: TITLES[kind],
+                    params: { kind, projectId: current.id, testId: `git-tab-${kind}` },
+                  });
+                api.getPanel(tab)?.api.setActive();
+              }}
+              onReady={(api) => api.getPanel(tab)?.api.setActive()}
+            />
+          </div>
         </>
       )}
     </div>

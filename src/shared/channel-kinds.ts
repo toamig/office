@@ -24,6 +24,8 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "sessions.list",
   "sessions.history",
   "layout.get",
+  "dock.get",
+  "dock.list",
   "hooks.status",
   "hooks.preview",
   "ask.result",
@@ -66,6 +68,7 @@ const QUIET_PREFIXES = [
   "app.",
   "preview.",
   "layout.",
+  "dock.",
   "chat.send",
   "setup.pickFolder",
 ];

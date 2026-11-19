@@ -119,10 +119,10 @@ test("a divider that is dragged stays where it was put after a restart", async (
   const first = await launch({ world: true, fakeTools: true });
   const win = await first.app.firstWindow();
   await win.setViewportSize({ width: 1600, height: 900 });
-  await win.getByTestId("rail-inbox").click();
-  const pane = win.getByTestId("split-inbox").locator(".ui-split-pane").first();
+  await win.getByTestId("rail-agents").click();
+  const pane = win.getByTestId("split-agents").locator(".ui-split-pane").first();
   const before = (await pane.boundingBox())?.width ?? 0;
-  const handle = await win.getByTestId("split-inbox-divider").boundingBox();
+  const handle = await win.getByTestId("split-agents-divider").boundingBox();
   if (!handle) throw new Error("no divider");
   const y = handle.y + handle.height / 2;
   await win.mouse.move(handle.x + 3, y);
@@ -136,7 +136,7 @@ test("a divider that is dragged stays where it was put after a restart", async (
   // It is saved on this PC, not just held in the page.
   await expect
     .poll(() =>
-      win.evaluate(() => window.office.invoke("settings.get").then((s) => s.panes["inbox"])),
+      win.evaluate(() => window.office.invoke("settings.get").then((s) => s.panes["agents"])),
     )
     .toBe(after);
   await first.app.close();
@@ -144,11 +144,11 @@ test("a divider that is dragged stays where it was put after a restart", async (
   const second = await launch({ base: first.base, fakeTools: true });
   const again = await second.app.firstWindow();
   await again.setViewportSize({ width: 1600, height: 900 });
-  await again.getByTestId("rail-inbox").click();
-  const pane2 = again.getByTestId("split-inbox").locator(".ui-split-pane").first();
+  await again.getByTestId("rail-agents").click();
+  const pane2 = again.getByTestId("split-agents").locator(".ui-split-pane").first();
   await expect.poll(async () => Math.round((await pane2.boundingBox())?.width ?? 0)).toBe(after);
   // The keyboard moves it too, by steps, and never past the least width of either pane.
-  await again.getByTestId("split-inbox-divider").focus();
+  await again.getByTestId("split-agents-divider").focus();
   await again.keyboard.press("ArrowLeft");
   await expect
     .poll(async () => Math.round((await pane2.boundingBox())?.width ?? 0))

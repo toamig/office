@@ -9,6 +9,8 @@ async function unlabelled(win: Page): Promise<string[]> {
       const html = el as HTMLElement;
       const rect = html.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) continue;
+      // A panel kept mounted behind another one is hidden, not on the page.
+      if (getComputedStyle(html).visibility === "hidden") continue;
       const text = (html.innerText ?? "").trim();
       if (text !== "") continue;
       const label = html.getAttribute("aria-label")?.trim();

@@ -64,12 +64,13 @@ export function VirtualList<T>({
   useEffect(() => {
     const el = root.current;
     if (!virtual || !el) return;
-    const parent = scrollParent(el);
     const onScroll = (): void => measure();
-    parent.addEventListener("scroll", onScroll, { passive: true });
+    // Scroll events do not bubble, but a capturing listener sees every element's: the list may be moved to another
+    // container after it is made (a dock panel), so it never holds on to the scroller it first found.
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
     window.addEventListener("resize", onScroll);
     return () => {
-      parent.removeEventListener("scroll", onScroll);
+      document.removeEventListener("scroll", onScroll, { capture: true });
       window.removeEventListener("resize", onScroll);
     };
   }, [virtual, measure]);

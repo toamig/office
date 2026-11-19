@@ -83,7 +83,7 @@ export function PreviewTab({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div data-testid="preview-tab">
+    <div data-testid="preview-tab" className="flex h-full flex-col p-3">
       <form
         className="mb-2 flex items-end gap-2"
         onSubmit={(e) => {

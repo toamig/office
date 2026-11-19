@@ -137,7 +137,7 @@ test("switching views keeps a running terminal's scrollback and a streaming chat
   // A chat that is streaming while the owner is away.
   await win.getByTestId("session-row").filter({ hasText: "Chat one" }).click();
   // Both side by side, so both are on screen and can be marked.
-  await win.getByTestId("split-columns").click();
+  await win.getByTestId("dock-split-right").first().click();
   await expect(win.getByTestId("chat")).toBeVisible();
   await expect(win.getByTestId("terminal")).toBeVisible();
   // Mark the live objects: if the view were rebuilt, the marks would be gone.
@@ -259,7 +259,17 @@ test("a long diff draws only the rows near the screen", async () => {
   expect(lines).toBeLessThan(250);
   await expect
     .poll(async () => {
-      await win.getByTestId("diff-line").last().scrollIntoViewIfNeeded();
+      // Whatever scrolls the list (the page, or a dock panel) goes to its end.
+      await win
+        .getByTestId("diff-line")
+        .last()
+        .evaluate((el) => {
+          for (let p = el.parentElement; p; p = p.parentElement) {
+            const oy = getComputedStyle(p).overflowY;
+            if ((oy === "auto" || oy === "scroll") && p.scrollHeight > p.clientHeight)
+              p.scrollTop = p.scrollHeight;
+          }
+        });
       return win.getByTestId("diff-line").last().innerText();
     })
     .toContain("line 699");

@@ -259,6 +259,11 @@ export const channels = {
   "sessions.rename": { req: z.object({ id: z.string(), title: z.string() }), res: z.void() },
   "layout.get": { req: z.object({ key: z.string() }), res: Layout.nullable() },
   "layout.set": { req: z.object({ key: z.string(), layout: Layout }), res: z.void() },
+  /** The saved layout of a docked workbench (its dock library's own JSON), by workbench and project. */
+  "dock.get": { req: z.object({ key: z.string() }), res: z.string().nullable() },
+  "dock.set": { req: z.object({ key: z.string(), json: z.string() }), res: z.void() },
+  "dock.list": { req: z.object({ prefix: z.string() }), res: z.array(z.string()) },
+  "dock.remove": { req: z.object({ key: z.string() }), res: z.void() },
   "hooks.status": {
     req: z.void(),
     res: z.object({
