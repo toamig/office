@@ -28,7 +28,8 @@ const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color:
 
 function NewTask({ onCreated, onClose }: { onCreated: (id: string) => void; onClose: () => void }) {
   useEscape(onClose);
-  const projects = useQuery("projects.list");
+  // The choices are the projects that are git repos, which is known once each project's status has been read.
+  const projects = useQuery("projects.list", undefined, ["project.status"]);
   const workspace = useQuery("workspace.get");
   const pipelines = Object.entries(workspace.data?.workspace?.pipelines ?? {});
   const [projectId, setProjectId] = useState("");

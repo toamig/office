@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { cpSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, repoRoot } from "./helpers";
+import { launch, relayUrl, repoRoot } from "./helpers";
 
 test("the sample channel module is off until enabled with a warning, then receives a notification", async () => {
   const { app, data } = await launch({ world: true, fakeTools: true });
@@ -35,7 +35,7 @@ test("the sample channel module is off until enabled with a warning, then receiv
     }),
   );
   // The page's CSP blocks fetch to localhost, so the hook POST comes from the test process.
-  const post = await fetch("http://127.0.0.1:47999/hook/claude", {
+  const post = await fetch(`${relayUrl(data)}/hook/claude`, {
     method: "POST",
     headers: { authorization: "Bearer e2e-token", "content-type": "application/json" },
     body: JSON.stringify({

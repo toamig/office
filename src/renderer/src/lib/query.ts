@@ -23,6 +23,7 @@ interface Entry {
   inflight: boolean;
   again: boolean;
   frame: number | null;
+  timer: ReturnType<typeof setTimeout> | undefined;
   refs: number;
   usedAt: number;
   listeners: Set<() => void>;
@@ -32,6 +33,8 @@ interface Entry {
 }
 
 const MAX_ENTRIES = 400;
+/** How long a request waits for a frame before the timer asks instead. */
+const FALLBACK_MS = 60;
 const entries = new Map<string, Entry>();
 /** Entries that open views are watching, by the events that make them ask again. */
 const watchers = new Map<EventType, Set<Entry>>();
@@ -81,6 +84,7 @@ function entryFor(channel: ChannelName, payload: unknown): Entry {
     inflight: false,
     again: false,
     frame: null,
+    timer: undefined,
     refs: 0,
     usedAt: Date.now(),
     listeners: new Set(),
@@ -128,13 +132,21 @@ function finish(e: Entry): void {
   }
 }
 
-/** Asks again at the next frame; any number of requests before then are one call. */
+/**
+ * Asks again at the next frame; any number of requests before then are one call. A frame does not come while the
+ * window is hidden or the machine is busy, so a short timer is the fallback that keeps the data from going stale.
+ */
 function schedule(e: Entry): void {
   if (e.frame !== null) return;
-  e.frame = requestAnimationFrame(() => {
+  const run = (): void => {
+    if (e.frame === null) return;
+    cancelAnimationFrame(e.frame);
+    clearTimeout(e.timer);
     e.frame = null;
     fetchNow(e);
-  });
+  };
+  e.frame = requestAnimationFrame(run);
+  e.timer = setTimeout(run, FALLBACK_MS);
 }
 
 function watch(e: Entry, type: EventType): void {
@@ -208,7 +220,10 @@ onMutation(invalidateMounted);
 
 /** Forgets everything cached. Used by tests. */
 export function clearQueryCache(): void {
-  for (const e of entries.values()) if (e.frame !== null) cancelAnimationFrame(e.frame);
+  for (const e of entries.values()) {
+    if (e.frame !== null) cancelAnimationFrame(e.frame);
+    clearTimeout(e.timer);
+  }
   entries.clear();
 }
 

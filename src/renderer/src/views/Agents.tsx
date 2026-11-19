@@ -1,5 +1,5 @@
 import { Archive, LayoutGrid, Play, Rows2, Columns2, Square, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { Layout, SessionRow } from "@shared/models";
 import { Button, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
@@ -159,10 +159,14 @@ export function Agents({ active: visible }: { active: boolean }) {
     }
   }
 
+  // The saved layout is read once per key. A change the owner has already made is newer than what was saved,
+  // so a late answer never replaces it.
+  const changed = useRef(false);
   useEffect(() => {
     let alive = true;
+    changed.current = false;
     void office.invoke("layout.get", { key }).then((loaded) => {
-      if (!alive) return;
+      if (!alive || changed.current) return;
       setLayout(loaded ?? EMPTY);
     });
     return () => {
@@ -171,6 +175,7 @@ export function Agents({ active: visible }: { active: boolean }) {
   }, [key]);
 
   const update = (next: Layout): void => {
+    changed.current = true;
     setLayout(next);
     void office.invoke("layout.set", { key, layout: next });
   };

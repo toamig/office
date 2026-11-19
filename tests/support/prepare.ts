@@ -2,7 +2,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import type { Page } from "@playwright/test";
-import { makeWorld, type World } from "../fixtures/vault/make";
+import { freshWorld, type World } from "../fixtures/vault/make";
 
 export const repoRoot = resolve(__dirname, "../..");
 
@@ -82,7 +82,7 @@ export function prepareLaunch(options: LaunchOptions, relayPort: number): Prepar
   }
   let world: World | undefined;
   if (options.world) {
-    world = makeWorld();
+    world = freshWorld();
     mkdirSync(data, { recursive: true });
     if (options.world === true) {
       // A second launch on the same folder keeps what the first one saved (window bounds, theme).
@@ -170,4 +170,12 @@ export async function pick(
       ? menu.locator(`[data-value="${choice}"]`)
       : menu.getByRole("option", { name: choice.label, exact: true });
   await option.click();
+}
+
+/** The relay's address for a run, read from its settings (the relay takes a free port, so runs never meet). */
+export function relayUrl(data: string): string {
+  const settings = JSON.parse(readFileSync(join(data, "settings.json"), "utf8")) as {
+    relay: { port: number };
+  };
+  return `http://127.0.0.1:${settings.relay.port}`;
 }

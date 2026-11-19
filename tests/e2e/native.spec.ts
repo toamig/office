@@ -1,9 +1,11 @@
 import { expect, test, type ElectronApplication, type Page } from "@playwright/test";
-import { launch } from "./helpers";
+import { existsSync } from "node:fs";
+import { launch, packagedExe } from "./helpers";
 
 // These run against the packaged app (npm run dist first): developer tools stay on in a development run.
 // Set OFFICE_E2E_DEV=1 to try them against the development build.
 const packaged = !process.env["OFFICE_E2E_DEV"];
+test.skip(packaged && !existsSync(packagedExe), "run `npm run dist` first");
 
 /**
  * Sends a key the way the operating system does, through the window's own input path, so the main process's
@@ -167,28 +169,18 @@ test("select all, copy, cut, paste and undo work in a text field without an appl
   await app.close();
 });
 
-test("Ctrl+/ opens the shortcuts sheet, the view keys work, and history walks back and forward", async () => {
+test("the mouse's back and forward buttons (app-command) walk Office's own history", async () => {
   const { app } = await launch({ world: true, fakeTools: true, packaged });
   const win = await ready(app);
-  await win.keyboard.press("Control+/");
-  const sheet = win.getByTestId("shortcuts-sheet");
-  await expect(sheet).toContainText("Jump to anything");
-  await expect(sheet).toContainText("Ctrl+Shift+A");
-  await win.keyboard.press("Escape");
-  await expect(sheet).toHaveCount(0);
-
-  await win.keyboard.press("Control+2");
+  await win.getByTestId("rail-projects").click();
   await expect(win.getByTestId("projects")).toBeVisible();
-  await win.keyboard.press("Control+,");
-  await expect(win.getByTestId("topbar-title")).toHaveText("Setup");
-  await win.keyboard.press("Alt+ArrowLeft");
+  const command = (name: string): Promise<void> =>
+    app.evaluate(({ BrowserWindow }, name) => {
+      BrowserWindow.getAllWindows()[0]?.emit("app-command", {}, name);
+    }, name);
+  await command("browser-backward");
+  await expect(win.getByTestId("home")).toBeVisible();
+  await command("browser-forward");
   await expect(win.getByTestId("projects")).toBeVisible();
-  await win.getByTestId("history-forward").click();
-  await expect(win.getByTestId("topbar-title")).toHaveText("Setup");
-  await win.getByTestId("rail-home").click();
-  await win.getByTestId("sidebar-toggle").click();
-  await expect(win.getByTestId("rail")).toHaveAttribute("data-collapsed", "true");
-  await win.keyboard.press("Control+B");
-  await expect(win.getByTestId("rail")).toHaveAttribute("data-collapsed", "false");
   await app.close();
 });

@@ -125,9 +125,6 @@ test("the shortcuts sheet fits the window without scrolling, and its note is who
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
   await expect(win.getByTestId("topbar")).toBeVisible();
-  await app.evaluate(({ BrowserWindow }) => {
-    BrowserWindow.getAllWindows()[0]?.setBounds({ x: 40, y: 40, width: 1360, height: 860 });
-  });
   await win.keyboard.press("Control+/");
   const sheet = win.getByTestId("shortcuts-sheet");
   await expect(sheet).toBeVisible();

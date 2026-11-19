@@ -276,8 +276,10 @@ export class SessionService {
   }
 
   /** Records that a process for the provider conversation has run, so it can be resumed. */
-  markStarted(id: string): void {
-    this.deps.db.prepare("UPDATE sessions SET conversation_started = 1 WHERE id = ?").run(id);
+  markStarted(id: string, started = true): void {
+    this.deps.db
+      .prepare("UPDATE sessions SET conversation_started = ? WHERE id = ?")
+      .run(started ? 1 : 0, id);
   }
 
   /** Remembers the provider's own conversation id (a Codex thread), which resuming needs. */

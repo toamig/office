@@ -199,10 +199,9 @@ test("switching views keeps a running terminal's scrollback and a streaming chat
   await app.close();
 });
 
-test("a long inbox and a long diff draw only the rows near the screen", async () => {
+test("a long inbox draws only the rows near the screen", async () => {
   const first = await launch({ world: true, fakeTools: true });
-  const { world, base } = first;
-  if (!world) throw new Error("no world");
+  const { base } = first;
   await first.app.firstWindow();
   await first.app.close();
 
@@ -223,14 +222,6 @@ test("a long inbox and a long diff draw only the rows near the screen", async ()
   })();
   db.close();
 
-  // A diff of 700 changed lines in the Alpha repo.
-  const alpha = world.code["alpha"];
-  if (!alpha) throw new Error("no alpha");
-  writeFileSync(
-    join(alpha.work, "README.md"),
-    Array.from({ length: 700 }, (_, i) => `line ${i}`).join("\n") + "\n",
-  );
-
   const second = await launch({ base, fakeTools: true });
   const win = await second.app.firstWindow();
   await win.getByTestId("rail-inbox").click();
@@ -246,7 +237,18 @@ test("a long inbox and a long diff draw only the rows near the screen", async ()
     })
     .toContain("Row 399");
   expect(await win.getByTestId("notification").count()).toBeLessThan(120);
+  await second.app.close();
+});
 
+test("a long diff draws only the rows near the screen", async () => {
+  const { app, page: win, world } = await launch({ world: true, fakeTools: true });
+  const alpha = world?.code["alpha"];
+  if (!alpha) throw new Error("no alpha");
+  // 700 changed lines in the Alpha repo.
+  writeFileSync(
+    join(alpha.work, "README.md"),
+    `${Array.from({ length: 700 }, (_, i) => `line ${i}`).join("\n")}\n`,
+  );
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
   await win.getByTestId("git-tab-changes").click();
@@ -261,5 +263,5 @@ test("a long inbox and a long diff draw only the rows near the screen", async ()
       return win.getByTestId("diff-line").last().innerText();
     })
     .toContain("line 699");
-  await second.app.close();
+  await app.close();
 });

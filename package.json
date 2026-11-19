@@ -16,6 +16,7 @@
     "test": "vitest run",
     "e2e": "electron-vite build && playwright test",
     "e2e:web": "npm run build:web && playwright test -c playwright.web.config.ts",
+    "test:affected": "node scripts/test-affected.mjs",
     "dev:web": "node scripts/dev-web.mjs",
     "dist": "electron-vite build && electron-builder --win nsis",
     "release": "node scripts/release.mjs"

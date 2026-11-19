@@ -1,4 +1,4 @@
-import { cpSync, existsSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -384,6 +384,46 @@ describe("a Claude chat with the fake CLI", () => {
     expect(runs[0]?.args).toContain("--permission-prompt-tool");
     expect(runs[1]?.args).toContain("--resume");
     expect(runs[1]?.args[runs[1].args.indexOf("--resume") + 1]).toBe(row.id);
+    h.chat.stop(row.id);
+  });
+
+  it("starts a chat fresh when it was told to resume a conversation that was never saved", async () => {
+    const h = harness();
+    const log = join(h.dir, "args.log");
+    process.env["FAKE_ARGS_LOG"] = log;
+    const row = h.sessions.start({ providerId: "fake", projectId: "p" });
+    // As if the first program was ended before it saved anything: marked started, but no conversation exists.
+    h.sessions.markStarted(row.id);
+    h.chat.send(row.id, "first words");
+    await until(() => kinds(h, row.id).includes("result"));
+    const runs = readFileSync(log, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { args: string[] });
+    // The program refused the resume; the same message ran again, started fresh, and shows once.
+    expect(runs.at(-1)?.args).toContain("--session-id");
+    expect(kinds(h, row.id).filter((k) => k === "user")).toHaveLength(1);
+    expect(h.sessions.get(row.id).conversationStarted).toBe(true);
+    h.chat.stop(row.id);
+  });
+
+  it("resumes a chat when the conversation it was told to start already exists", async () => {
+    const h = harness();
+    const log = join(h.dir, "args.log");
+    process.env["FAKE_ARGS_LOG"] = log;
+    const row = h.sessions.start({ providerId: "fake", projectId: "p" });
+    h.sessions.markStarted(row.id, false);
+    // The fake CLI keeps conversations under the fake home; this one is already there.
+    const store = join(process.env["OFFICE_HOME"] ?? "", ".fake-claude-sessions");
+    mkdirSync(store, { recursive: true });
+    writeFileSync(join(store, row.id), "");
+    h.chat.send(row.id, "hello again");
+    await until(() => kinds(h, row.id).includes("result"));
+    const runs = readFileSync(log, "utf8")
+      .trim()
+      .split("\n")
+      .map((l) => JSON.parse(l) as { args: string[] });
+    expect(runs.at(-1)?.args).toContain("--resume");
     h.chat.stop(row.id);
   });
 

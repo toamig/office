@@ -1,10 +1,10 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, terminalText } from "./helpers";
+import { launch, relayUrl, terminalText } from "./helpers";
 
 test("a simulated hook POST moves a session to needs-you and raises an urgent notification", async () => {
-  const { app } = await launch({ world: true, fakeTools: true });
+  const { app, data } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
   const session = await win.evaluate(() =>
     window.office.invoke("sessions.start", {
@@ -15,7 +15,7 @@ test("a simulated hook POST moves a session to needs-you and raises an urgent no
   );
 
   const post = (token: string): Promise<number> =>
-    fetch("http://127.0.0.1:47999/hook/claude", {
+    fetch(`${relayUrl(data)}/hook/claude`, {
       method: "POST",
       headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
       body: JSON.stringify({
@@ -50,7 +50,9 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
     "office-relay",
   );
   await win.getByTestId("hooks-confirm").click();
-  await expect(win.getByTestId("hooks-claude")).toContainText("installed");
+  // "not installed" contains "installed", so wait for the words that mean it is done.
+  await expect(win.getByTestId("hooks-claude")).not.toContainText("not installed");
+  await expect(win.getByTestId("hooks-message")).toBeVisible();
   expect(readFileSync(join(home, ".claude", "settings.json"), "utf8")).toContain(
     "office-relay.mjs",
   );

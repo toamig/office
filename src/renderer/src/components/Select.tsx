@@ -204,7 +204,8 @@ export function Select({
         aria-expanded={open}
         aria-controls={open ? listId : undefined}
         aria-label={ariaLabel}
-        title={title}
+        // With no label to show (the choices are not loaded yet) the control still says what it is.
+        title={title ?? (current?.label ? undefined : ariaLabel)}
         disabled={disabled}
         data-testid={testId}
         data-value={selected}

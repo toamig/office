@@ -1,10 +1,18 @@
 import { chromium, type Browser, type BrowserContext, type Page } from "@playwright/test";
 import { spawn, type ChildProcess } from "node:child_process";
+import { appendFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import { join } from "node:path";
 import { prepareLaunch, repoRoot, type LaunchOptions, type Prepared } from "../support/prepare";
 
-export { FAKE_OWNER, pick, repoRoot, terminalText, useCleanGitConfig } from "../support/prepare";
+export {
+  FAKE_OWNER,
+  pick,
+  relayUrl,
+  repoRoot,
+  terminalText,
+  useCleanGitConfig,
+} from "../support/prepare";
 export type { LaunchOptions } from "../support/prepare";
 
 /** The Electron binary: run as plain Node (ELECTRON_RUN_AS_NODE), so the native modules load as built. */
@@ -14,7 +22,8 @@ const HOST_SCRIPT = join(repoRoot, "out-web", "host", "index.js");
 
 let browserPromise: Promise<Browser> | null = null;
 /** One headless Chromium per worker; every test gets its own context in it. */
-const browser = (): Promise<Browser> => (browserPromise ??= chromium.launch({ headless: true }));
+const browser = (): Promise<Browser> =>
+  (browserPromise ??= chromium.launch({ headless: true, args: ["--disable-gpu"] }));
 
 interface Host {
   process: ChildProcess;
@@ -25,7 +34,7 @@ interface Host {
   stop: () => Promise<void>;
 }
 
-function startHost(env: Record<string, string>): Promise<Host> {
+function startHost(env: Record<string, string>, logFile: string): Promise<Host> {
   return new Promise((resolve, reject) => {
     const child = spawn(electronBinary(), [HOST_SCRIPT], {
       env: {
@@ -40,6 +49,7 @@ function startHost(env: Record<string, string>): Promise<Host> {
     let text = "";
     let ready = false;
     const onData = (chunk: Buffer): void => {
+      appendFileSync(logFile, chunk);
       text += chunk.toString();
       if (text.length > 20_000) text = text.slice(-10_000);
       if (ready) return;
@@ -102,15 +112,27 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
   // Hosts run side by side, so each takes free ports (the relay's included).
   const prepared = prepareLaunch(options, 0);
   const { env, ...rest } = prepared;
-  const host = await startHost(env);
+  const host = await startHost(env, join(rest.base, "host.log"));
   const context: BrowserContext = await (
     await browser()
   ).newContext({
     viewport: { width: 1360, height: 860 },
   });
   const page = await context.newPage();
-  const errors: string[] = [];
-  page.on("pageerror", (err) => errors.push(err.message));
+  page.on("pageerror", (err) =>
+    appendFileSync(
+      join(rest.base, "page.log"),
+      `pageerror: ${err.message}
+`,
+    ),
+  );
+  page.on("console", (m) =>
+    appendFileSync(
+      join(rest.base, "page.log"),
+      `${m.type()}: ${m.text()}
+`,
+    ),
+  );
   await page.goto(`http://127.0.0.1:${host.port}/?token=${host.token}`);
 
   const control = async (op: string, args?: unknown): Promise<unknown> =>

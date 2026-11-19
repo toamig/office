@@ -85,10 +85,7 @@ test("a required step stays closed until it is met: tools missing, then not logg
   await expect(win.getByTestId("welcome-reason")).toContainText("Install Claude Code or Codex");
 
   // Installed, but not logged in: the reason changes and Log in appears.
-  await app.evaluate((_electron, claude) => {
-    process.env["OFFICE_BIN_CLAUDE"] = claude;
-    process.env["FAKE_LOGGED_IN"] = "0";
-  }, fakeClaude);
+  await app.setEnv({ OFFICE_BIN_CLAUDE: fakeClaude, FAKE_LOGGED_IN: "0" });
   await win.getByTestId("tools-check").click();
   await expect(win.getByTestId("welcome-reason")).toContainText("Log in to Claude Code or Codex");
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();
@@ -101,9 +98,7 @@ test("a required step stays closed until it is met: tools missing, then not logg
   await expect(win.getByTestId("rail")).toHaveCount(0);
 
   // Logged in: Check again, and Continue is on.
-  await app.evaluate(() => {
-    process.env["FAKE_LOGGED_IN"] = "1";
-  });
+  await app.setEnv({ FAKE_LOGGED_IN: "1" });
   await win.getByTestId("tools-check").click();
   await expect(claude).toContainText("logged in");
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();

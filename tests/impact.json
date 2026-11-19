@@ -1,0 +1,307 @@
+{
+  "_about": "Which e2e specs cover which source folders (plan 1, rule 3). A key is a path prefix; the longest match wins. 'everything' means the full web run (and the Electron run for the ones marked electron). Keep it up to date with each new spec: a unit test fails when a spec or a source folder is missing.",
+  "everything": {
+    "web": [
+      "src/shared",
+      "src/main/core",
+      "src/main/context.ts",
+      "src/main/handlers.ts",
+      "src/main/shell-handlers.ts",
+      "src/main/shell-platform.ts",
+      "src/host",
+      "src/preload",
+      "src/renderer/src/bridge",
+      "src/renderer/src/lib",
+      "src/renderer/src/stores",
+      "src/renderer/src/components",
+      "src/renderer/src/styles.css",
+      "src/renderer/src/App.tsx",
+      "src/renderer/src/main.tsx",
+      "src/renderer/src/web-entry.ts",
+      "src/renderer/index.html",
+      "src/renderer/web.html",
+      "tests/support",
+      "tests/fixtures",
+      "tests/web/helpers.ts",
+      "tests/impact.json",
+      "vite.web.config.ts",
+      "vite.host.config.ts",
+      "playwright.web.config.ts",
+      "package.json",
+      "tsconfig.json"
+    ],
+    "electron": [
+      "src/shared",
+      "src/main/core",
+      "src/main/context.ts",
+      "src/main/handlers.ts",
+      "src/main/shell-handlers.ts",
+      "src/main/shell-platform.ts",
+      "src/preload",
+      "src/renderer/src/styles.css",
+      "tests/support",
+      "tests/fixtures",
+      "tests/e2e/helpers.ts",
+      "electron.vite.config.ts",
+      "electron-builder.yml",
+      "playwright.config.ts",
+      "package.json"
+    ]
+  },
+  "areas": {
+    "src/main/index.ts": {
+      "electron": [
+        "tests/e2e/chrome.spec.ts",
+        "tests/e2e/native.spec.ts",
+        "tests/e2e/smoke.spec.ts",
+        "tests/e2e/packaged.spec.ts"
+      ]
+    },
+    "src/main/chrome.ts": {
+      "electron": ["tests/e2e/chrome.spec.ts", "tests/e2e/native.spec.ts"]
+    },
+    "src/main/e2e.ts": {
+      "electron": ["tests/e2e/smoke.spec.ts", "tests/e2e/chrome.spec.ts"]
+    },
+    "src/main/electron-platform.ts": {
+      "electron": ["tests/e2e/preview.spec.ts", "tests/e2e/chrome.spec.ts"]
+    },
+    "src/main/preview.ts": {
+      "electron": ["tests/e2e/preview.spec.ts"]
+    },
+    "src/main/modules/ask": {
+      "web": ["tests/web/brain.spec.ts"]
+    },
+    "src/main/modules/brief": {
+      "web": ["tests/web/brain.spec.ts", "tests/web/home.spec.ts"]
+    },
+    "src/main/modules/chat": {
+      "web": [
+        "tests/web/chat.spec.ts",
+        "tests/web/polish.spec.ts",
+        "tests/web/permissions.spec.ts",
+        "tests/web/speed.spec.ts"
+      ]
+    },
+    "src/main/modules/explore": {
+      "web": ["tests/web/explore.spec.ts"]
+    },
+    "src/main/modules/git": {
+      "web": [
+        "tests/web/git.spec.ts",
+        "tests/web/m3-flow.spec.ts",
+        "tests/web/projects.spec.ts",
+        "tests/web/home.spec.ts"
+      ]
+    },
+    "src/main/modules/github": {
+      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts"]
+    },
+    "src/main/modules/notes": {
+      "web": ["tests/web/projects.spec.ts", "tests/web/brain.spec.ts"]
+    },
+    "src/main/modules/notify": {
+      "web": [
+        "tests/web/inbox.spec.ts",
+        "tests/web/hooks.spec.ts",
+        "tests/web/preferences.spec.ts",
+        "tests/web/permissions.spec.ts",
+        "tests/web/home.spec.ts"
+      ]
+    },
+    "src/main/modules/projects": {
+      "web": ["tests/web/projects.spec.ts"]
+    },
+    "src/main/modules/providers": {
+      "web": [
+        "tests/web/agents.spec.ts",
+        "tests/web/chat.spec.ts",
+        "tests/web/roles.spec.ts",
+        "tests/web/welcome.spec.ts"
+      ]
+    },
+    "src/main/modules/runs": {
+      "web": [
+        "tests/web/tasks.spec.ts",
+        "tests/web/permissions.spec.ts",
+        "tests/web/setup.spec.ts",
+        "tests/web/brain.spec.ts"
+      ]
+    },
+    "src/main/modules/search": {
+      "web": ["tests/web/polish.spec.ts", "tests/web/shortcuts.spec.ts", "tests/web/home.spec.ts"]
+    },
+    "src/main/modules/sessions": {
+      "web": [
+        "tests/web/agents.spec.ts",
+        "tests/web/capture.spec.ts",
+        "tests/web/m2-flow.spec.ts",
+        "tests/web/hooks.spec.ts",
+        "tests/web/terminal.spec.ts",
+        "tests/web/chat.spec.ts"
+      ]
+    },
+    "src/main/modules/setup": {
+      "web": [
+        "tests/web/setup.spec.ts",
+        "tests/web/welcome.spec.ts",
+        "tests/web/hooks.spec.ts",
+        "tests/web/smoke.spec.ts"
+      ]
+    },
+    "src/main/modules/tasks": {
+      "web": [
+        "tests/web/tasks.spec.ts",
+        "tests/web/board.spec.ts",
+        "tests/web/roles.spec.ts",
+        "tests/web/setup.spec.ts"
+      ]
+    },
+    "src/main/modules/vault": {
+      "web": [
+        "tests/web/brain.spec.ts",
+        "tests/web/board.spec.ts",
+        "tests/web/home.spec.ts",
+        "tests/web/capture.spec.ts",
+        "tests/web/m2-flow.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/Agents.tsx": {
+      "web": [
+        "tests/web/agents.spec.ts",
+        "tests/web/capture.spec.ts",
+        "tests/web/polish.spec.ts",
+        "tests/web/speed.spec.ts",
+        "tests/web/m2-flow.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/agents": {
+      "web": [
+        "tests/web/agents.spec.ts",
+        "tests/web/terminal.spec.ts",
+        "tests/web/capture.spec.ts",
+        "tests/web/hooks.spec.ts",
+        "tests/web/m2-flow.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/Board.tsx": {
+      "web": ["tests/web/board.spec.ts", "tests/web/tasks.spec.ts", "tests/web/roles.spec.ts"]
+    },
+    "src/renderer/src/views/board": {
+      "web": ["tests/web/board.spec.ts", "tests/web/tasks.spec.ts", "tests/web/roles.spec.ts"]
+    },
+    "src/renderer/src/views/Brain.tsx": {
+      "web": ["tests/web/brain.spec.ts"]
+    },
+    "src/renderer/src/views/brain": {
+      "web": ["tests/web/brain.spec.ts"]
+    },
+    "src/renderer/src/views/chat": {
+      "web": ["tests/web/chat.spec.ts", "tests/web/polish.spec.ts", "tests/web/permissions.spec.ts"]
+    },
+    "src/renderer/src/views/Explore.tsx": {
+      "web": ["tests/web/explore.spec.ts"]
+    },
+    "src/renderer/src/views/explore": {
+      "web": ["tests/web/explore.spec.ts"]
+    },
+    "src/renderer/src/views/Git.tsx": {
+      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts"]
+    },
+    "src/renderer/src/views/git": {
+      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts", "tests/web/speed.spec.ts"]
+    },
+    "src/renderer/src/views/Home.tsx": {
+      "web": ["tests/web/home.spec.ts", "tests/web/board.spec.ts", "tests/web/brain.spec.ts"]
+    },
+    "src/renderer/src/views/home": {
+      "web": ["tests/web/home.spec.ts", "tests/web/permissions.spec.ts", "tests/web/board.spec.ts"]
+    },
+    "src/renderer/src/views/Inbox.tsx": {
+      "web": ["tests/web/inbox.spec.ts", "tests/web/speed.spec.ts", "tests/web/permissions.spec.ts"]
+    },
+    "src/renderer/src/views/PreviewTab.tsx": {
+      "electron": ["tests/e2e/preview.spec.ts"]
+    },
+    "src/renderer/src/views/ProjectPage.tsx": {
+      "web": ["tests/web/projects.spec.ts", "tests/web/board.spec.ts", "tests/web/git.spec.ts"]
+    },
+    "src/renderer/src/views/project": {
+      "web": ["tests/web/projects.spec.ts", "tests/web/tasks.spec.ts"]
+    },
+    "src/renderer/src/views/Projects.tsx": {
+      "web": ["tests/web/projects.spec.ts"]
+    },
+    "src/renderer/src/views/Setup.tsx": {
+      "web": [
+        "tests/web/setup.spec.ts",
+        "tests/web/preferences.spec.ts",
+        "tests/web/hooks.spec.ts",
+        "tests/web/modules.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/setup": {
+      "web": [
+        "tests/web/setup.spec.ts",
+        "tests/web/welcome.spec.ts",
+        "tests/web/preferences.spec.ts",
+        "tests/web/hooks.spec.ts",
+        "tests/web/modules.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/welcome": {
+      "web": ["tests/web/welcome.spec.ts", "tests/web/setup.spec.ts", "tests/web/smoke.spec.ts"]
+    },
+    "tests/unit": {
+      "web": [],
+      "electron": []
+    },
+    "tests/web": {
+      "web": [],
+      "electron": []
+    },
+    "tests/e2e": {
+      "web": [],
+      "electron": []
+    },
+    "scripts": {
+      "web": [],
+      "electron": []
+    },
+    "resources": {
+      "web": ["tests/web/hooks.spec.ts", "tests/web/permissions.spec.ts"],
+      "electron": ["tests/e2e/packaged.spec.ts"]
+    },
+    "examples": {
+      "web": ["tests/web/setup.spec.ts", "tests/web/welcome.spec.ts"]
+    },
+    "README.md": {
+      "web": [],
+      "electron": []
+    },
+    "eslint.config.mjs": {
+      "web": [],
+      "electron": []
+    },
+    "vitest.config.mts": {
+      "web": [],
+      "electron": []
+    },
+    ".gitignore": {
+      "web": [],
+      "electron": []
+    },
+    "src/renderer/src/components": {
+      "web": [
+        "tests/web/a11y.spec.ts",
+        "tests/web/look.spec.ts",
+        "tests/web/views.spec.ts",
+        "tests/web/polish.spec.ts"
+      ]
+    },
+    "src/renderer/src/env.d.ts": {
+      "web": [],
+      "electron": []
+    }
+  }
+}

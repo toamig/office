@@ -15,7 +15,7 @@ import { writeTextFile } from "../../core/settings";
 import { nowIso } from "../../core/util";
 import type { PermissionBroker } from "../runs/permissions";
 import type { ProviderRegistry } from "../providers/registry";
-import type { RunPermission } from "../providers/types";
+import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
 import { ClaudeChatParser, CodexChatParser } from "./events";
 
@@ -33,6 +33,9 @@ export interface ChatServiceDeps {
 /** Claude Code's permission modes a chat can use; "default" sends no flag. */
 export const PERMISSION_MODES = ["default", "acceptEdits", "plan", "auto"];
 
+/** How many times a start that the program refuses over the conversation flag is tried, flipping the flag each time. */
+const MAX_START_ATTEMPTS = 3;
+
 interface Live {
   handle: StreamHandle;
   /** True while a turn runs in this process. */
@@ -41,6 +44,8 @@ interface Live {
   stopped: boolean;
   kind: "claude" | "codex";
   started: number;
+  /** The message this process was started for, so a start with the wrong conversation flag can be redone. */
+  turn?: { text: string; images: ChatImage[]; attempts: number };
 }
 
 /**
@@ -172,8 +177,6 @@ export class ChatService {
     if (!provider?.chatCommand) throw new IpcFailure("no-chat", "This tool has no chat mode");
     if (options) this.saveOptions(id, { ...this.options(id), ...options });
     const picked = this.options(id);
-    // --resume only for a conversation that exists, --session-id only for one that does not.
-    const resume = row.conversationStarted;
     this.append(id, { t: "user", id: `u${Date.now()}`, text, images: images.length });
     this.append(id, { t: "turn-start" });
     this.deps.sessions.setStatus(id, "working");
@@ -185,31 +188,7 @@ export class ChatService {
     const kind = provider.chatKind ?? "claude";
     if (kind === "claude") {
       let live = this.live.get(id);
-      if (!live) {
-        const spec = provider.chatCommand({
-          cwd: row.cwd,
-          officeSessionId: id,
-          resume,
-          ...(role ? { role } : {}),
-          permission,
-          ...(picked.model ? { model: picked.model } : {}),
-          ...(picked.permissionMode && picked.permissionMode !== "default"
-            ? { permissionMode: picked.permissionMode }
-            : {}),
-          runDir: this.dir(id),
-          addDirs: this.addDirs(id),
-        });
-        const handle = spawnStream(spec.cmd, spec.args, {
-          cwd: row.cwd,
-          ...(spec.env ? { env: spec.env } : {}),
-          keepStdin: true,
-        });
-        live = { handle, working: true, stopped: false, kind, started: Date.now() };
-        this.live.set(id, live);
-        // A process for this conversation has run, so from now on it is resumed, never started again.
-        this.deps.sessions.markStarted(id);
-        void this.readClaude(id, live);
-      }
+      if (!live) live = this.startClaude(id, row, provider, { text, images, attempts: 1 });
       live.working = true;
       live.handle.write(JSON.stringify(userMessage(text, images)));
       return;
@@ -234,6 +213,51 @@ export class ChatService {
     const live: Live = { handle, working: true, stopped: false, kind, started: Date.now() };
     this.live.set(id, live);
     void this.readCodex(id, live);
+  }
+
+  /** Starts the program of a Claude chat. It is resumed if its conversation exists, and started fresh if not. */
+  private startClaude(
+    id: string,
+    row: SessionRow,
+    provider: Provider,
+    turn: NonNullable<Live["turn"]>,
+  ): Live {
+    const picked = this.options(id);
+    const role = this.role(row);
+    const permission: RunPermission = role?.readOnly
+      ? { kind: "readonly" }
+      : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
+    const spec = provider.chatCommand!({
+      cwd: row.cwd,
+      officeSessionId: id,
+      resume: row.conversationStarted,
+      ...(role ? { role } : {}),
+      permission,
+      ...(picked.model ? { model: picked.model } : {}),
+      ...(picked.permissionMode && picked.permissionMode !== "default"
+        ? { permissionMode: picked.permissionMode }
+        : {}),
+      runDir: this.dir(id),
+      addDirs: this.addDirs(id),
+    });
+    const handle = spawnStream(spec.cmd, spec.args, {
+      cwd: row.cwd,
+      ...(spec.env ? { env: spec.env } : {}),
+      keepStdin: true,
+    });
+    const live: Live = {
+      handle,
+      working: true,
+      stopped: false,
+      kind: "claude",
+      started: Date.now(),
+      turn,
+    };
+    this.live.set(id, live);
+    // A process for this conversation has run, so from now on it is resumed, never started again.
+    this.deps.sessions.markStarted(id);
+    void this.readClaude(id, live);
+    return live;
   }
 
   private async readClaude(id: string, live: Live): Promise<void> {
@@ -286,6 +310,32 @@ export class ChatService {
   private async ended(id: string, live: Live): Promise<void> {
     const exit = await live.handle.exit;
     if (this.live.get(id) === live) this.live.delete(id);
+    // The program refused the conversation flag: it was started to resume a conversation that was never saved
+    // (it was ended before it saved anything), or to start one that exists. Start it again the other way; a
+    // program that was just stopped can still be saving as it dies, so the flag may need to turn more than once.
+    const wrong = /No conversation found/i.test(exit.stderr)
+      ? false
+      : /already in use/i.test(exit.stderr)
+        ? true
+        : null;
+    if (
+      wrong !== null &&
+      live.working &&
+      !live.stopped &&
+      live.turn &&
+      live.turn.attempts < MAX_START_ATTEMPTS
+    ) {
+      const provider = this.deps.providers.get(this.session(id).provider);
+      if (provider?.chatCommand) {
+        this.deps.sessions.markStarted(id, wrong);
+        const again = this.startClaude(id, this.session(id), provider, {
+          ...live.turn,
+          attempts: live.turn.attempts + 1,
+        });
+        again.handle.write(JSON.stringify(userMessage(live.turn.text, live.turn.images)));
+        return;
+      }
+    }
     this.deps.broker.cancelRun(id);
     if (live.working && !live.stopped) {
       this.append(id, {

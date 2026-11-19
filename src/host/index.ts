@@ -88,6 +88,8 @@ async function main(): Promise<void> {
   process.stdin.on("end", () => void shutdown());
   process.stdin.resume();
 
+  // What the app does in the background after it starts is done before a test begins, so no test races it.
+  await ctx.projects.refreshAll();
   console.log(`OFFICE_HOST_READY ${JSON.stringify({ port: server.port, token })}`);
 }
 
