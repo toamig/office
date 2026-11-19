@@ -16,12 +16,15 @@ export function PathField({
   onChange,
   testId,
   pickTitle,
+  onCommit,
 }: {
   label: string;
   value: string;
   onChange: (v: string) => void;
   testId: string;
   pickTitle: string;
+  /** The value is final: Enter, leaving the field, or a folder picked with Browse. */
+  onCommit?: (value: string) => void;
 }) {
   return (
     <label className="mb-2 flex items-center gap-2">
@@ -31,13 +34,25 @@ export function PathField({
         style={fieldStyle}
         value={value}
         onChange={(e) => onChange(e.target.value)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") onCommit?.(value);
+        }}
+        onBlur={(e) => {
+          // Moving to the buttons that belong to the field (Save, Undo) is not leaving it.
+          if ((e.relatedTarget as HTMLElement | null)?.closest("[data-field-action]")) return;
+          onCommit?.(value);
+        }}
         data-testid={testId}
         aria-label={label}
       />
       <Button
         type="button"
         onClick={() =>
-          void office.invoke("setup.pickFolder", { title: pickTitle }).then((p) => p && onChange(p))
+          void office.invoke("setup.pickFolder", { title: pickTitle }).then((p) => {
+            if (!p) return;
+            onChange(p);
+            onCommit?.(p);
+          })
         }
       >
         <FolderOpen size={13} /> Browse

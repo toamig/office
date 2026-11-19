@@ -146,7 +146,7 @@ for (const only of ["light", "dark"] as const)
       await win.getByTestId("welcome-continue").click();
       await shoot(win, "welcome-2-projects", theme);
       await win.getByTestId("setup-projects").fill(world.projectsRoot);
-      await win.getByTestId("setup-projects-save").click();
+      await win.getByTestId("setup-projects").press("Enter");
       await win.getByTestId("welcome-continue").click();
       await expect(win.getByTestId("tool-row")).toHaveCount(5);
       await shoot(win, "welcome-3-tools", theme);
@@ -156,3 +156,34 @@ for (const only of ["light", "dark"] as const)
       await app.close();
     }
   });
+
+test("the setup dialogs and the projects folder feedback", async () => {
+  mkdirSync(out, { recursive: true });
+  const { app, page: win, world, base } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  // The hook install dialog, in plain words.
+  await win.getByTestId("rail-setup").click();
+  await win.getByTestId("install-claude").click();
+  await expect(win.getByTestId("hooks-consent")).toBeVisible();
+  await shoot(win, "hooks-dialog", "light");
+  await win.getByTestId("hooks-diff-toggle").click();
+  await shoot(win, "hooks-dialog-diff", "light");
+  await win.getByTestId("hooks-cancel").click();
+  // The tool login dialog.
+  await app.setEnv({ FAKE_LOGGED_IN: "0" });
+  await win.getByTestId("tools-check").click();
+  await win.getByTestId("tool-login").first().click();
+  await expect(win.getByTestId("tool-dialog")).toBeVisible();
+  await shoot(win, "tool-dialog", "light");
+  await win.getByTestId("tool-dialog-close").click();
+  // The projects folder with everything missing, and the Projects page.
+  const empty = join(base, "nothing");
+  mkdirSync(empty, { recursive: true });
+  await win.getByTestId("setup-projects").fill(empty);
+  await win.getByTestId("setup-projects").press("Enter");
+  await shoot(win, "projects-folder-none", "light");
+  await win.getByTestId("projects-use-anyway").click();
+  await win.getByTestId("rail-projects").click();
+  await shoot(win, "projects-missing", "light");
+  await app.close();
+});

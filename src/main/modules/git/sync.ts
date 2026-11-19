@@ -92,7 +92,7 @@ export async function syncRepo(path: string): Promise<RepoOutcome> {
 
   if (status.ahead > 0) {
     if (status.files.length > 0) {
-      const reason = `${status.ahead} commit(s) to push, but the working tree has uncommitted changes`;
+      const reason = `${status.ahead} commit(s) to push, but the working tree has uncommitted changes (${filesNote(status.files.map((f) => f.path))})`;
       return pulled
         ? { action: "pulled", reason: `pulled; ${reason}` }
         : { action: "skipped", reason };
@@ -112,6 +112,12 @@ export async function syncRepo(path: string): Promise<RepoOutcome> {
 
 const HUB_PAD = 26;
 
+/** The first few file names, for a message that says what is in the way. */
+export function filesNote(paths: string[], shown = 3): string {
+  const head = paths.slice(0, shown).join(", ");
+  return paths.length > shown ? `${head} and ${paths.length - shown} more` : head;
+}
+
 /** Turns the text printed by `node tools/hub.mjs auto` into one result per nested repo. */
 export function parseHubOutput(text: string): SyncRepoResult[] {
   const byFolder = new Map<string, SyncRepoResult>();
@@ -125,7 +131,9 @@ export function parseHubOutput(text: string): SyncRepoResult[] {
     const existing = byFolder.get(id);
     byFolder.set(
       id,
-      existing ? mergeResults(existing, incoming) : { id, name: folder, ...incoming },
+      existing
+        ? mergeResults(existing, incoming)
+        : { id, name: folder === "." ? "Brain hub" : folder, ...incoming },
     );
   }
   return [...byFolder.values()];

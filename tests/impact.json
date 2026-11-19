@@ -91,7 +91,8 @@
         "tests/web/git.spec.ts",
         "tests/web/m3-flow.spec.ts",
         "tests/web/projects.spec.ts",
-        "tests/web/home.spec.ts"
+        "tests/web/home.spec.ts",
+        "tests/web/folders.spec.ts"
       ]
     },
     "src/main/modules/github": {
@@ -110,7 +111,7 @@
       ]
     },
     "src/main/modules/projects": {
-      "web": ["tests/web/projects.spec.ts"]
+      "web": ["tests/web/projects.spec.ts", "tests/web/folders.spec.ts"]
     },
     "src/main/modules/providers": {
       "web": [
@@ -146,7 +147,8 @@
         "tests/web/setup.spec.ts",
         "tests/web/welcome.spec.ts",
         "tests/web/hooks.spec.ts",
-        "tests/web/smoke.spec.ts"
+        "tests/web/smoke.spec.ts",
+        "tests/web/folders.spec.ts"
       ]
     },
     "src/main/modules/tasks": {
@@ -230,14 +232,15 @@
       "web": ["tests/web/projects.spec.ts", "tests/web/tasks.spec.ts"]
     },
     "src/renderer/src/views/Projects.tsx": {
-      "web": ["tests/web/projects.spec.ts"]
+      "web": ["tests/web/projects.spec.ts", "tests/web/folders.spec.ts"]
     },
     "src/renderer/src/views/Setup.tsx": {
       "web": [
         "tests/web/setup.spec.ts",
         "tests/web/preferences.spec.ts",
         "tests/web/hooks.spec.ts",
-        "tests/web/modules.spec.ts"
+        "tests/web/modules.spec.ts",
+        "tests/web/folders.spec.ts"
       ]
     },
     "src/renderer/src/views/setup": {
@@ -246,11 +249,17 @@
         "tests/web/welcome.spec.ts",
         "tests/web/preferences.spec.ts",
         "tests/web/hooks.spec.ts",
-        "tests/web/modules.spec.ts"
+        "tests/web/modules.spec.ts",
+        "tests/web/folders.spec.ts"
       ]
     },
     "src/renderer/src/views/welcome": {
-      "web": ["tests/web/welcome.spec.ts", "tests/web/setup.spec.ts", "tests/web/smoke.spec.ts"]
+      "web": [
+        "tests/web/welcome.spec.ts",
+        "tests/web/setup.spec.ts",
+        "tests/web/smoke.spec.ts",
+        "tests/web/folders.spec.ts"
+      ]
     },
     "tests/unit": {
       "web": [],

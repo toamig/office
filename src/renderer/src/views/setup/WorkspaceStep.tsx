@@ -1,5 +1,6 @@
 import { useState } from "react";
 import type { WorkspaceInspection } from "@shared/models";
+import { useUnsaved } from "../../components/LeaveGuard";
 import { Button, Chip, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { fieldClass, fieldStyle, PathField } from "./PathField";
@@ -18,6 +19,13 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
   const [create, setCreate] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  // A folder that is chosen but not yet used is a change that is not saved.
+  useUnsaved(
+    "workspace-folder",
+    inspection
+      ? "The workspace folder you chose is not used until you click Use this workspace."
+      : null,
+  );
 
   const guard = async (work: () => Promise<void>): Promise<void> => {
     setError(null);
@@ -93,6 +101,7 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
                 label="Workspace folder"
                 value={root}
                 onChange={setRoot}
+                onCommit={(v) => v && void chooseFolder(v)}
                 testId="setup-root"
                 pickTitle="Workspace repo folder"
               />

@@ -3,6 +3,7 @@ import { useState } from "react";
 import type { SetupState } from "@shared/models";
 import { Button } from "../../components/ui";
 import { office } from "../../lib/ipc";
+import { useUi } from "../../stores/ui";
 import { HooksPanel } from "../setup/HooksPanel";
 import { ProjectsStep } from "../setup/ProjectsStep";
 import { ToolsStep } from "../setup/ToolsStep";
@@ -54,7 +55,8 @@ export function Welcome({ state }: { state: SetupState }) {
     if (next) setStep(next.id);
   };
   const last = index === state.steps.length - 1;
-  const blocked = here?.required && !here.met ? here.reason : null;
+  const unsaved = useUi((s) => Object.values(s.unsaved)[0]);
+  const blocked = here?.required && !here.met ? here.reason : (unsaved ?? null);
   const copy = COPY[step];
 
   return (

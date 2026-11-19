@@ -22,6 +22,13 @@ test("the preview pane opens a local page, goes back and forward, and refuses ot
     await win.getByTestId("tab-preview").click();
     await expect(win.getByTestId("preview-tab")).toBeVisible();
 
+    // The empty field shows a hint, not a value, and Go waits for an address.
+    await expect(win.getByTestId("preview-url")).toHaveAttribute(
+      "placeholder",
+      "For example localhost:5173",
+    );
+    await expect(win.getByTestId("preview-go")).toBeDisabled();
+
     await win.getByTestId("preview-url").fill(base);
     await win.getByTestId("preview-go").click();
     await expect

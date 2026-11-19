@@ -3,12 +3,13 @@ import { join, resolve } from "node:path";
 import type { SyncReport, SyncRepoResult } from "../../../shared/models";
 import type { Project, Workspace } from "../../../shared/types";
 import { run } from "../../core/exec";
-import { mapLimit, nowIso } from "../../core/util";
+import { mapLimit, nowIso, projectFolder } from "../../core/util";
 import { parseHubOutput, syncRepo } from "./sync";
 
 export interface SyncAllDeps {
   workspace: () => Workspace | null;
   projectsRoot: () => string;
+  projectPaths?: () => Record<string, string>;
   workspaceRoot: () => string;
   onReport?: (report: SyncReport) => void | Promise<void>;
   /** Called after each repo finished, so project status can be refreshed. */
@@ -60,7 +61,7 @@ export async function syncAll(deps: SyncAllDeps): Promise<SyncReport> {
     const projects: Array<{ project: Project; path: string }> = [];
     for (const project of workspace.projects) {
       if (project.archived) continue;
-      const path = resolve(deps.projectsRoot(), project.path);
+      const path = projectFolder(deps.projectsRoot(), project, deps.projectPaths?.());
       if (hubRoot && sameFolder(path, hubRoot)) continue; // covered by the hub tool
       projects.push({ project, path });
     }
@@ -73,7 +74,7 @@ export async function syncAll(deps: SyncAllDeps): Promise<SyncReport> {
                 id: project.id,
                 name: project.name,
                 action: "skipped" as const,
-                reason: "not a git repo",
+                reason: existsSync(path) ? "not a git repo" : `folder missing (${path})`,
               },
             ];
           }
@@ -97,7 +98,7 @@ export async function syncProject(deps: SyncAllDeps, projectId: string): Promise
   const project = workspace?.projects.find((p) => p.id === projectId);
   const results: SyncRepoResult[] = [];
   if (project && workspace) {
-    const path = resolve(deps.projectsRoot(), project.path);
+    const path = projectFolder(deps.projectsRoot(), project, deps.projectPaths?.());
     const isHub = workspace.vault.kind === "brain-hub" && sameFolder(path, deps.workspaceRoot());
     if (isHub) results.push(...(await syncHub(deps.workspaceRoot())));
     else if (!existsSync(join(path, ".git"))) {
@@ -105,7 +106,7 @@ export async function syncProject(deps: SyncAllDeps, projectId: string): Promise
         id: project.id,
         name: project.name,
         action: "skipped",
-        reason: "not a git repo",
+        reason: existsSync(path) ? "not a git repo" : `folder missing (${path})`,
       });
     } else {
       results.push({ id: project.id, name: project.name, ...(await syncRepo(path)) });

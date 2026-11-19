@@ -37,7 +37,7 @@ test("an empty app-data folder opens the welcome flow, with no sidebar, and walk
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();
   await expect(win.getByTestId("welcome-reason")).toContainText("Choose the folder your projects");
   await win.getByTestId("setup-projects").fill(world.projectsRoot);
-  await win.getByTestId("setup-projects-save").click();
+  await win.getByTestId("setup-projects").press("Enter");
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();
   await win.getByTestId("welcome-continue").click();
 

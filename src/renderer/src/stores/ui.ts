@@ -33,6 +33,13 @@ interface UiState {
   navigate: (view: ViewId, params?: Record<string, string>) => void;
   back: () => void;
   forward: () => void;
+  /** Changes a page holds that are not saved yet, by field: leaving the page asks first. */
+  unsaved: Record<string, string>;
+  setUnsaved: (key: string, message: string | null) => void;
+  /** Where the owner was going when the unsaved warning stopped them. */
+  pendingLeave: (() => void) | null;
+  stayHere: () => void;
+  leaveAnyway: () => void;
   sidebarCollapsed: boolean;
   setSidebarCollapsed: (collapsed: boolean) => void;
   syncing: boolean;
@@ -53,7 +60,27 @@ export const useUi = create<UiState>((set, get) => ({
   history: [{ view: "home", params: {} }],
   at: 0,
   visits: 0,
+  unsaved: {},
+  pendingLeave: null,
+  setUnsaved: (key, message) =>
+    set((s) => {
+      const next = { ...s.unsaved };
+      if (message === null) delete next[key];
+      else next[key] = message;
+      return { unsaved: next };
+    }),
+  stayHere: () => set({ pendingLeave: null }),
+  leaveAnyway: () => {
+    const go = get().pendingLeave;
+    set({ pendingLeave: null, unsaved: {} });
+    go?.();
+  },
   navigate: (view, params = {}) => {
+    // Unsaved changes on this page: ask before going to another one.
+    if (view !== get().view && Object.keys(get().unsaved).length > 0) {
+      set({ pendingLeave: () => get().navigate(view, params) });
+      return;
+    }
     const next: Place = { view, params };
     const { history, at } = get();
     const here = history[at];
@@ -66,11 +93,19 @@ export const useUi = create<UiState>((set, get) => ({
   back: () => {
     const { history, at } = get();
     const to = history[at - 1];
+    if (to && to.view !== get().view && Object.keys(get().unsaved).length > 0) {
+      set({ pendingLeave: () => get().back() });
+      return;
+    }
     if (to) set({ view: to.view, params: to.params, at: at - 1, visits: get().visits + 1 });
   },
   forward: () => {
     const { history, at } = get();
     const to = history[at + 1];
+    if (to && to.view !== get().view && Object.keys(get().unsaved).length > 0) {
+      set({ pendingLeave: () => get().forward() });
+      return;
+    }
     if (to) set({ view: to.view, params: to.params, at: at + 1, visits: get().visits + 1 });
   },
   sidebarCollapsed: false,

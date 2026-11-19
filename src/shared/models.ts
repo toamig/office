@@ -313,6 +313,22 @@ export const SetupState = z.object({
 });
 export type SetupState = z.infer<typeof SetupState>;
 
+/** Which of the workspace's projects exist under a candidate projects folder. */
+export const FolderScan = z.object({
+  total: z.number(),
+  found: z.array(z.string()),
+  missing: z.array(z.string()),
+});
+export type FolderScan = z.infer<typeof FolderScan>;
+
+export const RootSuggestion = z.object({
+  /** The best folder, or null when none of the places looked at holds any of the projects. */
+  best: z.string().nullable(),
+  total: z.number(),
+  candidates: z.array(z.object({ path: z.string(), found: z.number(), total: z.number() })),
+});
+export type RootSuggestion = z.infer<typeof RootSuggestion>;
+
 export const WorkspaceInspection = z.object({
   exists: z.boolean(),
   isGitRepo: z.boolean(),

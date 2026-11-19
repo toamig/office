@@ -1,16 +1,18 @@
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { LastCommit, ProjectDetail, ProjectSummary, RepoStatus } from "../../../shared/models";
 import type { Project } from "../../../shared/types";
 import type { Bus } from "../../core/bus";
-import { debounce, mapLimit, nowIso } from "../../core/util";
+import { debounce, mapLimit, nowIso, projectFolder } from "../../core/util";
 import { isGitFolder, readLastCommit, readOrigin, readStatus } from "./status";
 
 export interface ProjectServiceDeps {
   bus: Bus;
   projects: () => Project[];
   projectsRoot: () => string;
+  /** Folders this PC was told for single projects, which win over the projects folder. */
+  projectPaths?: () => Record<string, string>;
   /** Number of "Waiting on you" items for a project (the vault module provides it). */
   waiting?: (projectId: string) => number;
 }
@@ -37,7 +39,7 @@ export class ProjectService {
   constructor(private readonly deps: ProjectServiceDeps) {}
 
   absPath(project: Project): string {
-    return resolve(this.deps.projectsRoot(), project.path);
+    return projectFolder(this.deps.projectsRoot(), project, this.deps.projectPaths?.());
   }
 
   find(id: string): Project | undefined {

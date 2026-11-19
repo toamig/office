@@ -8,10 +8,17 @@ import { useUi } from "../stores/ui";
 
 function Card({ p }: { p: ProjectSummary }) {
   const navigate = useUi((s) => s.navigate);
+  const locate = async (): Promise<void> => {
+    const path = await office.invoke("setup.pickFolder", { title: `Where is ${p.name}?` });
+    if (path) await office.invoke("projects.locate", { id: p.id, path });
+  };
   return (
-    <button
+    <div
       data-testid="project-card"
+      role="button"
+      tabIndex={0}
       onClick={() => navigate("project", { id: p.id })}
+      onKeyDown={(e) => e.key === "Enter" && navigate("project", { id: p.id })}
       className="flex flex-col gap-1.5 rounded border p-3 text-left"
       style={{ background: "var(--panel)", borderColor: "var(--line)", color: "var(--text)" }}
     >
@@ -19,7 +26,19 @@ function Card({ p }: { p: ProjectSummary }) {
         {p.pinned && <Pin size={12} />}
         {p.name}
       </div>
-      {!p.exists && <Chip tone="bad">folder missing</Chip>}
+      {!p.exists && (
+        <>
+          <Chip tone="bad">folder missing</Chip>
+          <div className="flex flex-wrap gap-1.5" onClick={(e) => e.stopPropagation()}>
+            <Button onClick={() => navigate("setup")} data-testid="change-projects-folder">
+              Change projects folder
+            </Button>
+            <Button onClick={() => void locate()} data-testid="locate-project">
+              Locate this folder
+            </Button>
+          </div>
+        </>
+      )}
       {p.exists && !p.isRepo && <Chip tone="warn">not a git repo</Chip>}
       {p.isRepo && (
         <div className="flex flex-wrap items-center gap-1.5">
@@ -36,7 +55,7 @@ function Card({ p }: { p: ProjectSummary }) {
         {p.waiting > 0 && <Chip tone="warn">{p.waiting} waiting</Chip>}
         <span>last activity {timeAgo(p.lastActivity)}</span>
       </div>
-    </button>
+    </div>
   );
 }
 
@@ -47,6 +66,8 @@ export function Projects() {
     "workspace.changed",
     "vault.changed",
   ]);
+  const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
+  const navigate = useUi((s) => s.navigate);
   const list = (projects.data ?? []).filter((p) => !p.archived);
   const groups = new Map<string, ProjectSummary[]>();
   for (const p of list.filter((x) => !x.pinned))
@@ -58,6 +79,22 @@ export function Projects() {
     <div className="p-4" data-testid="projects">
       <h1 className="m-0 mb-3 text-lg font-semibold">Projects</h1>
       {projects.error && <ErrorBanner message={projects.error} />}
+      {list.length > 0 && list.every((p) => !p.exists) && (
+        <div className="mb-3" data-testid="all-folders-missing">
+          <ErrorBanner
+            message={`None of your project folders were found under ${workspace.data?.projectsRoot || "the projects folder"}. Most likely the projects folder is the wrong one: change it in Setup, or locate each project.`}
+          />
+          <div className="mt-2">
+            <Button
+              variant="primary"
+              onClick={() => navigate("setup")}
+              data-testid="banner-change-folder"
+            >
+              Change projects folder
+            </Button>
+          </div>
+        </div>
+      )}
       {projects.data?.length === 0 && (
         <EmptyState>No projects yet. Add some to the workspace config, or finish Setup.</EmptyState>
       )}

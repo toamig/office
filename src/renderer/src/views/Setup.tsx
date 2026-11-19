@@ -31,9 +31,6 @@ export function Setup() {
               workspace.reload();
             }}
           />
-          <div className="mt-4 border-t pt-3" style={{ borderColor: "var(--line)" }}>
-            <ProjectsStep onDone={workspace.reload} />
-          </div>
         </Panel>
       )}
       {w?.configured && !showWizard && (
@@ -48,6 +45,11 @@ export function Setup() {
             <span style={{ color: "var(--muted)" }}>Projects</span>
             <span>{w.workspace?.projects.length ?? 0}</span>
           </div>
+        </Panel>
+      )}
+      {w?.configured && (
+        <Panel title="Projects folder">
+          <ProjectsStep onDone={workspace.reload} />
         </Panel>
       )}
       <ToolsPanel />

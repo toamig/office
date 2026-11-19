@@ -9,6 +9,7 @@ import { TopBar } from "./components/TopBar";
 import { ErrorBanner } from "./components/ui";
 import { useQuery } from "./lib/hooks";
 import { prefetchStart } from "./lib/prefetch";
+import { LeaveGuard } from "./components/LeaveGuard";
 import { useSidebarCollapsed } from "./lib/sidebar";
 import { useGlobalShortcuts } from "./lib/shortcuts";
 import { office } from "./lib/ipc";
@@ -120,6 +121,7 @@ export default function App() {
       <SyncReportDialog />
       <QuickSwitcher />
       <ShortcutsSheet />
+      <LeaveGuard />
       <ThemeApplier />
     </div>
   );

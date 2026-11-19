@@ -1,9 +1,10 @@
 import { existsSync } from "node:fs";
-import { join, resolve } from "node:path";
+import { join } from "node:path";
 import type { BriefItem, BriefView } from "../../../shared/models";
 import type { Project, Workspace } from "../../../shared/types";
 import type { Db } from "../../core/db";
 import type { Notifier } from "../../core/notifier";
+import { projectFolder } from "../../core/util";
 import { git } from "../git/run";
 import type { RunService } from "../runs/service";
 
@@ -23,6 +24,7 @@ export interface BriefDeps {
   notifier: Notifier;
   workspace: () => Workspace | null;
   projectsRoot: () => string;
+  projectPaths?: () => Record<string, string>;
   workspaceRoot: () => string;
   now?: () => Date;
 }
@@ -110,7 +112,7 @@ export class BriefService {
     const out: Activity[] = [];
     for (const project of ws.projects) {
       if (project.archived) continue;
-      const code = resolve(this.deps.projectsRoot(), project.path);
+      const code = projectFolder(this.deps.projectsRoot(), project, this.deps.projectPaths?.());
       const commits = await subjects(code, iso);
       let notes: string[] = [];
       if (project.vault !== undefined && project.vault !== "." && ws.vault.kind !== "none") {

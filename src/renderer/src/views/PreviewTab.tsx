@@ -11,6 +11,8 @@ export function PreviewTab({ projectId }: { projectId: string }) {
   const [url, setUrl] = useState(() => localStorage.getItem(storeKey) ?? "");
   const [state, setState] = useState<PreviewState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  /** Something to say that is not a failure: no dev server was found. */
+  const [note, setNote] = useState<string | null>(null);
   const holder = useRef<HTMLDivElement>(null);
   // Dialogs sit in the page, and a native pane would cover them, so it steps aside while one is open.
   const covered = useUi((s) => s.switcherOpen || s.syncReport !== null);
@@ -44,7 +46,9 @@ export function PreviewTab({ projectId }: { projectId: string }) {
   }, []);
 
   const go = async (target = url): Promise<void> => {
+    if (!target.trim()) return;
     setError(null);
+    setNote(null);
     try {
       const next = await office.invoke("preview.open", { url: target });
       setState(next);
@@ -59,11 +63,12 @@ export function PreviewTab({ projectId }: { projectId: string }) {
   };
   const detect = async (): Promise<void> => {
     setError(null);
+    setNote(null);
     const found = await office.invoke("preview.detect");
     if (found) {
       setUrl(found);
       await go(found);
-    } else setError("No dev server found on the usual ports. Start it, or type its address.");
+    } else setNote("No dev server was found on the usual ports. Start it, or type its address.");
   };
 
   return (
@@ -104,13 +109,13 @@ export function PreviewTab({ projectId }: { projectId: string }) {
         <input
           value={url}
           onChange={(e) => setUrl(e.target.value)}
-          placeholder="http://localhost:5173"
+          placeholder="For example localhost:5173"
           aria-label="Address"
           data-testid="preview-url"
           className="flex-1 rounded border px-2 py-1"
           style={{ borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" }}
         />
-        <Button type="submit" variant="primary" data-testid="preview-go">
+        <Button type="submit" variant="primary" disabled={!url.trim()} data-testid="preview-go">
           Go
         </Button>
         <Button type="button" onClick={() => void detect()} data-testid="preview-detect">
@@ -126,6 +131,11 @@ export function PreviewTab({ projectId }: { projectId: string }) {
         </Button>
       </form>
       {error && <ErrorBanner message={error} />}
+      {note && (
+        <p className="my-2" style={{ color: "var(--muted)" }} data-testid="preview-note">
+          {note}
+        </p>
+      )}
       {state?.error && <ErrorBanner message={`The page did not load: ${state.error}`} />}
       <div
         ref={holder}

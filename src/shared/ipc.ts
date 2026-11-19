@@ -43,6 +43,8 @@ import {
   SyncReport,
   ToolStatus,
   SetupState,
+  FolderScan,
+  RootSuggestion,
   WaitingEntry,
   WorkspaceView,
   VaultFile,
@@ -154,6 +156,15 @@ export const channels = {
   /** Where the welcome flow stands: the steps, which are met, and whether the app is gated on them. */
   "setup.state": { req: z.void(), res: SetupState },
   /** Remembers the projects folder (the welcome flow's second step). */
+  /** Which of the workspace's projects exist under a folder, read from the workspace config. */
+  "setup.scanProjectsRoot": { req: z.object({ path: z.string() }), res: FolderScan },
+  /** The folder where most of the workspace's projects are, found from the workspace folder and the usual places. */
+  "setup.suggestProjectsRoot": { req: z.void(), res: RootSuggestion },
+  /** Tells this PC where one project's folder is (null forgets it): a per-machine exception to the projects folder. */
+  "projects.locate": {
+    req: z.object({ id: z.string(), path: z.string().nullable() }),
+    res: z.void(),
+  },
   "setup.setProjectsRoot": { req: z.object({ path: z.string() }), res: z.void() },
   /** The welcome flow is finished: open the app. */
   "setup.complete": { req: z.void(), res: z.void() },

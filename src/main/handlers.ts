@@ -4,6 +4,8 @@ import type { AppSettings, GithubOverview, Inventory, ProviderStatus } from "../
 import { workspaceView, type AppContext } from "./context";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { normPath } from "./core/util";
+import { loadWorkspaceFile } from "./core/workspace";
+import { scanProjectsRoot, suggestRoots, type ProjectRef } from "./modules/setup/projects-folder";
 import { BackgroundCache } from "./core/background-cache";
 import { IpcFailure } from "./core/ipc";
 import {
@@ -96,6 +98,41 @@ function registerSetupHandlers(ctx: AppContext): void {
   ctx.ipc.handle("setup.detectTools", () => ctx.toolsMonitor.read());
   ctx.ipc.handle("setup.recheckTools", () => ctx.toolsMonitor.check());
   ctx.ipc.handle("setup.state", () => ctx.setupState());
+  /** The projects of the workspace config, read from the file, so this works before the workspace is open. */
+  const configuredProjects = (): ProjectRef[] => {
+    const s = ctx.settings();
+    if (!s.workspaceRoot || !s.workspaceConfigPath) return [];
+    const loaded = loadWorkspaceFile(join(s.workspaceRoot, s.workspaceConfigPath));
+    return loaded.ok
+      ? loaded.workspace.projects
+          .filter((p) => !p.archived)
+          .map((p) => ({ id: p.id, name: p.name, path: p.path }))
+      : [];
+  };
+  ctx.ipc.handle("setup.scanProjectsRoot", (req) =>
+    scanProjectsRoot(configuredProjects(), resolve(req.path), ctx.settings().projectPaths),
+  );
+  ctx.ipc.handle("setup.suggestProjectsRoot", () => {
+    const projects = configuredProjects();
+    const candidates = suggestRoots(ctx.settings().workspaceRoot, projects, userHome());
+    return {
+      best: candidates[0]?.path ?? null,
+      total: projects.length,
+      candidates: candidates.slice(0, 5),
+    };
+  });
+  ctx.ipc.handle("projects.locate", (req) => {
+    const paths = { ...ctx.settings().projectPaths };
+    if (req.path === null) delete paths[req.id];
+    else {
+      if (!isDirectory(resolve(req.path)))
+        throw new IpcFailure("no-folder", `${req.path} is not a folder`);
+      paths[req.id] = resolve(req.path);
+    }
+    ctx.patchSettings({ projectPaths: paths });
+    void ctx.projects.refresh(req.id);
+    ctx.bus.emit("workspace.changed", {});
+  });
   ctx.ipc.handle("setup.setProjectsRoot", (req) => {
     const path = resolve(req.path);
     if (!isDirectory(path)) throw new IpcFailure("no-projects-root", `${path} is not a folder`);

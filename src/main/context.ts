@@ -159,6 +159,7 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     bus,
     projects: () => store.state.workspace?.projects ?? [],
     projectsRoot: () => box.current.projectsRoot,
+    projectPaths: () => box.current.projectPaths,
     waiting: (id) => vault.waitingCount(id),
   });
   const health = new HealthService({
@@ -218,6 +219,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     notifier,
     workspace: () => store.state.workspace,
     projectsRoot: () => box.current.projectsRoot,
+    projectPaths: () => box.current.projectPaths,
     workspaceRoot: () => box.current.workspaceRoot,
   });
   const sessions = new SessionService({
@@ -375,6 +377,7 @@ function createLifecycle(
   const syncDeps: SyncAllDeps = {
     workspace: () => store.state.workspace,
     projectsRoot: () => box.current.projectsRoot,
+    projectPaths: () => box.current.projectPaths,
     workspaceRoot: () => box.current.workspaceRoot,
     onRepoDone: (id) => void projects.refresh(id),
     onReport: (report) => notifyFromSyncReport(notifier, report),

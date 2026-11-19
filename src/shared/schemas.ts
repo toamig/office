@@ -6,6 +6,8 @@ export const MachineSettings = z.object({
   workspaceRoot: z.string().default(""),
   workspaceConfigPath: z.string().default(""),
   projectsRoot: z.string().default(""),
+  /** Where a project's folder is on this PC when it is not under the projects folder: project id to absolute path. */
+  projectPaths: z.record(z.string(), z.string()).default({}),
   editorCommand: z.string().default("code"),
   /** Where a finished Art request is filed (one folder per project inside it). Empty: nowhere. */
   artVaultRoot: z.string().default(""),
