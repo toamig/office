@@ -59,6 +59,9 @@ export function ToolsStep() {
     }
   };
 
+  const agentReady = (tools.data ?? []).some(
+    (t) => (t.id === "claude-code" || t.id === "codex") && t.installed && t.loggedIn !== false,
+  );
   return (
     <div data-testid="tools-step">
       <div className="mb-2 flex items-center">
@@ -72,48 +75,60 @@ export function ToolsStep() {
       {tools.error && <Banner tone="danger">{tools.error}</Banner>}
       {tools.loading && !tools.data && <Skeleton width={30} />}
       <div data-testid="tools">
-        {tools.data?.map((t) => (
-          <div key={t.id} className="ui-line" data-testid="tool-row">
-            <span className="w-32 font-medium">{t.label}</span>
-            <span className="ui-badges">
-              {t.installed ? (
-                <StatusBadge status="installed" label={`Installed ${t.version ?? ""}`.trim()} />
-              ) : (
-                <StatusBadge status="missing" />
+        {tools.data?.map((t) => {
+          const quickFix =
+            t.installed && t.loggedIn !== false && Boolean(t.problem) && fixCommand(t) !== null;
+          return (
+            <div key={t.id} className="ui-line" data-testid="tool-row">
+              <span className="w-32 font-medium">{t.label}</span>
+              <span className="ui-badges">
+                {t.installed ? (
+                  <StatusBadge status="installed" label={`Installed ${t.version ?? ""}`.trim()} />
+                ) : (
+                  <StatusBadge status="missing" />
+                )}
+                {t.loggedIn === true && <StatusBadge status="logged-in" />}
+                {t.loggedIn === false && <StatusBadge status="not-logged-in" />}
+              </span>
+              <div className="ui-line-main">
+                {NEEDED[t.id] && (t.id === "git" ? !t.installed : !agentReady) && (
+                  <div className="ui-muted" data-testid="tool-needed">
+                    {NEEDED[t.id]}
+                  </div>
+                )}
+                {quickFix ? (
+                  <div className="ui-warn" data-testid="tool-update">
+                    Update available: your config needs a newer Codex
+                  </div>
+                ) : (
+                  <>
+                    {t.problem && <div className="ui-warn">{t.problem}</div>}
+                    {t.fix && <div className="ui-muted">Fix: {t.fix}</div>}
+                  </>
+                )}
+              </div>
+              {t.installed && t.loggedIn === false && (
+                <Button onClick={() => void start("login", t)} data-testid="tool-login">
+                  Log in
+                </Button>
               )}
-              {t.loggedIn === true && <StatusBadge status="logged-in" />}
-              {t.loggedIn === false && <StatusBadge status="not-logged-in" />}
-            </span>
-            <div className="ui-line-main">
-              {NEEDED[t.id] && (
-                <div className="ui-muted" data-testid="tool-needed">
-                  {NEEDED[t.id]}
-                </div>
+              {quickFix && (
+                <Button
+                  onClick={() => void start("run", t)}
+                  title={fixCommand(t) ?? undefined}
+                  data-testid="tool-run"
+                >
+                  Run
+                </Button>
               )}
-              {t.problem && <div className="ui-warn">{t.problem}</div>}
-              {t.fix && <div className="ui-muted">Fix: {t.fix}</div>}
+              {!t.installed && t.id === "codex" && (
+                <Button onClick={() => void start("run", t)} data-testid="tool-install">
+                  Install (npm i -g @openai/codex)
+                </Button>
+              )}
             </div>
-            {t.installed && t.loggedIn === false && (
-              <Button onClick={() => void start("login", t)} data-testid="tool-login">
-                Log in
-              </Button>
-            )}
-            {t.installed && t.loggedIn !== false && t.problem && fixCommand(t) !== null && (
-              <Button
-                onClick={() => void start("run", t)}
-                title={fixCommand(t) ?? undefined}
-                data-testid="tool-run"
-              >
-                Run
-              </Button>
-            )}
-            {!t.installed && t.id === "codex" && (
-              <Button onClick={() => void start("run", t)} data-testid="tool-install">
-                Install (npm i -g @openai/codex)
-              </Button>
-            )}
-          </div>
-        ))}
+          );
+        })}
       </div>
       {run && (
         <ToolRunDialog

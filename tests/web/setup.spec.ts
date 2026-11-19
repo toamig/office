@@ -20,8 +20,11 @@ test("Setup shows the workspace, the tools with their problems and fixes, and th
   const codex = win
     .getByTestId("tool-row")
     .filter({ has: win.getByText("Codex", { exact: true }) });
-  await expect(codex).toContainText("Codex CLI is older than your config");
-  await expect(codex).toContainText("npm i -g @openai/codex");
+  // One short line with its Run button; the command is in the button's tooltip.
+  await expect(codex.getByTestId("tool-update")).toContainText("Update available");
+  await expect(codex.getByTestId("tool-run")).toHaveAttribute("title", /npm i -g @openai\/codex/);
+  // "One of Claude Code or Codex is required" shows only while no agent tool is ready.
+  await expect(win.getByTestId("tool-needed")).toHaveCount(0);
   await expect(
     win.getByTestId("tool-row").filter({ has: win.getByText("Claude Code", { exact: true }) }),
   ).toContainText(/logged in/i);
