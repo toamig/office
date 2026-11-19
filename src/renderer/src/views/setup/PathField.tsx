@@ -1,5 +1,5 @@
 import { FolderOpen } from "lucide-react";
-import { Button } from "../../components/ui";
+import { Button } from "../../ui";
 import { office } from "../../lib/ipc";
 
 export const fieldClass = "flex-1";

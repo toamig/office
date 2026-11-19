@@ -51,7 +51,7 @@ function ProjectCard({ p }: { p: ProjectSummary }) {
   };
   return (
     <Card testId="project-card" onOpen={() => navigate("project", { id: p.id })}>
-      <div className="grid gap-2">
+      <div className="project-card">
         <div className="flex items-center gap-2 font-semibold">
           {p.pinned && <Pin size={14} aria-label="Pinned" />}
           {p.name}

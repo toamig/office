@@ -128,13 +128,7 @@ describe("the audit of views (plan DesignSystem, M10.3)", () => {
   });
 
   it("draws no inline error bar: an action result is a notification", () => {
-    // The facade in components/ui.tsx turns a message into a notification; a view must not draw its own bar.
-    expect(
-      hits(
-        /<ErrorBanner\b/,
-        checked.filter((f) => !f.endsWith("components/ui.tsx")),
-      ),
-    ).toEqual([]);
+    expect(hits(/ErrorBanner/)).toEqual([]);
   });
 
   it("keeps the design system components themselves free of one-off sizes", () => {

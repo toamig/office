@@ -409,8 +409,8 @@
 .ui-empty {
   display: grid;
   justify-items: start;
-  gap: var(--space-3);
-  padding: var(--space-5);
+  gap: var(--space-2);
+  padding: var(--space-3) 0;
   color: var(--muted);
 }
 .ui-empty h3 {
@@ -960,4 +960,20 @@ input[type="radio"] {
 
 .ui-panel-bg {
   background: var(--panel);
+}
+
+/* A card in a grid answers to its own width: a project is a row when its card is wide. */
+.ui-grid > * {
+  container-type: inline-size;
+}
+.project-card {
+  display: grid;
+  gap: var(--space-2);
+}
+@container (min-width: 640px) {
+  .project-card {
+    grid-template-columns: minmax(200px, 1fr) minmax(0, 2fr) auto;
+    align-items: center;
+    column-gap: var(--space-4);
+  }
 }
