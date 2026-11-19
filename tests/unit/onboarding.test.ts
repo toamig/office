@@ -5,6 +5,7 @@ import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createBrain } from "../../src/main/modules/onboarding/brain";
 import {
+  defaultTarget,
   hasPointer,
   installPointer,
   pointerBlock,
@@ -29,7 +30,12 @@ function repo(dir: string, files: Record<string, string> = { "README.md": "# x\n
   return dir;
 }
 
-const block = pointerBlock({ name: "Alpha", brain: "Brain", notesFolder: "Projects/Alpha" });
+const block = pointerBlock({
+  name: "Alpha",
+  notesPath: "C:/Notes/Brain/Projects/Alpha",
+  notesFolder: "Projects/Alpha",
+  remote: null,
+});
 
 describe("the agent pointer", () => {
   it("keeps every byte outside the markers through install and uninstall", () => {
@@ -50,10 +56,25 @@ describe("the agent pointer", () => {
     }
   });
 
-  it("names the notes without a path that only exists on this PC", () => {
-    expect(block).toContain("`Brain`");
+  it("gives the absolute folder of the notes and the brain's remote when there is one", () => {
+    expect(block).toContain("`C:/Notes/Brain/Projects/Alpha`");
     expect(block).toContain("`Projects/Alpha`");
-    expect(block).not.toMatch(/[A-Z]:\\|\/Users\//);
+    expect(block).not.toContain("git remote");
+    const withRemote = pointerBlock({
+      name: "Alpha",
+      notesPath: "C:/Notes/Brain/Projects/Alpha",
+      notesFolder: "Projects/Alpha",
+      remote: "git@github.com:me/brain.git",
+    });
+    expect(withRemote).toContain("`git@github.com:me/brain.git`");
+  });
+
+  it("goes in the local file for a public repo and in AGENTS.md otherwise, or when GitHub cannot say", () => {
+    expect(defaultTarget("PUBLIC")).toBe("local");
+    expect(defaultTarget("public")).toBe("local");
+    expect(defaultTarget("PRIVATE")).toBe("agents");
+    expect(defaultTarget("INTERNAL")).toBe("agents");
+    expect(defaultTarget(null)).toBe("agents");
   });
 
   it("leaves text without the block alone", () => {
@@ -181,9 +202,13 @@ describe("adding projects", () => {
 
     // The pointer keeps the owner's text, commits only its file, and comes out byte for byte.
     const original = readFileSync(join(sheep, "AGENTS.md"), "utf8");
-    const preview = service.pointerPreview("sheep");
-    expect(preview.creates).toEqual([]);
+    const preview = await service.pointerPreview("sheep");
+    expect(preview.creates.agents).toEqual([]);
     expect(preview.text).toContain("`Projects/Sheep`");
+    // The path in the text is one an agent can open on this PC.
+    const named = /in `([^`]+)` \(the folder/.exec(preview.text)?.[1] ?? "";
+    expect(named).toBe(join(brain, "Projects", "Sheep").replaceAll("\\", "/"));
+    expect(existsSync(join(named, "Overview.md"))).toBe(true);
     const done = await service.pointerApply(["sheep"], false);
     expect(done.ok).toBe(true);
     expect(readFileSync(join(sheep, "AGENTS.md"), "utf8").startsWith(original)).toBe(true);
@@ -204,11 +229,130 @@ describe("adding projects", () => {
     const { projectsRoot, service } = await setup();
     const plain = repo(join(projectsRoot, "Plain"));
     await service.add([{ path: plain, name: "Plain", notes: "none", domain: "saas" }]);
-    expect(service.pointerPreview("plain").creates).toEqual(["AGENTS.md", "CLAUDE.md"]);
+    expect((await service.pointerPreview("plain")).creates.agents).toEqual([
+      "AGENTS.md",
+      "CLAUDE.md",
+    ]);
     await service.pointerApply(["plain"], false);
     expect(readFileSync(join(plain, "CLAUDE.md"), "utf8")).toBe("@AGENTS.md\n");
     await service.pointerRemove(["plain"]);
     expect(existsSync(join(plain, "AGENTS.md"))).toBe(false);
     expect(existsSync(join(plain, "CLAUDE.md"))).toBe(false);
+  });
+
+  describe("where the pointer goes", () => {
+    const withGh = async <T>(visibility: string, body: () => Promise<T>): Promise<T> => {
+      const before = process.env["OFFICE_BIN_GH"];
+      const vis = process.env["FAKE_GH_VISIBILITY"];
+      process.env["OFFICE_BIN_GH"] = resolve(__dirname, "../fixtures/bin/fake-gh.mjs");
+      process.env["FAKE_GH_REMOTES"] = tmp("office-fake-gh-");
+      process.env["FAKE_GH_VISIBILITY"] = visibility;
+      try {
+        return await body();
+      } finally {
+        if (before === undefined) delete process.env["OFFICE_BIN_GH"];
+        else process.env["OFFICE_BIN_GH"] = before;
+        if (vis === undefined) delete process.env["FAKE_GH_VISIBILITY"];
+        else process.env["FAKE_GH_VISIBILITY"] = vis;
+      }
+    };
+
+    it("defaults to the local file for a public repo: written, never committed, kept out of git, and removed byte for byte", async () => {
+      const { projectsRoot, service } = await setup();
+      const original = "# Mine\n\nKeep this.\n";
+      const pub = repo(join(projectsRoot, "Pub"), { "CLAUDE.local.md": original });
+      // The owner's own local file is not tracked: the file exists but git ignores it.
+      sh(pub, "rm", "-q", "--cached", "CLAUDE.local.md");
+      sh(pub, "commit", "-q", "-m", "untrack");
+      await service.add([{ path: pub, name: "Pub", notes: "none", domain: "saas" }]);
+      await withGh("*=PUBLIC", async () => {
+        const preview = await service.pointerPreview("pub");
+        expect(preview.visibility).toBe("PUBLIC");
+        expect(preview.target).toBe("local");
+        expect(preview.file).toBe(join(pub, "CLAUDE.local.md"));
+        const before = sh(pub, "rev-parse", "HEAD").trim();
+        const done = await service.pointerApply(["pub"], false);
+        expect(done.ok).toBe(true);
+        expect(sh(pub, "rev-parse", "HEAD").trim()).toBe(before);
+        expect(existsSync(join(pub, "AGENTS.md"))).toBe(false);
+        const written = readFileSync(join(pub, "CLAUDE.local.md"), "utf8");
+        expect(written.startsWith(original)).toBe(true);
+        expect(written).toContain(preview.text.split("\n")[1] ?? "");
+        expect(sh(pub, "status", "--porcelain").trim()).toBe("");
+        expect(readFileSync(join(pub, ".git", "info", "exclude"), "utf8")).toContain(
+          "CLAUDE.local.md",
+        );
+        // Applying twice changes nothing, and the exclude line is not repeated.
+        await service.pointerApply(["pub"], false);
+        expect(
+          readFileSync(join(pub, ".git", "info", "exclude"), "utf8")
+            .split(/\r?\n/)
+            .filter((l) => l === "CLAUDE.local.md"),
+        ).toHaveLength(1);
+        await service.pointerRemove(["pub"]);
+        expect(readFileSync(join(pub, "CLAUDE.local.md"), "utf8")).toBe(original);
+      });
+    });
+
+    it("defaults to AGENTS.md for a private repo, and for a repo when gh fails", async () => {
+      const { projectsRoot, service } = await setup();
+      const priv = repo(join(projectsRoot, "Priv"));
+      const broken = repo(join(projectsRoot, "Broken"));
+      await service.add([
+        { path: priv, name: "Priv", notes: "none", domain: "saas" },
+        { path: broken, name: "Broken", notes: "none", domain: "saas" },
+      ]);
+      await withGh("Priv=PRIVATE,Broken=fail", async () => {
+        const a = await service.pointerPreview("priv");
+        expect([a.visibility, a.target, a.file]).toEqual([
+          "PRIVATE",
+          "agents",
+          join(priv, "AGENTS.md"),
+        ]);
+        const b = await service.pointerPreview("broken");
+        expect([b.visibility, b.target, b.file]).toEqual([
+          null,
+          "agents",
+          join(broken, "AGENTS.md"),
+        ]);
+        await service.pointerApply(["priv", "broken"], false);
+        expect(existsSync(join(priv, "AGENTS.md"))).toBe(true);
+        expect(existsSync(join(broken, "AGENTS.md"))).toBe(true);
+        expect(existsSync(join(priv, "CLAUDE.local.md"))).toBe(false);
+      });
+    });
+
+    it("follows the owner's choice over the default, in either direction", async () => {
+      const { projectsRoot, service } = await setup();
+      const a = repo(join(projectsRoot, "Aaa"));
+      const b = repo(join(projectsRoot, "Bbb"));
+      await service.add([
+        { path: a, name: "Aaa", notes: "none", domain: "saas" },
+        { path: b, name: "Bbb", notes: "none", domain: "saas" },
+      ]);
+      await withGh("Aaa=PUBLIC,Bbb=PRIVATE", async () => {
+        await service.pointerApply(["aaa"], false, "agents");
+        await service.pointerApply(["bbb"], false, "local");
+        expect(existsSync(join(a, "AGENTS.md"))).toBe(true);
+        expect(existsSync(join(a, "CLAUDE.local.md"))).toBe(false);
+        expect(existsSync(join(b, "AGENTS.md"))).toBe(false);
+        expect(existsSync(join(b, "CLAUDE.local.md"))).toBe(true);
+        // Remove finds the block in whichever file holds it.
+        await service.pointerRemove(["aaa", "bbb"]);
+        expect(existsSync(join(a, "AGENTS.md"))).toBe(false);
+        expect(existsSync(join(b, "CLAUDE.local.md"))).toBe(false);
+      });
+    });
+
+    it("adds the brain's remote to the text when the brain has one", async () => {
+      const { brain, projectsRoot, service } = await setup();
+      sh(brain, "remote", "add", "origin", "https://example.com/me/brain.git");
+      const c = repo(join(projectsRoot, "Ccc"));
+      await service.add([{ path: c, name: "Ccc", notes: "none", domain: "saas" }]);
+      await withGh("*=PRIVATE", async () => {
+        const preview = await service.pointerPreview("ccc");
+        expect(preview.text).toContain("`https://example.com/me/brain.git`");
+      });
+    });
   });
 });

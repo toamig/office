@@ -38,6 +38,21 @@ if (args[0] === "--version") {
     }
   }
   console.log(`https://github.com/${full}`);
+} else if (args[0] === "repo" && args[1] === "view" && args.includes("visibility")) {
+  // FAKE_GH_VISIBILITY is "folder=PUBLIC,other=PRIVATE" keyed by the folder gh runs in; "*" is the default
+  // (PRIVATE when unset) and the value "fail" makes the call fail, as when gh is not logged in.
+  const table = Object.fromEntries(
+    (process.env["FAKE_GH_VISIBILITY"] ?? "")
+      .split(",")
+      .filter(Boolean)
+      .map((pair) => pair.split("=")),
+  );
+  const value = table[process.cwd().split(/[\\/]/).pop() ?? ""] ?? table["*"] ?? "PRIVATE";
+  if (value === "fail") {
+    console.error("fake-gh: could not resolve to a Repository");
+    process.exit(1);
+  }
+  console.log(JSON.stringify({ visibility: value }));
 } else if (args[0] === "pr" && args[1] === "list") {
   const file = process.env["FAKE_GH_PRS"];
   console.log(file && existsSync(file) ? readFileSync(file, "utf8") : "[]");

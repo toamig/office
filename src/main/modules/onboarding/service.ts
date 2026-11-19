@@ -1,9 +1,10 @@
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
-import { basename, dirname, join, relative, resolve } from "node:path";
+import { appendFileSync, existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { z } from "zod";
 import { Workspace as WorkspaceSchema } from "../../../shared/schemas";
 import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
+import { run } from "../../core/exec";
 import { writeTextFile } from "../../core/settings";
 import { projectFolder } from "../../core/util";
 import { folderName, slugify } from "../explore/files";
@@ -11,11 +12,14 @@ import { git } from "../git/run";
 import type { VaultWriter } from "../vault/writer";
 import { createBrain, type BrainResult } from "./brain";
 import {
+  defaultTarget,
   hasPointer,
   installPointer,
   pointerBlock,
   removePointer,
+  TARGET_FILE,
   type PointerInfo,
+  type PointerTarget,
 } from "./pointer";
 import { noteFolders, scanProjects, type Candidate } from "./scan";
 
@@ -285,53 +289,104 @@ export class OnboardingService {
 
   // ---------- the agent pointer ----------
 
-  private pointerInfo(id: string): { info: PointerInfo; dir: string; name: string } {
+  /** The folder the notes live in on this PC: the project's notes folder if it exists, else the brain's root. */
+  private notesPath(folder: string): string {
+    return resolve(this.deps.workspaceRoot(), folder).replaceAll("\\", "/");
+  }
+
+  /** The brain's git remote ("origin"), asked of the repo that holds the notes, or null when it has none. */
+  private async brainRemote(notesPath: string): Promise<string | null> {
+    const at = existsSync(notesPath) ? notesPath : this.deps.workspaceRoot();
+    if (!existsSync(at)) return null;
+    const out = await git(at, ["remote", "get-url", "origin"], { timeoutMs: 10_000 });
+    const url = out.code === 0 ? firstLine(out.stdout) : "";
+    return url === "" ? null : url;
+  }
+
+  /** Whether GitHub says the code repo is public: "PUBLIC", "PRIVATE", "INTERNAL", or null when gh cannot say. */
+  private async visibilityOf(dir: string): Promise<string | null> {
+    if (!existsSync(dir)) return null;
+    const out = await run("gh", ["repo", "view", "--json", "visibility"], {
+      cwd: dir,
+      timeoutMs: 20_000,
+    });
+    if (out.code !== 0) return null;
+    try {
+      const v = (JSON.parse(out.stdout) as { visibility?: unknown }).visibility;
+      return typeof v === "string" && v !== "" ? v : null;
+    } catch {
+      return null;
+    }
+  }
+
+  private async pointerInfo(
+    id: string,
+  ): Promise<{ info: PointerInfo; dir: string; name: string; visibility: string | null }> {
     const ws = this.deps.workspace();
     const project = ws?.projects.find((p) => p.id === id);
     if (!ws || !project) throw new IpcFailure("not-found", `No project ${id}`);
+    const dir = projectFolder(this.deps.projectsRoot(), project, this.deps.projectPaths());
+    const notesFolder = project.vault ?? `Projects/${folderName(project.name)}`;
+    const notesPath = this.notesPath(notesFolder);
+    const [remote, visibility] = await Promise.all([
+      this.brainRemote(notesPath),
+      this.visibilityOf(dir),
+    ]);
     return {
       name: project.name,
-      dir: projectFolder(this.deps.projectsRoot(), project, this.deps.projectPaths()),
-      info: {
-        name: project.name,
-        brain: basename(this.deps.workspaceRoot()),
-        notesFolder: project.vault ?? `Projects/${folderName(project.name)}`,
-      },
+      dir,
+      visibility,
+      info: { name: project.name, notesPath, notesFolder, remote },
     };
   }
 
-  /** What the pointer would do for a project: the exact text, and which files would be created. */
-  pointerPreview(id: string): {
+  /** What the pointer would do for a project: the exact text, where it goes by default, and which files each choice creates. */
+  async pointerPreview(id: string): Promise<{
     project: string;
     file: string;
     text: string;
-    creates: string[];
+    creates: { agents: string[]; local: string[] };
     installed: boolean;
-  } {
-    const { info, dir, name } = this.pointerInfo(id);
-    const agents = join(dir, "AGENTS.md");
+    target: PointerTarget;
+    visibility: string | null;
+  }> {
+    const { info, dir, name, visibility } = await this.pointerInfo(id);
+    const agents = join(dir, TARGET_FILE.agents);
+    const local = join(dir, TARGET_FILE.local);
     const claude = join(dir, "CLAUDE.md");
-    const creates: string[] = [];
-    if (!existsSync(agents)) creates.push("AGENTS.md");
-    if (!existsSync(agents) && !existsSync(claude)) creates.push("CLAUDE.md");
-    const current = existsSync(agents) ? readFileSync(agents, "utf8") : null;
+    const creates = {
+      agents: [
+        ...(existsSync(agents) ? [] : [TARGET_FILE.agents]),
+        ...(!existsSync(agents) && !existsSync(claude) ? ["CLAUDE.md"] : []),
+      ],
+      local: existsSync(local) ? [] : [TARGET_FILE.local],
+    };
+    const target = defaultTarget(visibility);
+    const has = (file: string): boolean =>
+      existsSync(file) && hasPointer(readFileSync(file, "utf8"));
     return {
       project: name,
-      file: agents,
+      file: target === "local" ? local : agents,
       text: pointerBlock(info),
       creates,
-      installed: current !== null && hasPointer(current),
+      installed: has(agents) || has(local),
+      target,
+      visibility,
     };
   }
 
   /** Writes the block, commits only the files it touched, and pushes only when asked. */
-  async pointerApply(ids: string[], push: boolean): Promise<AddReport> {
+  async pointerApply(
+    ids: string[],
+    push: boolean,
+    choice: "auto" | PointerTarget = "auto",
+  ): Promise<AddReport> {
     const steps: OnboardingStep[] = [];
     for (const id of ids) {
       const step: OnboardingStep = { id, label: id, status: "pending" };
       steps.push(step);
       try {
-        step.result = await this.applyOne(id, push);
+        step.result = await this.applyOne(id, push, choice);
         step.status = "done";
       } catch (err) {
         step.status = "failed";
@@ -342,15 +397,27 @@ export class OnboardingService {
     return { ok: true, steps, added: ids };
   }
 
-  private async applyOne(id: string, push: boolean): Promise<string> {
-    const { info, dir } = this.pointerInfo(id);
-    const agents = join(dir, "AGENTS.md");
-    const claude = join(dir, "CLAUDE.md");
-    const original = existsSync(agents) ? readFileSync(agents, "utf8") : null;
+  private async applyOne(
+    id: string,
+    push: boolean,
+    choice: "auto" | PointerTarget,
+  ): Promise<string> {
+    const { info, dir, visibility } = await this.pointerInfo(id);
+    const target = choice === "auto" ? defaultTarget(visibility) : choice;
+    const file = join(dir, TARGET_FILE[target]);
+    const original = existsSync(file) ? readFileSync(file, "utf8") : null;
     if (original !== null && hasPointer(original)) return "already there";
-    const files = ["AGENTS.md"];
+    const block = pointerBlock(info);
+    if (target === "local") {
+      // Only this PC: never committed, and kept out of `git status` through the repo's own exclude file.
+      writeTextFile(file, installPointer(original, block));
+      await this.excludeLocally(dir, TARGET_FILE.local);
+      return `${TARGET_FILE.local} (this PC only)`;
+    }
+    const claude = join(dir, "CLAUDE.md");
+    const files = [TARGET_FILE.agents];
     const makeClaude = original === null && !existsSync(claude);
-    writeTextFile(agents, installPointer(original, pointerBlock(info)));
+    writeTextFile(file, installPointer(original, block));
     if (makeClaude) {
       writeTextFile(claude, "@AGENTS.md\n");
       files.push("CLAUDE.md");
@@ -363,30 +430,51 @@ export class OnboardingService {
     return files.join(" and ");
   }
 
-  /** Removes the block, and the files only if Office created them and nothing else is in them. */
+  /** Adds a line to the repo's own .git/info/exclude (never a committed file), once. */
+  private async excludeLocally(dir: string, line: string): Promise<void> {
+    if (!existsSync(join(dir, ".git"))) return;
+    const where = await git(dir, ["rev-parse", "--git-path", "info/exclude"]);
+    if (where.code !== 0) return;
+    const rel = firstLine(where.stdout);
+    const file = isAbsolute(rel) ? rel : join(dir, rel);
+    const text = existsSync(file) ? readFileSync(file, "utf8") : "";
+    if (text.split(/\r?\n/).includes(line)) return;
+    mkdirSync(dirname(file), { recursive: true });
+    appendFileSync(file, `${text === "" || text.endsWith("\n") ? "" : "\n"}${line}\n`);
+  }
+
+  /** Removes the block from whichever of the two files holds it, and a file only if Office made it and nothing else is in it. */
   async pointerRemove(ids: string[]): Promise<AddReport> {
     const steps: OnboardingStep[] = [];
     for (const id of ids) {
-      const { dir } = this.pointerInfo(id);
-      const agents = join(dir, "AGENTS.md");
+      const { dir } = await this.pointerInfo(id);
       const step: OnboardingStep = { id, label: id, status: "done", result: "no pointer" };
       steps.push(step);
-      if (!existsSync(agents)) continue;
-      const text = readFileSync(agents, "utf8");
-      if (!hasPointer(text)) continue;
-      const rest = removePointer(text);
-      const touched = ["AGENTS.md"];
-      if (rest === "") {
-        rmSync(agents);
-        const claude = join(dir, "CLAUDE.md");
-        if (existsSync(claude) && readFileSync(claude, "utf8") === "@AGENTS.md\n") {
-          rmSync(claude);
-          touched.push("CLAUDE.md");
-        }
-      } else writeTextFile(agents, rest);
-      if (existsSync(join(dir, ".git")))
-        await this.commit(dir, touched, "Remove the Office pointer", false);
-      step.result = "removed";
+      const removed: string[] = [];
+      const agents = join(dir, TARGET_FILE.agents);
+      if (existsSync(agents) && hasPointer(readFileSync(agents, "utf8"))) {
+        const rest = removePointer(readFileSync(agents, "utf8"));
+        const touched = [TARGET_FILE.agents];
+        if (rest === "") {
+          rmSync(agents);
+          const claude = join(dir, "CLAUDE.md");
+          if (existsSync(claude) && readFileSync(claude, "utf8") === "@AGENTS.md\n") {
+            rmSync(claude);
+            touched.push("CLAUDE.md");
+          }
+        } else writeTextFile(agents, rest);
+        if (existsSync(join(dir, ".git")))
+          await this.commit(dir, touched, "Remove the Office pointer", false);
+        removed.push(TARGET_FILE.agents);
+      }
+      const local = join(dir, TARGET_FILE.local);
+      if (existsSync(local) && hasPointer(readFileSync(local, "utf8"))) {
+        const rest = removePointer(readFileSync(local, "utf8"));
+        if (rest === "") rmSync(local);
+        else writeTextFile(local, rest);
+        removed.push(TARGET_FILE.local);
+      }
+      if (removed.length > 0) step.result = `removed from ${removed.join(" and ")}`;
     }
     return { ok: true, steps, added: ids };
   }

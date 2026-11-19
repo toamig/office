@@ -159,6 +159,12 @@ test("the agent pointer: shown first, only its file committed, nothing outside t
   await win.getByTestId("project-pointer-add").click();
   await expect(win.getByTestId("pointer-text")).toContainText("<!-- office:begin -->");
   await expect(win.getByTestId("pointer-text")).toContainText("Overview.md");
+  // The text names a folder an agent can open on this PC, and the choice shows where it goes by default.
+  const shown = (await win.getByTestId("pointer-text").textContent()) ?? "";
+  const named = /are in `([^`]+)`/.exec(shown)?.[1] ?? "";
+  expect(named).toMatch(/^([A-Za-z]:)?\//);
+  await expect(win.getByTestId("pointer-target-auto")).toBeChecked();
+  await expect(win.getByTestId("pointer-files")).toContainText("Alpha: AGENTS.md");
   // Nothing is written until it is confirmed.
   expect(readFileSync(join(alpha.work, "AGENTS.md"), "utf8")).toBe(mine);
   await win.getByTestId("pointer-confirm").click();
@@ -175,8 +181,43 @@ test("the agent pointer: shown first, only its file committed, nothing outside t
 
   await win.getByTestId("project-pointer-remove").click();
   await win.getByTestId("pointer-confirm").click();
+  await expect(win.getByTestId("pointer-report")).toContainText("removed");
   await win.getByTestId("pointer-close").click();
   expect(readFileSync(join(alpha.work, "AGENTS.md"), "utf8")).toBe(mine);
+  await app.close();
+});
+
+test("the agent pointer can go in CLAUDE.local.md: this PC only, never committed, and Remove takes it out", async () => {
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  const alpha = world.code["alpha"];
+  if (!alpha) throw new Error("no alpha");
+  const win = await app.firstWindow();
+  const head = sh(alpha.work, "rev-parse", "HEAD").trim();
+
+  await win.getByTestId("rail-projects").click();
+  await win.getByTestId("project-card").filter({ hasText: "Alpha" }).click();
+  await win.getByTestId("project-pointer-add").click();
+  await win.getByTestId("pointer-target-local").check();
+  await expect(win.getByTestId("pointer-files")).toContainText("Alpha: CLAUDE.local.md");
+  // Nothing about pushing: the file is never committed.
+  await expect(win.getByTestId("pointer-push")).toHaveCount(0);
+  await win.getByTestId("pointer-confirm").click();
+  await expect(win.getByTestId("pointer-report")).toContainText("CLAUDE.local.md");
+  await win.getByTestId("pointer-close").click();
+
+  expect(readFileSync(join(alpha.work, "CLAUDE.local.md"), "utf8")).toContain(
+    "<!-- office:begin -->",
+  );
+  expect(existsSync(join(alpha.work, "AGENTS.md"))).toBe(false);
+  expect(sh(alpha.work, "rev-parse", "HEAD").trim()).toBe(head);
+  expect(sh(alpha.work, "status", "--porcelain").trim()).toBe("");
+
+  await win.getByTestId("project-pointer-remove").click();
+  await win.getByTestId("pointer-confirm").click();
+  await expect(win.getByTestId("pointer-report")).toContainText("removed");
+  await win.getByTestId("pointer-close").click();
+  expect(existsSync(join(alpha.work, "CLAUDE.local.md"))).toBe(false);
   await app.close();
 });
 

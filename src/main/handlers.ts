@@ -151,7 +151,7 @@ function registerSetupHandlers(ctx: AppContext): void {
     ctx.bus.emit("workspace.changed", {});
   });
   ctx.ipc.handle("pointer.preview", (req) => ctx.onboarding.pointerPreview(req.id));
-  ctx.ipc.handle("pointer.apply", (req) => ctx.onboarding.pointerApply(req.ids, req.push));
+  ctx.ipc.handle("pointer.apply", (req) => ctx.onboarding.pointerApply(req.ids, req.push, req.target));
   ctx.ipc.handle("pointer.remove", (req) => ctx.onboarding.pointerRemove(req.ids));
   ctx.ipc.handle("setup.setProjectsRoot", (req) => {
     const path = resolve(req.path);

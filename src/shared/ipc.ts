@@ -195,7 +195,12 @@ export const channels = {
   "onboarding.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "pointer.preview": { req: z.object({ id: z.string() }), res: PointerPreview },
   "pointer.apply": {
-    req: z.object({ ids: z.array(z.string()), push: z.boolean() }),
+    req: z.object({
+      ids: z.array(z.string()),
+      push: z.boolean(),
+      /** "auto": each repo's default (public: CLAUDE.local.md, else AGENTS.md). */
+      target: z.enum(["auto", "agents", "local"]).default("auto"),
+    }),
     res: OnboardingReport,
   },
   "pointer.remove": { req: z.object({ ids: z.array(z.string()) }), res: OnboardingReport },

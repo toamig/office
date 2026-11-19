@@ -378,12 +378,21 @@ export const BrainResult = z.object({
 });
 export type BrainResult = z.infer<typeof BrainResult>;
 
+export const PointerTarget = z.enum(["agents", "local"]);
+export type PointerTarget = z.infer<typeof PointerTarget>;
+
 export const PointerPreview = z.object({
   project: z.string(),
+  /** The file the block goes in by default for this repo (see `target`). */
   file: z.string(),
   text: z.string(),
-  creates: z.array(z.string()),
+  /** The files each choice would create, when they do not exist yet. */
+  creates: z.object({ agents: z.array(z.string()), local: z.array(z.string()) }),
   installed: z.boolean(),
+  /** Where it goes by default: the local file for a public repo, AGENTS.md otherwise or when GitHub cannot say. */
+  target: PointerTarget,
+  /** What `gh repo view` said ("PUBLIC", "PRIVATE", "INTERNAL"), or null when it could not say. */
+  visibility: z.string().nullable(),
 });
 export type PointerPreview = z.infer<typeof PointerPreview>;
 

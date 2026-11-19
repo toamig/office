@@ -1,14 +1,30 @@
-/** The agent pointer: a block between markers in a code repo's AGENTS.md (plan M9.3). Pure text, so it is easy to test. */
+/** The agent pointer: a block between markers in a code repo's AGENTS.md or CLAUDE.local.md (plan M9.3). Pure text, so it is easy to test. */
 
 export const POINTER_BEGIN = "<!-- office:begin -->";
 export const POINTER_END = "<!-- office:end -->";
 const LEAD = /<!-- office:lead=(\d) -->/;
 
+/** Which file the block goes in: AGENTS.md (committed, read by every agent tool) or CLAUDE.local.md (this PC only). */
+export type PointerTarget = "agents" | "local";
+
+export const TARGET_FILE: Record<PointerTarget, string> = {
+  agents: "AGENTS.md",
+  local: "CLAUDE.local.md",
+};
+
+/** A public repo gets the local file, because the block holds a path that only exists on this PC; anything else, or a failed check, gets AGENTS.md. */
+export function defaultTarget(visibility: string | null): PointerTarget {
+  return visibility?.toLowerCase() === "public" ? "local" : "agents";
+}
+
 export interface PointerInfo {
   name: string;
-  /** Where the notes are, without a path that only exists on this PC: the brain's folder name and the notes folder. */
-  brain: string;
+  /** The absolute path of the notes folder on this PC, with forward slashes: a place an agent can open. */
+  notesPath: string;
+  /** The notes folder relative to the brain, for the reader's orientation. */
   notesFolder: string;
+  /** The brain's git remote, when it has one. */
+  remote: string | null;
 }
 
 /** The block, without the lead marker. */
@@ -17,7 +33,8 @@ export function pointerBlock(info: PointerInfo): string {
     POINTER_BEGIN,
     "## Notes for this project",
     "",
-    `The notes for ${info.name} are in the brain \`${info.brain}\`, in the folder \`${info.notesFolder}\`.`,
+    `The notes for ${info.name} are in \`${info.notesPath}\` (the folder \`${info.notesFolder}\` of the brain).`,
+    ...(info.remote ? [`The brain's git remote is \`${info.remote}\`.`] : []),
     "Read `Overview.md` there first. Record decisions in it, and what is left to do in `OpenItems.md`; what waits on",
     'the owner goes under its "Waiting on you" heading.',
     POINTER_END,

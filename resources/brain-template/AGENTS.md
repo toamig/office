@@ -11,5 +11,4 @@ These notes belong to the owner. Follow these rules whenever you read or write t
    Remove the line when it is done.
 4. **Say a fact once.** If another note already owns a fact, link to that note instead of
    restating it.
-5. Files are UTF-8 without BOM, with LF line endings. Commit messages never carry a
-   `Co-Authored-By` trailer.
+5. Files are UTF-8 without BOM, with LF line endings.
