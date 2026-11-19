@@ -265,3 +265,66 @@ test("a long diff draws only the rows near the screen", async () => {
     .toContain("line 699");
   await app.close();
 });
+
+test("a board of 200 task cards answers a click inside one frame", async () => {
+  const first = await launch({ world: true, fakeTools: true });
+  const { base } = first;
+  await first.app.firstWindow();
+  await first.app.close();
+
+  // 200 tasks of the Feature pipeline in every state, written to the app's database between two runs.
+  const db = openDb(join(base, "data", "office.db"));
+  const insertTask = db.prepare(
+    `INSERT INTO tasks (id, project_id, pipeline, title, description, branch, worktree, stage_index, status, created_at, updated_at)
+     VALUES (?, 'alpha', 'feature', ?, '', NULL, NULL, ?, ?, ?, ?)`,
+  );
+  const insertStage = db.prepare(
+    `INSERT INTO task_stages (task_id, idx, stage_id, role, status) VALUES (?, ?, ?, ?, ?)`,
+  );
+  const shapes: Array<[string, number, string[]]> = [
+    ["running", 0, ["running", "pending", "pending"]],
+    ["waiting-gate", 0, ["waiting-gate", "pending", "pending"]],
+    ["running", 1, ["approved", "running", "pending"]],
+    ["waiting-gate", 2, ["approved", "done", "waiting-gate"]],
+    ["done", 2, ["approved", "done", "approved"]],
+    ["failed", 1, ["approved", "failed", "pending"]],
+  ];
+  const roles = ["planner", "builder", "reviewer"];
+  const ids = ["plan", "build", "review"];
+  const now = Date.now();
+  db.transaction(() => {
+    for (let i = 0; i < 200; i++) {
+      const id = randomUUID();
+      const [status, index, stages] = shapes[i % shapes.length] as [string, number, string[]];
+      const at = new Date(now - i * 60_000).toISOString();
+      insertTask.run(id, `Task ${String(i).padStart(3, "0")}`, index, status, at, at);
+      stages.forEach((st, n) => insertStage.run(id, n, ids[n], roles[n], st));
+    }
+  })();
+  db.close();
+
+  const second = await launch({ base, fakeTools: true });
+  const win = await second.app.firstWindow();
+  await win.getByTestId("rail-board").click();
+  await expect(win.getByTestId("task-card")).toHaveCount(200, { timeout: 30000 });
+  // Each card has its compact diagram, and every state is in a column.
+  await expect(win.getByTestId("task-card").first().locator(".mark")).toHaveCount(3);
+  const times = await win.evaluate(async () => {
+    const cards = [
+      ...document.querySelectorAll<HTMLElement>('[data-testid="task-card"] [role="button"]'),
+    ];
+    const out: number[] = [];
+    for (let i = 0; i < 40; i++) {
+      const el = cards[(i * 5) % cards.length] as HTMLElement;
+      const t0 = performance.now();
+      el.click();
+      out.push(performance.now() - t0);
+      await new Promise((r) => setTimeout(r, 20));
+    }
+    return out;
+  });
+  const sorted = [...times].sort((a, b) => a - b);
+  const p95 = sorted[Math.floor(sorted.length * 0.95)] ?? 0;
+  expect(p95, `a click took ${p95.toFixed(1)} ms at the 95th percentile`).toBeLessThan(16);
+  await second.app.close();
+});

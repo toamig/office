@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { memo, useCallback, useState } from "react";
 import type { TaskView } from "@shared/models";
 import { useQuery } from "../../lib/hooks";
 import { office } from "../../lib/ipc";
@@ -13,9 +13,11 @@ import {
   SplitPane,
   StatusBadge,
   Textarea,
+  PipelineMarks,
   Time,
   notifyError,
 } from "../../ui";
+import { diagramStages } from "./diagram";
 import { TaskDetail } from "./TaskDetail";
 
 const columns: Array<{ id: string; title: string; match: (t: TaskView) => boolean }> = [
@@ -147,8 +149,15 @@ export function NewTask({
   );
 }
 
-function TaskCard({ t, selected, onOpen }: { t: TaskView; selected: boolean; onOpen: () => void }) {
-  const stage = t.stages[Math.min(t.stageIndex, t.stages.length - 1)];
+const TaskCard = memo(function TaskCard({
+  t,
+  selected,
+  onOpen,
+}: {
+  t: TaskView;
+  selected: boolean;
+  onOpen: (id: string) => void;
+}) {
   const ended = t.status === "done" || t.status === "cancelled" || t.status === "failed";
   return (
     <div
@@ -156,20 +165,15 @@ function TaskCard({ t, selected, onOpen }: { t: TaskView; selected: boolean; onO
       data-status={t.status}
       data-selected={selected ? "true" : undefined}
     >
-      <Card onOpen={onOpen}>
+      <Card onOpen={() => onOpen(t.id)}>
         <div className="grid gap-1">
           <div className="font-medium">{t.title}</div>
           <div className="ui-line-sub">{t.projectName}</div>
           <div className="ui-badges ui-line-sub">
             <StatusBadge status={t.status} />
             <span>{t.pipelineName}</span>
-            {stage && (
-              <span>
-                Stage {stage.stageId}
-                {stage.provider ? ` (${stage.role}, ${stage.provider})` : ""}
-              </span>
-            )}
           </div>
+          <PipelineMarks stages={diagramStages(t)} />
           <div className="ui-line-sub">
             {ended ? "Ended " : "Started "}
             <Time iso={ended ? t.updatedAt : t.createdAt} />
@@ -178,7 +182,7 @@ function TaskCard({ t, selected, onOpen }: { t: TaskView; selected: boolean; onO
       </Card>
     </div>
   );
-}
+});
 
 /** Tasks as cards moving through Running, Waiting on you, Done and Failed. */
 export function BoardTab({
@@ -193,6 +197,7 @@ export function BoardTab({
   const tasks = useQuery("tasks.list", {}, ["task.changed"]);
   const [open, setOpen] = useState<string | null>(initialTask ?? null);
   const list = tasks.data ?? [];
+  const pickTask = useCallback((id: string) => setOpen(id), []);
   const board = (
     <div className="grid content-start gap-4 pr-4">
       {tasks.error && <Banner tone="danger">{tasks.error}</Banner>}
@@ -208,7 +213,7 @@ export function BoardTab({
               {c.title} ({list.filter(c.match).length})
             </h3>
             {list.filter(c.match).map((t) => (
-              <TaskCard key={t.id} t={t} selected={open === t.id} onOpen={() => setOpen(t.id)} />
+              <TaskCard key={t.id} t={t} selected={open === t.id} onOpen={pickTask} />
             ))}
           </div>
         ))}

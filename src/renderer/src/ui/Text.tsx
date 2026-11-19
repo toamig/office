@@ -1,5 +1,5 @@
 import type { ButtonHTMLAttributes, ReactNode } from "react";
-import { timeAgo } from "../lib/hooks";
+import { timeAgo } from "../lib/time";
 
 /** A button that reads as a link: for a name that opens the thing it names. */
 export function LinkButton({ className = "", ...props }: ButtonHTMLAttributes<HTMLButtonElement>) {

@@ -1,7 +1,17 @@
 import { Check, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "../../components/Markdown";
-import { Button, Card, EmptyState, IconButton, StatusBadge, Textarea, notifyError } from "../../ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  PipelineDiagram,
+  StatusBadge,
+  Textarea,
+  notifyError,
+} from "../../ui";
+import { diagramStages } from "./diagram";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 
@@ -107,6 +117,13 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
           {t.branch && <code className="ui-path">{t.branch}</code>}
         </div>
         <p className="mt-0 ui-muted">{t.description}</p>
+        <div className="mb-3">
+          <PipelineDiagram
+            stages={diagramStages(t)}
+            picked={shown?.stageId}
+            onPick={(id) => setStage(id)}
+          />
+        </div>
         <div className="mb-3 flex flex-wrap gap-1">
           {t.stages.map((s) => (
             <Button

@@ -977,3 +977,169 @@ input[type="radio"] {
     column-gap: var(--space-4);
   }
 }
+
+/* ---- the pipeline diagram ---- */
+.diagram {
+  display: flex;
+  align-items: stretch;
+  margin: 0;
+  padding: var(--space-2) 0;
+  list-style: none;
+  overflow-x: auto;
+}
+.diagram-node {
+  flex: 0 0 auto;
+}
+.diagram-button {
+  display: grid;
+  width: 168px;
+  height: 100%;
+  align-content: start;
+  justify-items: start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+}
+.diagram-button:not(:disabled):hover {
+  border-color: color-mix(in srgb, var(--accent) 50%, var(--line));
+}
+.diagram-button:disabled {
+  cursor: default;
+}
+.diagram-node[data-current="true"] .diagram-button {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 1px var(--accent);
+}
+.diagram-node[data-picked="true"] .diagram-button {
+  background: var(--selected);
+}
+.diagram-node[data-status="pending"] .diagram-button {
+  color: var(--muted);
+}
+.diagram-name {
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.diagram-who {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.diagram-time {
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.diagram-variants {
+  display: grid;
+  gap: 2px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+}
+.diagram-count {
+  color: var(--text);
+  font-weight: 600;
+}
+.diagram-line {
+  flex: 0 0 var(--space-5);
+  align-self: center;
+  height: 1px;
+  background: var(--line);
+}
+.diagram-you {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  align-self: center;
+  gap: var(--space-1);
+  padding: 2px var(--space-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--bg);
+  color: var(--muted);
+  font-size: var(--text-xs);
+  position: relative;
+  margin: 0 var(--space-3);
+}
+.diagram-you::before,
+.diagram-you::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: var(--space-3);
+  height: 1px;
+  background: var(--line);
+}
+.diagram-you::before {
+  right: 100%;
+}
+.diagram-you::after {
+  left: 100%;
+}
+@keyframes diagram-pulse {
+  0%,
+  100% {
+    box-shadow: 0 0 0 1px var(--accent);
+  }
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 30%, transparent);
+  }
+}
+.diagram-node[data-current="true"][data-working="true"] .diagram-button {
+  animation: diagram-pulse 2.4s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .diagram-node[data-current="true"][data-working="true"] .diagram-button {
+    animation: none;
+  }
+}
+
+/* the compact diagram: small marks and the current stage */
+.marks {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  min-width: 0;
+}
+.marks-row {
+  display: inline-flex;
+  gap: 3px;
+}
+.mark {
+  width: 10px;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+}
+.mark[data-status="done"],
+.mark[data-status="approved"] {
+  background: var(--success);
+}
+.mark[data-status="running"] {
+  background: var(--info);
+}
+.mark[data-status="waiting-gate"],
+.mark[data-status="waiting-permission"] {
+  background: var(--attention);
+}
+.mark[data-status="failed"] {
+  background: var(--danger);
+}
+.mark[data-current="true"] {
+  height: 6px;
+  outline: 1px solid var(--text);
+  outline-offset: 1px;
+}
+.marks-now {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

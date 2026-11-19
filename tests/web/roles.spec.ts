@@ -10,8 +10,8 @@ test("editing a role round-trips through the workspace file", async () => {
   await win.getByTestId("rail-board").click();
   await win.getByTestId("board-tab-roles").click();
   await win.getByTestId("role-row").filter({ hasText: "builder" }).click();
-  await win.getByTestId("role-model").fill("haiku");
-  await pick(win, "role-effort", "high");
+  await pick(win, "role-model", "haiku");
+  await win.getByTestId("role-effort-high").click();
   await win.getByTestId("role-instructions").fill("Build carefully.");
   await win.getByTestId("role-save").click();
   await expect(toasts(win).filter({ hasText: "Role saved" })).toBeVisible();
@@ -24,8 +24,9 @@ test("editing a role round-trips through the workspace file", async () => {
   });
 
   // A new role, and a project override that the Start agent dialog's role picker will honour.
-  await win.getByTestId("new-role-id").fill("qa");
   await win.getByTestId("new-role").click();
+  await win.getByTestId("new-role-id").fill("qa");
+  await win.getByTestId("new-role-create").click();
   await expect(win.getByTestId("role-row").filter({ hasText: "qa" })).toBeVisible();
   await pick(win, "override-project", { label: "Alpha" });
   await pick(win, "override-builder", "qa");

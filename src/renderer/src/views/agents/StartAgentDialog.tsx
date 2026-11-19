@@ -11,11 +11,14 @@ const NEW_WORKTREE = "__new_worktree__";
 export function StartAgentDialog({
   projectId,
   cwd,
+  roleId: initialRole,
   onClose,
   onStarted,
 }: {
   projectId?: string;
   cwd?: string;
+  /** A role to start as, from a link (for example Start a session as this role). */
+  roleId?: string;
   onClose: () => void;
   onStarted: (session: SessionRow) => void;
 }) {
@@ -27,7 +30,7 @@ export function StartAgentDialog({
   const [newWorktree, setNewWorktree] = useState("");
   const worktrees = useQuery("worktrees.list", { projectId: project || "__none__" });
   const [mode, setMode] = useState<"role" | "provider">("role");
-  const [roleId, setRoleId] = useState("builder");
+  const [roleId, setRoleId] = useState(initialRole ?? "builder");
   const [providerId, setProviderId] = useState("claude-code");
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");

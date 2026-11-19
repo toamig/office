@@ -3,11 +3,13 @@ import { useState } from "react";
 import { useUi } from "../stores/ui";
 import { Button, Page, Tabs } from "../ui";
 import { BoardTab } from "./board/BoardTab";
+import { PermissionsTab } from "./board/PermissionsTab";
+import { PipelinesTab } from "./board/PipelinesTab";
 import { RolesTab } from "./board/RolesTab";
 
-type Tab = "board" | "roles";
+type Tab = "board" | "pipelines" | "roles" | "permissions";
 
-/** The orchestrator: the task board, and the roles that decide who plans, builds and reviews. */
+/** The orchestrator: the task board, the pipelines tasks run through, the roles that do each stage, and what they may do. */
 export function Board() {
   const [tab, setTab] = useState<Tab>("board");
   const [creating, setCreating] = useState(false);
@@ -32,7 +34,9 @@ export function Board() {
         onChange={setTab}
         items={[
           { id: "board", label: "Tasks", testId: "board-tab-board" },
+          { id: "pipelines", label: "Pipelines", testId: "board-tab-pipelines" },
           { id: "roles", label: "Roles", testId: "board-tab-roles" },
+          { id: "permissions", label: "Permissions", testId: "board-tab-permissions" },
         ]}
       />
       {tab === "board" && (
@@ -42,7 +46,9 @@ export function Board() {
           onCloseCreate={() => setCreating(false)}
         />
       )}
-      {tab === "roles" && <RolesTab />}
+      {tab === "pipelines" && <PipelinesTab />}
+      {tab === "roles" && <RolesTab goTo={setTab} />}
+      {tab === "permissions" && <PermissionsTab />}
     </Page>
   );
 }

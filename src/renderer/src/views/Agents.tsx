@@ -370,6 +370,7 @@ export function Agents({ active: visible }: { active: boolean }) {
         <StartAgentDialog
           {...(filter ? { projectId: filter } : {})}
           {...(linked["cwd"] ? { cwd: linked["cwd"] } : {})}
+          {...(linked["role"] ? { roleId: linked["role"] } : {})}
           onClose={() => setStarting(false)}
           onStarted={(session) => {
             setStarting(false);
