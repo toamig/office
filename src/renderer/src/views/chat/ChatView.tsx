@@ -98,7 +98,10 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
     try {
       await work();
     } catch (err) {
-      notifyError(err, "That did not work", session.id);
+      notifyError(err, "Could not send that to the agent", session.id, {
+        label: "Try again",
+        run: () => void run(work),
+      });
     }
   };
 

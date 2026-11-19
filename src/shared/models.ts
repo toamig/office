@@ -70,6 +70,8 @@ export const ProjectSummary = z.object({
   changed: z.number(),
   ahead: z.number(),
   behind: z.number(),
+  /** Files in a merge conflict. */
+  conflicted: z.number(),
   waiting: z.number(),
   lastActivity: z.string().nullable(),
   statusAt: z.string().nullable(),
@@ -224,6 +226,36 @@ export const NotificationRow = z.object({
 export type NotificationRow = z.infer<typeof NotificationRow>;
 
 /** A headless builder asking whether it may run something outside its role's allowed commands. */
+/** Something that waits on the owner, derived from live state: it exists exactly while it is unresolved. */
+export const PendingItem = z.object({
+  /** Stable while the same thing is pending, e.g. "session:<id>". */
+  key: z.string(),
+  kind: z.enum([
+    "permission",
+    "agent-needs-you",
+    "agent-failed",
+    "task-gate",
+    "task-failed",
+    "conflict",
+    "push-failed",
+    "ci-failed",
+    "review-requested",
+    "waiting",
+  ]),
+  /** danger (red) for something broken, attention (amber) for something that waits for an answer. */
+  severity: z.enum(["danger", "attention"]),
+  projectId: z.string().nullable(),
+  title: z.string(),
+  detail: z.string().nullable(),
+  /** Where it is resolved. */
+  link: NotificationLink,
+  /** Changes when the state behind the item changes, so a dismissed item comes back. */
+  fingerprint: z.string(),
+  /** For a waiting line: what ticking it off needs. */
+  waitingRaw: z.string().optional(),
+});
+export type PendingItem = z.infer<typeof PendingItem>;
+
 export const PermissionRequest = z.object({
   id: z.string(),
   runId: z.string(),
@@ -977,6 +1009,8 @@ export const UpdateStatus = z.object({
     "downloading",
     "downloaded",
     "up-to-date",
+    /** Nothing has been published on GitHub yet: a neutral state, not a failure. */
+    "no-releases",
     "error",
   ]),
   newVersion: z.string().nullable(),

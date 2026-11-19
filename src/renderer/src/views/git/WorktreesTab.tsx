@@ -26,7 +26,7 @@ export function WorktreesTab({ projectId }: { projectId: string }) {
       await work();
       list.reload();
     } catch (err) {
-      notifyError(err, "That did not work", "worktrees");
+      notifyError(err, "Could not change the worktree", "worktrees");
     }
   };
 

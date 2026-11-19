@@ -30,10 +30,9 @@ test("a simulated hook POST moves a session to needs-you and raises an urgent no
   await win.getByTestId("rail-agents").click();
   await expect(win.getByTestId("session-status").first()).toContainText(/needs you/i);
   await win.getByTestId("rail-inbox").click();
-  const note = win.getByTestId("notification");
+  const note = win.locator('[data-testid="pending-item"][data-kind="agent-needs-you"]');
   await expect(note).toHaveCount(1);
   await expect(note).toContainText("Hooked needs you");
-  await expect(note).toContainText(/urgent/i);
   await app.close();
 });
 
@@ -81,7 +80,7 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
     timeout: 20000,
   });
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("notification").first()).toContainText("Asker needs you");
+  await expect(win.getByTestId("pending-item").first()).toContainText("Asker needs you");
   expect(session.id).toBeTruthy();
 
   // Uninstalling puts the file back as it was.

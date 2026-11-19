@@ -30,7 +30,7 @@ test("the dropdown is Office's own: a button with a menu, keyboard navigable, an
   await expect(filter).toContainText("Beta");
   // Clicking outside closes it without changing anything.
   await filter.click();
-  await win.getByTestId("topbar-title").click();
+  await win.getByTestId("topbar").click({ position: { x: 600, y: 10 } });
   await expect(menu).toHaveCount(0);
   await expect(filter).toContainText("Beta");
   await app.close();

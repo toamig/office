@@ -15,11 +15,11 @@ test("Ctrl+/ opens the shortcuts sheet, the view keys work, and history walks ba
   await win.keyboard.press("Control+2");
   await expect(win.getByTestId("projects")).toBeVisible();
   await win.keyboard.press("Control+,");
-  await expect(win.getByTestId("topbar-title")).toHaveText("Setup");
+  await expect(win.getByRole("heading", { level: 1 })).toHaveText("Setup");
   await win.keyboard.press("Alt+ArrowLeft");
   await expect(win.getByTestId("projects")).toBeVisible();
   await win.getByTestId("history-forward").click();
-  await expect(win.getByTestId("topbar-title")).toHaveText("Setup");
+  await expect(win.getByRole("heading", { level: 1 })).toHaveText("Setup");
   await win.getByTestId("rail-home").click();
   await win.getByTestId("sidebar-toggle").click();
   await expect(win.getByTestId("rail")).toHaveAttribute("data-collapsed", "true");

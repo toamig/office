@@ -18,6 +18,7 @@ export function Board() {
   return (
     <Page
       title="Board"
+      subtitle="Tasks that agents work through one stage at a time, with you approving."
       testId="board"
       fill
       primary={

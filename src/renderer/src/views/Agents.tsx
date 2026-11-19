@@ -326,6 +326,7 @@ export function Agents({ active: visible }: { active: boolean }) {
   return (
     <Page
       title="Agents"
+      subtitle="Agent conversations working on your projects."
       testId="agents"
       fill
       primary={

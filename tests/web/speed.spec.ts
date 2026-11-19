@@ -1,6 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { randomUUID } from "node:crypto";
-import { writeFileSync } from "node:fs";
+import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openDb } from "../../src/main/core/db";
 import { launch } from "./helpers";
@@ -199,44 +199,43 @@ test("switching views keeps a running terminal's scrollback and a streaming chat
   await app.close();
 });
 
-test("a long inbox draws only the rows near the screen", async () => {
+test("a long Needs you list draws only the rows near the screen", async () => {
   const first = await launch({ world: true, fakeTools: true });
-  const { base } = first;
+  const { base, world } = first;
+  if (!world) throw new Error("no world");
   await first.app.firstWindow();
   await first.app.close();
 
-  // 400 notifications, written to the app's database between two runs.
-  const db = openDb(join(base, "data", "office.db"));
-  const insert = db.prepare(
-    `INSERT INTO notifications (id, kind, project_id, title, body, link, urgent, created_at, read_at)
-     VALUES (?, 'agent.done', NULL, ?, NULL, NULL, 0, ?, NULL)`,
+  // 400 things waiting on the owner, written into a project's notes between two runs.
+  const file = join(world.hub, "Alpha", "OpenItems.md");
+  const lines = Array.from(
+    { length: 400 },
+    (_, i) =>
+      `- [ ] 2026-11-${String(1 + (i % 28)).padStart(2, "0")} Row ${String(i).padStart(3, "0")}`,
+  ).join("\n");
+  const text = readFileSync(file, "utf8").replace(
+    "## Waiting on you\n",
+    `## Waiting on you\n\n${lines}\n`,
   );
-  const start = Date.now();
-  db.transaction(() => {
-    for (let i = 0; i < 400; i++)
-      insert.run(
-        randomUUID(),
-        `Row ${String(i).padStart(3, "0")}`,
-        new Date(start - i * 1000).toISOString(),
-      );
-  })();
-  db.close();
+  writeFileSync(file, text);
 
   const second = await launch({ base, fakeTools: true });
   const win = await second.app.firstWindow();
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("notification").first()).toContainText("Row 000");
-  const drawn = await win.getByTestId("notification").count();
+  const rows = win.getByTestId("pending-item");
+  await expect(rows.first()).toBeVisible();
+  const drawn = await rows.count();
   expect(drawn).toBeGreaterThan(5);
   expect(drawn).toBeLessThan(120);
-  // Scrolling to the end brings the last rows into the page.
+  // Scrolling to the end brings the oldest rows into the page, and the rows at the top are no longer drawn.
+  const top = await rows.first().innerText();
   await expect
     .poll(async () => {
-      await win.getByTestId("notification").last().scrollIntoViewIfNeeded();
-      return win.getByTestId("notification").last().innerText();
+      await rows.last().scrollIntoViewIfNeeded();
+      return (await rows.first().innerText()) === top;
     })
-    .toContain("Row 399");
-  expect(await win.getByTestId("notification").count()).toBeLessThan(120);
+    .toBe(false);
+  expect(await rows.count()).toBeLessThan(120);
   await second.app.close();
 });
 

@@ -28,7 +28,7 @@ export function BranchesTab({ projectId }: { projectId: string }) {
       await work();
       branches.reload();
     } catch (err) {
-      notifyError(err, "That did not work", "branches");
+      notifyError(err, "Could not change the branch", "branches");
     }
   };
 

@@ -36,6 +36,6 @@ describe("read channels", () => {
     expect(isMutation("preview.bounds")).toBe(false);
     expect(isMutation("app.popupMenu")).toBe(false);
     expect(isMutation("sessions.kill")).toBe(true);
-    expect(isMutation("notifications.markRead")).toBe(true);
+    expect(isMutation("pending.dismiss")).toBe(true);
   });
 });

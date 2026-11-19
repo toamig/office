@@ -78,7 +78,18 @@ export class GithubService {
   private timer: NodeJS.Timeout | undefined;
   private readonly seen = new Set<string>();
 
+  /** What the last poll found that still waits on the owner, per project. */
+  private readonly live = new Map<string, { ci: RunInfo | null; reviews: PrInfo[] }>();
+
+  /** Called when a poll changed what waits on the owner. */
+  onChange?: () => void;
+
   constructor(private readonly deps: { projects: ProjectService; notifier: Notifier }) {}
+
+  /** Failed CI and review requests as of the last poll; a project that is green again is not listed. */
+  pendingState(): Array<{ projectId: string; ci: RunInfo | null; reviews: PrInfo[] }> {
+    return [...this.live].map(([projectId, v]) => ({ projectId, ...v }));
+  }
 
   async overview(projectId: string): Promise<GithubOverview> {
     const project = this.deps.projects.find(projectId);
@@ -93,9 +104,16 @@ export class GithubService {
     const projects = this.deps.projects.list().filter((p) => !p.archived && p.isRepo);
     await mapLimit(projects, 2, async (p) => {
       const info = await this.overview(p.id);
-      if (!info.isGithub || info.error) return;
+      if (!info.isGithub || info.error) {
+        if (this.live.delete(p.id)) this.onChange?.();
+        return;
+      }
       this.notifyFailures(p.id, p.name, info.runs);
-      await this.notifyReviewRequests(p.id, p.name);
+      const reviews = await this.notifyReviewRequests(p.id, p.name);
+      // The newest finished run decides: red while it failed, gone once a later run passed.
+      const latest = info.runs.find((r) => r.status === "completed") ?? null;
+      this.live.set(p.id, { ci: latest?.conclusion === "failure" ? latest : null, reviews });
+      this.onChange?.();
     });
   }
 
@@ -113,9 +131,9 @@ export class GithubService {
     }
   }
 
-  private async notifyReviewRequests(projectId: string, name: string): Promise<void> {
+  private async notifyReviewRequests(projectId: string, name: string): Promise<PrInfo[]> {
     const project = this.deps.projects.find(projectId);
-    if (!project) return;
+    if (!project) return [];
     const out = await run(
       "gh",
       ["pr", "list", "--search", "review-requested:@me", "--json", PR_FIELDS],
@@ -124,8 +142,9 @@ export class GithubService {
         timeoutMs: 30_000,
       },
     );
-    if (out.code !== 0) return;
-    for (const pr of parsePrs(out.stdout)) {
+    if (out.code !== 0) return this.live.get(projectId)?.reviews ?? [];
+    const prs = parsePrs(out.stdout);
+    for (const pr of prs) {
       if (this.seen.has(pr.url)) continue;
       this.seen.add(pr.url);
       this.deps.notifier.notify({
@@ -136,6 +155,7 @@ export class GithubService {
         link: { view: "git", params: { project: projectId, tab: "prs" } },
       });
     }
+    return prs;
   }
 
   /** Every 5 minutes while the app is open (plan 13, M3.5). */

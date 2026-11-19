@@ -107,6 +107,10 @@ test("the pipeline editor reorders stages, previews the diagram, and refuses a s
   await expect(win.getByTestId("pipeline-preview-diagram").getByTestId("diagram-you")).toHaveCount(
     2,
   );
+  // Only the grip is draggable: selecting text in a stage's fields never moves the card.
+  await expect(win.getByTestId("stage-editor").first()).not.toHaveAttribute("draggable", /./);
+  await expect(win.getByTestId("stage-grip").first()).toHaveAttribute("draggable", "true");
+  await expect(win.getByTestId("stage-grip").first()).toHaveAttribute("title", "Drag to reorder");
   await win.getByTestId("stage-down").first().click();
   expect(await ids()).toEqual(["build", "plan", "review"]);
   await win.getByTestId("stage-up").nth(2).click();

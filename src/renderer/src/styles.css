@@ -63,8 +63,37 @@ body {
 }
 .topbar button,
 .topbar input,
-.topbar a {
+.topbar a,
+.topbar .ui-popover,
+.topbar .ui-popover * {
   -webkit-app-region: no-drag;
+}
+/* The bell and its count: the pill sits on the corner of the button, which keeps its own hover box. */
+.bell-host {
+  position: relative;
+  display: flex;
+}
+.bell-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  pointer-events: none;
+}
+.bell-count .ui-count {
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+}
+.bell-item-main {
+  display: grid;
+  min-width: 0;
+  flex: 1;
+  gap: 2px;
+  border: 0;
+  background: transparent;
+  color: inherit;
+  text-align: left;
 }
 .topbar-title {
   margin-left: 8px;

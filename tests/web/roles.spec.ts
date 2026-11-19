@@ -45,3 +45,36 @@ test("editing a role round-trips through the workspace file", async () => {
   await expect(toasts(win).filter({ hasText: "used by the" })).toBeVisible();
   await app.close();
 });
+
+test("a role whose model does not fit its provider says so and can be fixed, and effort follows the provider", async () => {
+  const { app } = await launch({ world: true, fakeTools: true });
+  const win = await app.firstWindow();
+  // The owner's case: Claude Code paired with a model that is not Claude's.
+  await win.evaluate(() =>
+    window.office.invoke("roles.save", {
+      id: "mixed",
+      role: {
+        provider: "claude-code",
+        model: "gpt-6.1-terra",
+        instructions: "",
+        permissionProfile: "ask-first",
+        readOnly: false,
+        allowedCommands: [],
+      },
+    }),
+  );
+  await win.getByTestId("rail-board").click();
+  await win.getByTestId("board-tab-roles").click();
+  await win.getByTestId("role-row").filter({ hasText: "Mixed" }).click();
+  await expect(win.getByTestId("role-model-mismatch")).toContainText("does not fit this provider");
+  await win.getByTestId("role-model-fix").click();
+  await expect(win.getByTestId("role-model-mismatch")).toHaveCount(0);
+  await expect(win.getByTestId("role-model")).toContainText("The tool's default");
+
+  // Claude Code accepts Max; Codex has no such level, so it is not offered there.
+  await expect(win.getByTestId("role-effort-max")).toBeVisible();
+  await pick(win, "role-provider", { label: "Codex" });
+  await expect(win.getByTestId("role-effort-max")).toHaveCount(0);
+  await expect(win.getByTestId("role-effort-xhigh")).toBeVisible();
+  await app.close();
+});

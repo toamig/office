@@ -296,7 +296,7 @@ describe("the bridge, the relay route and the broker together", () => {
       toolName: "Bash",
       summary: "rm -rf build",
     });
-    const note = notifier.list({}).find((n) => n.kind === "permission.request");
+    const note = notifier.list().find((n) => n.kind === "permission.request");
     expect(note).toMatchObject({ urgent: true, link: { view: "inbox" } });
     expect(waiting).toEqual([["run-1", true]]);
 
@@ -306,7 +306,8 @@ describe("the bridge, the relay route and the broker together", () => {
       updatedInput: { command: "rm -rf build" },
     });
     expect(waiting.at(-1)).toEqual(["run-1", false]);
-    expect(notifier.list({}).find((n) => n.id === note?.id)?.readAt).toBeTruthy();
+    // It is pending while it waits and gone from the list of broker questions once answered.
+    expect(broker.list()).toHaveLength(0);
 
     const second = await callBridge("run-1", "curl x | sh");
     await until(() => broker.list().length === 1);
@@ -324,7 +325,7 @@ describe("the bridge, the relay route and the broker together", () => {
     const a = await callBridge("run-a", "same command");
     const b = await callBridge("run-a", "same command");
     await until(() => broker.list().length === 2);
-    expect(notifier.list({}).filter((n) => n.kind === "permission.request")).toHaveLength(2);
+    expect(notifier.list().filter((n) => n.kind === "permission.request")).toHaveLength(2);
     for (const r of broker.list()) broker.answer(r.id, false);
     await a.answer();
     await b.answer();

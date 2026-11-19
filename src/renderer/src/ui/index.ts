@@ -10,7 +10,6 @@ export { StatusBadge, CountPill, Kbd } from "./Status";
 export { Skeleton, Spinner, EmptyState, Banner } from "./Feedback";
 export {
   NotificationStack,
-  NotificationBell,
   notify,
   notifyDone,
   notifyError,

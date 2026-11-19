@@ -41,7 +41,7 @@ test("a day in the workbench: two agents, a needs-you, capture, ask the brain an
     .getByTestId("session-status");
   await expect(alphaStatus).toContainText(/needs you/i, { timeout: 20000 });
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("notification").first()).toContainText("Alpha work needs you");
+  await expect(win.getByTestId("pending-item").first()).toContainText("Alpha work needs you");
 
   // The owner answers it, and the session goes back to idle.
   await win.getByTestId("rail-agents").click();

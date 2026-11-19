@@ -189,7 +189,12 @@ export function Git() {
   );
 
   return (
-    <Page title="Git" testId="git" fill>
+    <Page
+      title="Git"
+      subtitle="Branches, changes and pull requests for each project."
+      testId="git"
+      fill
+    >
       <InspectorSlot view="git">{current && <GitInspector projectId={current.id} />}</InspectorSlot>
       <SplitPane
         id="git"

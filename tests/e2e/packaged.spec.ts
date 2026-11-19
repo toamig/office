@@ -9,9 +9,9 @@ test.skip(!existsSync(packagedExe), "run `npm run dist` first");
 test("the packaged app shows the fixture workspace and opens the database", async () => {
   const { app } = await launch({ world: true, packaged: true });
   const win = await app.firstWindow();
-  await expect(win.getByTestId("waiting-item")).toHaveCount(2);
-  const counts = await win.evaluate(() => window.office.invoke("notifications.counts"));
-  expect(counts).toEqual({ unread: 0, urgentUnread: 0 });
+  await expect(win.getByTestId("pending-item").filter({ hasText: "Alpha" }).first()).toBeVisible();
+  const pending = await win.evaluate(() => window.office.invoke("pending.list"));
+  expect(pending.filter((i) => i.kind === "waiting")).toHaveLength(2);
   await app.close();
 });
 

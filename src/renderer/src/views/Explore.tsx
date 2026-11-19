@@ -68,6 +68,7 @@ export function Explore() {
   return (
     <Page
       title="Explore"
+      subtitle="A chat for ideas, research and questions, with no project attached."
       testId="explore"
       fill
       primary={

@@ -60,7 +60,7 @@ test("an empty app-data folder opens the welcome flow, with no sidebar, and walk
   await expect(win.getByTestId("home")).toBeVisible();
   await expect(win.getByTestId("rail")).toBeVisible();
   await expect(win.getByTestId("welcome")).toHaveCount(0);
-  await expect(win.getByTestId("waiting-item")).toHaveCount(2);
+  await expect(win.locator('[data-testid="pending-item"][data-kind="waiting"]')).toHaveCount(2);
 
   const saved = JSON.parse(readFileSync(join(data, "settings.json"), "utf8"));
   expect(saved).toMatchObject({ projectsRoot: world.projectsRoot, welcomeDone: true });

@@ -8,7 +8,7 @@ test("Setup shows the workspace, the tools with their problems and fixes, and th
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
   await expect(win.getByTestId("home")).toBeVisible();
-  await expect(win.getByTestId("waiting-item")).toHaveCount(2);
+  await expect(win.locator('[data-testid="pending-item"][data-kind="waiting"]')).toHaveCount(2);
   await win.getByTestId("rail-setup").click();
 
   await expect(win.getByTestId("workspace-summary")).toContainText(world.hub);
@@ -90,10 +90,9 @@ test("automations: add one, run it now, and see it finish", async () => {
 
   await row.getByTestId("automation-run").click();
   await expect(row).toContainText(/last run just now/i, { timeout: 60000 });
+  // A finished automation is a result, not something that waits on the owner.
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("notification").first()).toContainText(
-    "Automation finished: nightly-brief",
-  );
+  await expect(win.getByTestId("pending-item").filter({ hasText: "nightly-brief" })).toHaveCount(0);
 
   await win.getByTestId("rail-setup").click();
   await win.getByTestId("automation-cron").fill("every day");

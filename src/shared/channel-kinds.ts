@@ -52,8 +52,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "app.update.status",
   "tasks.list",
   "tasks.get",
-  "notifications.list",
-  "notifications.counts",
+  "pending.list",
   "vault.health",
 ];
 

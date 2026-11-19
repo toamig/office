@@ -136,7 +136,6 @@ export class PermissionBroker {
     const pending = this.pending.get(id);
     if (!pending) return;
     this.pending.delete(id);
-    this.deps.notifier.markRead([pending.notificationId]);
     const stillWaiting = [...this.pending.values()].some(
       (p) => p.request.runId === pending.request.runId,
     );

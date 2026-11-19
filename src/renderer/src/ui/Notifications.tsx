@@ -1,8 +1,7 @@
-import { AlertTriangle, Bell, Check, Info, X } from "lucide-react";
+import { AlertTriangle, Check, Info, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { create } from "zustand";
 import { Button, IconButton } from "./Button";
-import { CountPill } from "./Status";
 
 export type NoteTone = "success" | "info" | "attention" | "danger";
 
@@ -21,11 +20,10 @@ export interface Note {
 export type NoteInput = Omit<Note, "id" | "at">;
 
 const SHOWN = 4;
-const HISTORY = 50;
 
 interface NoteState {
+  /** The pop-ups showing now. Nothing is kept once one leaves. */
   live: Note[];
-  history: Note[];
   seq: number;
   push: (n: NoteInput) => number;
   dismiss: (id: number) => void;
@@ -33,7 +31,6 @@ interface NoteState {
 
 export const useNotes = create<NoteState>((set, get) => ({
   live: [],
-  history: [],
   seq: 0,
   push: (input) => {
     const id = get().seq + 1;
@@ -42,17 +39,34 @@ export const useNotes = create<NoteState>((set, get) => ({
       seq: id,
       // A newer result for the same subject replaces the older one.
       live: [...s.live.filter((n) => !input.subject || n.subject !== input.subject), note],
-      history: [note, ...s.history].slice(0, HISTORY),
     }));
     return id;
   },
   dismiss: (id) => set((s) => ({ live: s.live.filter((n) => n.id !== id) })),
 }));
 
-/** An error from an action, as a notification that stays until it is closed or replaced by a newer result for the same subject. */
-export function notifyError(err: unknown, title = "That did not work", subject?: string): number {
-  const message = err instanceof Error ? err.message : String(err);
-  return notify({ tone: "danger", title, detail: message, subject });
+/** The cause of an error in plain words: the transport's wrapping ("Error invoking remote method ...") is dropped. */
+export function plainCause(err: unknown): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  return (
+    raw
+      .replace(/^Error invoking remote method '[^']*':\s*/, "")
+      .replace(/^(\w*Error|IpcFailure):\s*/, "")
+      .trim() || "Something went wrong."
+  );
+}
+
+/**
+ * An error from an action, as a notification that stays until it is closed or replaced by a newer result for the same
+ * subject. It names the action that failed (the title), says why in plain words, and offers one next step.
+ */
+export function notifyError(
+  err: unknown,
+  title: string,
+  subject?: string,
+  action?: { label: string; run: () => void },
+): number {
+  return notify({ tone: "danger", title, detail: plainCause(err), subject, action });
 }
 
 /** A good result: a short notification that leaves by itself. */
@@ -143,38 +157,6 @@ export function NotificationStack() {
       {shown.map((n) => (
         <Toast key={n.id} note={n} />
       ))}
-    </div>
-  );
-}
-
-/** The bell in the top bar: the last 50 notifications of this session. */
-export function NotificationBell() {
-  const history = useNotes((s) => s.history);
-  const [open, setOpen] = useState(false);
-  return (
-    <div className="relative">
-      <IconButton label="Notifications" onClick={() => setOpen((v) => !v)} aria-expanded={open}>
-        <Bell size={16} />
-        {history.length > 0 && <CountPill count={history.length} tone="muted" />}
-      </IconButton>
-      {open && (
-        <div className="ui-popover" data-testid="notification-history">
-          {history.length === 0 && (
-            <p className="m-3 text-[length:var(--text-sm)]">Nothing yet this session.</p>
-          )}
-          {history.map((n) => (
-            <div key={n.id} className="ui-row" data-testid="notification-history-row">
-              <div className="min-w-0 flex-1">
-                <div className="ui-toast-title">{n.title}</div>
-                {n.detail && <div className="ui-toast-detail">{n.detail}</div>}
-              </div>
-              <span className="ui-toast-detail num">
-                {new Date(n.at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
-              </span>
-            </div>
-          ))}
-        </div>
-      )}
     </div>
   );
 }

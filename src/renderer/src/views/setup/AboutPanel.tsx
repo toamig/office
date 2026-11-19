@@ -11,6 +11,7 @@ const label: Record<UpdateStatus["state"], string> = {
   downloading: "Downloading an update",
   downloaded: "Update ready",
   "up-to-date": "You have the latest version",
+  "no-releases": "No releases yet",
   error: "The update check failed",
 };
 

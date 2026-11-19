@@ -278,6 +278,7 @@ export function Projects() {
   return (
     <Page
       title="Projects"
+      subtitle="Your projects and where each one stands."
       testId="projects"
       primary={
         <Button variant="primary" onClick={() => setAdding(true)} data-testid="add-projects-open">

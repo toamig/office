@@ -23,9 +23,15 @@ test("a sync conflict lands in the inbox once, even when repeated", async () => 
   await win.getByRole("button", { name: "Close" }).click();
 
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("notification")).toHaveCount(1);
-  await expect(win.getByTestId("notification")).toContainText("Sync conflict in Alpha");
-  await win.getByTestId("mark-all-read").click();
-  await expect(win.getByTestId("inbox-count")).toHaveCount(0);
+  // One item however often it was synced, and the badge counts it in the colour of a problem.
+  const conflict = win.locator('[data-testid="pending-item"][data-kind="conflict"]');
+  await expect(conflict).toHaveCount(1);
+  await expect(conflict).toContainText("Sync conflict in Alpha");
+  await expect(win.getByTestId("inbox-count")).toHaveAttribute("data-tone", "danger");
+  // Dismissing hides it, and it is not kept anywhere.
+  await conflict.getByTestId("pending-dismiss").click();
+  await expect(conflict).toHaveCount(0);
+  // What is left is amber: nothing is broken any more.
+  await expect(win.getByTestId("inbox-count")).toHaveAttribute("data-tone", "attention");
   await app.close();
 });

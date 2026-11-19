@@ -13,7 +13,7 @@ const READS: Partial<Record<ViewId, Array<() => void>>> = {
     () => prefetch("projects.list"),
     () => prefetch("vault.health"),
     () => prefetch("sessions.list", {}),
-    () => prefetch("notifications.list", { unread: true, limit: 200 }),
+    () => prefetch("pending.list"),
     () => prefetch("tasks.list", {}),
     () => prefetch("automations.list"),
     () => prefetch("permissions.list"),
@@ -21,7 +21,7 @@ const READS: Partial<Record<ViewId, Array<() => void>>> = {
   projects: [() => prefetch("projects.list")],
   agents: [() => prefetch("sessions.list", {}), () => prefetch("projects.list")],
   inbox: [
-    () => prefetch("notifications.list", { limit: 1000 }),
+    () => prefetch("pending.list"),
     () => prefetch("projects.list"),
     () => prefetch("permissions.list"),
   ],

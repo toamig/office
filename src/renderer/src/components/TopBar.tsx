@@ -3,8 +3,8 @@ import { useInspector } from "../lib/inspector";
 import { office } from "../lib/ipc";
 import { useSidebarCollapsed } from "../lib/sidebar";
 import { useUi } from "../stores/ui";
-import { VIEW_LABELS } from "../lib/views";
-import { Button, NotificationBell, notify, notifyError } from "../ui";
+import { Button, notify, notifyError } from "../ui";
+import { PendingBell } from "./PendingBell";
 
 /** The padding that keeps controls clear of the native window buttons drawn in the corner. */
 const BUTTONS_CLEARANCE =
@@ -95,9 +95,6 @@ export function TopBar() {
       >
         <ArrowRight size={16} />
       </BarButton>
-      <div className="topbar-title" data-testid="topbar-title">
-        {VIEW_LABELS[view]}
-      </div>
       <div className="flex-1" />
       <button
         className="switcher-button"
@@ -116,7 +113,7 @@ export function TopBar() {
           <PanelRight size={16} />
         </BarButton>
       )}
-      <NotificationBell />
+      <PendingBell />
       <Button onClick={() => void sync()} disabled={syncing} data-testid="sync-all">
         <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
         {syncing ? "Syncing..." : "Sync all"}

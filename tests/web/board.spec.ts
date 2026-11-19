@@ -10,11 +10,11 @@ test("Home shows a waiting item, opens its project and ticks it done", async () 
   const win = await app.firstWindow();
 
   await expect(win.getByTestId("home")).toBeVisible();
-  const items = win.getByTestId("waiting-item");
+  const items = win.locator('[data-testid="pending-item"][data-kind="waiting"]');
   await expect(items).toHaveCount(2);
   await expect(items.first()).toContainText("Decide the sheep and enemy balance");
 
-  await items.first().getByTestId("open-waiting").click();
+  await items.first().getByTestId("pending-open").click();
   await expect(win.getByTestId("project-page")).toContainText("Alpha");
   await win.getByTestId("tab-todos").click();
   await expect(win.getByTestId("project-waiting")).toHaveCount(2);
@@ -35,8 +35,8 @@ test("Home shows a waiting item, opens its project and ticks it done", async () 
 test("Home done button works too, and the project list shows git state", async () => {
   const { app } = await launch({ world: true });
   const win = await app.firstWindow();
-  await win.getByTestId("done-waiting").first().click();
-  await expect(win.getByTestId("waiting-item")).toHaveCount(1);
+  await win.getByTestId("pending-done").first().click();
+  await expect(win.locator('[data-testid="pending-item"][data-kind="waiting"]')).toHaveCount(1);
 
   await win.getByTestId("rail-projects").click();
   await expect(win.getByTestId("project-card")).toHaveCount(2); // a pinned project is listed once, under Pinned

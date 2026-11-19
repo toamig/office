@@ -19,6 +19,11 @@ for (const [rail, root] of VIEWS) {
     const { app, page } = await launch({ world: true, fakeTools: true });
     await page.getByTestId(`rail-${rail}`).click();
     await expect(page.getByTestId(root)).toBeVisible();
+    // Every view says in one line what it is for, under its title, and the title is not repeated in the top bar.
+    const purpose = page.getByTestId(root).locator(".page-sub").first();
+    await expect(purpose).toBeVisible();
+    expect(((await purpose.innerText()).match(/[.]/g) ?? []).length).toBeLessThanOrEqual(2);
+    await expect(page.getByTestId("topbar-title")).toHaveCount(0);
     await app.close();
   });
 }

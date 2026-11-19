@@ -26,8 +26,9 @@ test("Home lists live agents and task approvals next to the notes' waiting items
       fanout: 1,
     }),
   );
-  await expect(win.getByTestId("waiting-gate")).toContainText("Home task", { timeout: 60000 });
-  await win.getByTestId("open-waiting-gate").click();
+  const gate = win.locator('[data-testid="pending-item"][data-kind="task-gate"]');
+  await expect(gate).toContainText("Home task", { timeout: 60000 });
+  await gate.getByTestId("pending-open").click();
   await expect(win.getByTestId("board")).toBeVisible();
 
   // The Today panel is always there, even with no automations.

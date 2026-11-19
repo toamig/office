@@ -17,10 +17,7 @@ import { Dropdown as Select } from "../../ui";
 
 /** Scheduled prompts on any project: a cron expression, a role and a prompt. Missed runs fire once at start. */
 export function AutomationsPanel() {
-  const automations = useQuery("automations.list", undefined, [
-    "workspace.changed",
-    "notification.new",
-  ]);
+  const automations = useQuery("automations.list", undefined, ["workspace.changed", "run.done"]);
   const projects = useQuery("projects.list");
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const roles = Object.keys(workspace.data?.workspace?.roles ?? {});

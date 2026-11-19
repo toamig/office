@@ -54,7 +54,7 @@ const payloads = (w: World): Partial<Record<ChannelName, unknown>> => ({
   "chat.files": { id: "none", query: "" },
   "tasks.list": {},
   "tasks.get": { id: "none" },
-  "notifications.list": {},
+  "pending.list": {},
 });
 
 beforeAll(async () => {

@@ -163,7 +163,12 @@ function NoteViewer({ path, onClose }: { path: string; onClose: () => void }) {
 export function Brain() {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <Page title="Brain" testId="brain" fill>
+    <Page
+      title="Brain"
+      subtitle="The notes you and your agents share, and whether they are healthy."
+      testId="brain"
+      fill
+    >
       <SplitPane
         id="brain"
         defaultSize={620}

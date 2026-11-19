@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { allProfiles } from "@shared/permissions";
 import type { Role } from "@shared/types";
+import { effortsFor, modelFits } from "@shared/roles";
 import { useQuery } from "../../lib/hooks";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
@@ -15,6 +16,7 @@ import {
   Input,
   LinkButton,
   SegmentedControl,
+  StatusBadge,
   SplitPane,
   Textarea,
   notifyDone,
@@ -22,14 +24,13 @@ import {
   sentence,
 } from "../../ui";
 
-const EFFORTS = [
-  ["", "Default"],
-  ["low", "Low"],
-  ["medium", "Medium"],
-  ["high", "High"],
-  ["xhigh", "Very high"],
-  ["max", "Max"],
-] as const;
+const EFFORT_LABELS: Record<string, string> = {
+  low: "Low",
+  medium: "Medium",
+  high: "High",
+  xhigh: "Very high",
+  max: "Max",
+};
 
 /** Starting points for a new role: what it is for, its standing instructions, and the profile it begins with. */
 const TEMPLATES: Record<
@@ -116,6 +117,9 @@ function RoleForm({
   const [draft, setDraft] = useState<Role>(role);
   const profiles = allProfiles(workspace.data?.workspace?.permissionProfiles);
   const models = providers.data?.find((p) => p.id === draft.provider)?.models ?? [];
+  const known = Object.fromEntries((providers.data ?? []).map((p) => [p.id, p.models]));
+  const fits = modelFits(draft.provider, draft.model, known);
+  const efforts = effortsFor(draft.provider);
   const profile = profiles.find((p) => p.id === draft.permissionProfile);
   const usedIn = Object.entries(workspace.data?.workspace?.pipelines ?? {}).flatMap(([pid, p]) =>
     p.stages.filter((s) => s.role === id).map((s) => ({ pid, name: p.name, stage: s.id })),
@@ -187,7 +191,15 @@ function RoleForm({
           <span className="ui-label">Provider</span>
           <Dropdown
             value={draft.provider}
-            onChange={(e) => set("provider", e.target.value)}
+            onChange={(e) =>
+              setDraft((d) => {
+                const next = { ...d, provider: e.target.value };
+                // An effort the new provider does not accept is dropped; a model that does not fit is flagged.
+                if (next.effort && !effortsFor(e.target.value).includes(next.effort))
+                  delete next.effort;
+                return next;
+              })
+            }
             data-testid="role-provider"
           >
             {(providers.data ?? []).map((p) => (
@@ -216,10 +228,27 @@ function RoleForm({
               </option>
             ))}
             {draft.model && !models.includes(draft.model) && (
-              <option value={draft.model}>{draft.model}</option>
+              <option value={draft.model}>{draft.model} (not offered here)</option>
             )}
           </Dropdown>
-          <span className="ui-helper">Which model the tool uses for this role.</span>
+          {fits ? (
+            <span className="ui-helper">Which model the tool uses for this role.</span>
+          ) : (
+            <span className="ui-badges" data-testid="role-model-mismatch">
+              <StatusBadge
+                status="info"
+                tone="attention"
+                label="This model does not fit this provider"
+              />
+              <Button
+                size="sm"
+                onClick={() => set("model", undefined)}
+                data-testid="role-model-fix"
+              >
+                Use the default model
+              </Button>
+            </span>
+          )}
         </label>
       </div>
       <div className="grid gap-1">
@@ -228,11 +257,14 @@ function RoleForm({
           label="Effort"
           value={draft.effort ?? ""}
           onChange={(v) => set("effort", (v || undefined) as Role["effort"])}
-          options={EFFORTS.map(([value, label]) => ({
-            value,
-            label,
-            testId: `role-effort-${value || "default"}`,
-          }))}
+          options={[
+            { value: "", label: "Default", testId: "role-effort-default" },
+            ...efforts.map((value) => ({
+              value,
+              label: EFFORT_LABELS[value] ?? value,
+              testId: `role-effort-${value}`,
+            })),
+          ]}
         />
         <span className="ui-helper">
           How hard the model thinks. More effort is slower and costs more.

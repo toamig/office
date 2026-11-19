@@ -11,7 +11,7 @@ import {
   Settings,
 } from "lucide-react";
 import { useState, type ComponentType, type KeyboardEvent, type PointerEvent } from "react";
-import { useQuery } from "../lib/hooks";
+import { usePending } from "../lib/pending";
 import { prefetchView } from "../lib/prefetch";
 import { SIDEBAR_MAX, SIDEBAR_MIN, useSidebarCollapsed, useSidebarWidth } from "../lib/sidebar";
 import { VIEW_LABELS } from "../lib/views";
@@ -41,11 +41,7 @@ export function Sidebar({
 }) {
   const { view, navigate } = useUi();
   const [collapsed] = useSidebarCollapsed();
-  const counts = useQuery("notifications.counts", undefined, [
-    "notification.new",
-    "notification.read",
-  ]);
-  const unread = counts.data?.unread ?? 0;
+  const pending = usePending();
   const { save } = useSidebarWidth();
   const [dragged, setDragged] = useState<number | null>(null);
   const move = (e: PointerEvent<HTMLDivElement>): void => {
@@ -79,9 +75,9 @@ export function Sidebar({
         >
           <v.icon size={16} />
           {!collapsed && <span className="sidebar-label">{VIEW_LABELS[v.id]}</span>}
-          {v.id === "inbox" && unread > 0 && (
-            <span data-testid="inbox-count" className="count-badge">
-              {unread}
+          {v.id === "inbox" && pending.worst && (
+            <span data-testid="inbox-count" className="count-badge" data-tone={pending.worst}>
+              {pending.items.length}
             </span>
           )}
         </button>

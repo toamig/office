@@ -87,7 +87,10 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
       await work();
       task.reload();
     } catch (err) {
-      notifyError(err, "That did not work", `task-${id}`);
+      notifyError(err, "Could not update that task", `task-${id}`, {
+        label: "Try again",
+        run: () => void run(work),
+      });
     }
   };
   if (!t)

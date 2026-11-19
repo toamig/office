@@ -8,9 +8,10 @@ class FakeUpdater extends EventEmitter implements UpdaterLike {
   checks = 0;
   installed = 0;
   fail = false;
+  failWith = "offline";
   async checkForUpdates(): Promise<void> {
     this.checks++;
-    if (this.fail) throw new Error("offline");
+    if (this.fail) throw new Error(this.failWith);
     this.emit("checking-for-update");
   }
   quitAndInstall(): void {
@@ -72,5 +73,15 @@ describe("UpdateService", () => {
     expect(status).toMatchObject({ state: "error", detail: "offline" });
     updater.emit("error", new Error("signature mismatch"));
     expect(service.status().detail).toBe("signature mismatch");
+  });
+
+  it("no published release is the neutral state No releases yet, never an error", async () => {
+    const updater = new FakeUpdater();
+    const service = new UpdateService({ updater, version: "0.1.0", enabled: true });
+    updater.emit("error", new Error("No published versions on GitHub"));
+    expect(service.status()).toMatchObject({ state: "no-releases", detail: null });
+    updater.fail = true;
+    updater.failWith = "No published versions on GitHub";
+    expect((await service.check()).state).toBe("no-releases");
   });
 });

@@ -151,6 +151,7 @@ export class ProjectService {
       changed: status?.files.length ?? 0,
       ahead: status?.ahead ?? 0,
       behind: status?.behind ?? 0,
+      conflicted: status?.conflicted ?? 0,
       waiting: this.deps.waiting?.(project.id) ?? 0,
       lastActivity: cached?.lastCommit?.date ?? null,
       statusAt: cached?.at ?? null,

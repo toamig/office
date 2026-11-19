@@ -93,9 +93,9 @@ test("each view puts its details in the inspector", async () => {
   await expect(body.getByTestId("git-inspector")).toContainText("main");
 
   await win.getByTestId("rail-inbox").click();
-  await expect(body.getByTestId("inbox-detail")).toContainText("Pick a notification");
-  await win.getByTestId("notification").first().click();
-  await expect(body.getByTestId("inbox-detail")).not.toContainText("Pick a notification");
+  await expect(body.getByTestId("inbox-detail")).toContainText("Pick an item");
+  await win.getByTestId("pending-item").first().click();
+  await expect(body.getByTestId("inbox-detail")).not.toContainText("Pick an item");
   await app.close();
 });
 

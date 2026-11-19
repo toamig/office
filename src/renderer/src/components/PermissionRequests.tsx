@@ -15,10 +15,7 @@ export function PermissionRequests({
   /** Only the questions of this run or chat (an inline card in a conversation). */
   runId?: string;
 }) {
-  const requests = useQuery("permissions.list", undefined, [
-    "permission.changed",
-    "notification.new",
-  ]);
+  const requests = useQuery("permissions.list", undefined, ["permission.changed"]);
   const [reasons, setReasons] = useState<Record<string, string>>({});
   const answer = async (id: string, allow: boolean): Promise<void> => {
     try {

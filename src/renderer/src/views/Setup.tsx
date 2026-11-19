@@ -18,7 +18,7 @@ export function Setup() {
   const w = workspace.data;
   const showWizard = w !== undefined && rerun;
   return (
-    <Page title="Setup" testId="setup">
+    <Page title="Setup" subtitle="Your tools, folders and preferences." testId="setup">
       <div className="setup-grid">
         {showWizard && (
           <div className="span-all">

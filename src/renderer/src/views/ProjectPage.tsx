@@ -417,6 +417,7 @@ function ProjectBody({
       breadcrumb={[{ label: "Projects", onClick: () => navigate("projects") }]}
       subtitle={
         <span className="ui-badges">
+          <span>Everything about this project: where it stands, its work and its notes.</span>
           {project.group && <span>{project.group}</span>}
           {project.waiting > 0 && (
             <StatusBadge status="waiting" label={`${project.waiting} waiting`} />

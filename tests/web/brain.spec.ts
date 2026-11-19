@@ -52,7 +52,8 @@ test("Home writes a morning brief on demand and lists only projects with news", 
   const items = win.getByTestId("brief-item");
   await expect(items.first()).toContainText("Fake brief for");
   await expect(win.getByTestId("brief")).not.toContainText("No brief yet");
+  // A brief is a result, not something that waits on the owner: it is not in the Needs you list.
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("notification").first()).toContainText("morning brief");
+  await expect(win.getByTestId("pending-item").filter({ hasText: "morning brief" })).toHaveCount(0);
   await app.close();
 });

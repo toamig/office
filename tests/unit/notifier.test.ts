@@ -30,10 +30,6 @@ function make(
 ) {
   const sent: string[] = [];
   const bus = new Bus();
-  const events: string[] = [];
-  bus.on("notification.new", (e) =>
-    events.push(String((e.payload as { updated: boolean }).updated)),
-  );
   const notifier = new Notifier({
     db: openDb(":memory:"),
     bus,
@@ -42,7 +38,7 @@ function make(
     ...(opts.now ? { now: opts.now } : {}),
     channels: [{ id: "test", send: (n) => void sent.push(n.title) }],
   });
-  return { notifier, sent, events };
+  return { notifier, sent };
 }
 
 describe("notifier", () => {
@@ -53,20 +49,18 @@ describe("notifier", () => {
     expect(urgent.urgent).toBe(true);
     expect(calm.urgent).toBe(false);
     expect(sent).toEqual(["Conflict"]);
-    expect(notifier.unreadUrgentCount()).toBe(1);
-    expect(notifier.unreadCount()).toBe(2);
+    expect(notifier.list()).toHaveLength(2);
   });
 
   it("deduplicates the same kind, project and title inside ten minutes", () => {
     let t = new Date("2026-11-19T10:00:00Z");
-    const { notifier, sent, events } = make({ now: () => t });
+    const { notifier, sent } = make({ now: () => t });
     const first = notifier.notify({
       kind: "git.conflict",
       projectId: "a",
       title: "Conflict",
       body: "one",
     });
-    notifier.markRead([first.id]);
     t = new Date("2026-11-19T10:05:00Z");
     const second = notifier.notify({
       kind: "git.conflict",
@@ -76,15 +70,14 @@ describe("notifier", () => {
     });
     expect(second.id).toBe(first.id);
     expect(second.body).toBe("two");
-    expect(second.readAt).toBeNull();
     expect(notifier.list()).toHaveLength(1);
     expect(sent).toEqual(["Conflict"]);
-    expect(events).toEqual(["false", "true"]);
     t = new Date("2026-11-19T10:20:00Z");
     expect(
       notifier.notify({ kind: "git.conflict", projectId: "a", title: "Conflict" }).id,
     ).not.toBe(first.id);
-    expect(notifier.list()).toHaveLength(2);
+    // Only what the alert rules need is kept: the old row is gone once the window has passed.
+    expect(notifier.list()).toHaveLength(1);
   });
 
   it("does not raise alerts for muted projects or during quiet hours, but still stores them", () => {
@@ -100,18 +93,6 @@ describe("notifier", () => {
     quiet.notifier.notify({ kind: "git.conflict", title: "Night" });
     expect(quiet.sent).toEqual([]);
     expect(quiet.notifier.list()).toHaveLength(1);
-  });
-
-  it("filters the inbox and marks items read", () => {
-    const { notifier } = make();
-    const a = notifier.notify({ kind: "git.conflict", projectId: "a", title: "A" });
-    notifier.notify({ kind: "agent.done", projectId: "b", title: "B" });
-    expect(notifier.list({ urgent: true }).map((n) => n.title)).toEqual(["A"]);
-    expect(notifier.list({ projectId: "b" }).map((n) => n.title)).toEqual(["B"]);
-    notifier.markRead([a.id]);
-    expect(notifier.list({ unread: true }).map((n) => n.title)).toEqual(["B"]);
-    notifier.markRead();
-    expect(notifier.unreadCount()).toBe(0);
   });
 });
 

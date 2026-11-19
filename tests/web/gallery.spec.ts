@@ -62,7 +62,7 @@ test("a dialog takes focus, keeps Tab inside, closes on Esc and gives focus back
   await app.close();
 });
 
-test("notifications stack in the corner, never take focus, leave on their own, and keep a history", async () => {
+test("notifications stack in the corner, never take focus, and leave on their own", async () => {
   const { app, page } = await launch({ world: true });
   await page.clock.install();
   await page.getByTestId("rail-gallery").click();

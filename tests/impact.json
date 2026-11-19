@@ -101,6 +101,14 @@
     "src/main/modules/notes": {
       "web": ["tests/web/projects.spec.ts", "tests/web/brain.spec.ts"]
     },
+    "src/main/modules/pending": {
+      "web": [
+        "tests/web/pending.spec.ts",
+        "tests/web/inbox.spec.ts",
+        "tests/web/home.spec.ts",
+        "tests/web/hooks.spec.ts"
+      ]
+    },
     "src/main/modules/notify": {
       "web": [
         "tests/web/inbox.spec.ts",

@@ -12,6 +12,9 @@ const percentOf = (progress: unknown): number =>
     ? (progress as { percent: number }).percent
     : 0;
 
+/** What electron-updater says when the repository has no published release at all. */
+const NO_RELEASES = /no published versions|cannot find latest|no releases/i;
+
 /** The part of electron-updater's autoUpdater that Office uses, so tests can fake it. */
 export interface UpdaterLike {
   autoDownload: boolean;
@@ -66,14 +69,20 @@ export class UpdateService {
         detail: "It installs when you quit Office.",
       }),
     );
-    updater.on("error", (err) =>
-      this.set({ state: "error", detail: err instanceof Error ? err.message : String(err) }),
-    );
+    updater.on("error", (err) => this.failed(err));
   }
 
   private set(patch: Partial<UpdateStatus>): void {
     this.current = { ...this.current, ...patch };
     this.deps.onChange?.(this.current);
+  }
+
+  /** No release yet is a plain fact; only a real failure is an error. */
+  private failed(err: unknown): void {
+    const message = err instanceof Error ? err.message : String(err);
+    if (NO_RELEASES.test(message))
+      this.set({ state: "no-releases", newVersion: null, detail: null });
+    else this.set({ state: "error", detail: message });
   }
 
   status(): UpdateStatus {
@@ -86,7 +95,7 @@ export class UpdateService {
     try {
       await this.deps.updater.checkForUpdates();
     } catch (err) {
-      this.set({ state: "error", detail: (err as Error).message });
+      this.failed(err);
     }
     return this.current;
   }

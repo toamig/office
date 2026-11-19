@@ -27,6 +27,8 @@ export interface BriefDeps {
   projectPaths?: () => Record<string, string>;
   workspaceRoot: () => string;
   now?: () => Date;
+  /** Called when a brief was written, so a view showing it can read it again. */
+  written?: () => void;
 }
 
 const pad = (n: number): string => String(n).padStart(2, "0");
@@ -180,6 +182,7 @@ export class BriefService {
       body: `${activities.length} project${activities.length === 1 ? "" : "s"} with news`,
       link: { view: "home" },
     });
+    this.deps.written?.();
     return { date, count: activities.length };
   }
 

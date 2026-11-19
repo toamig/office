@@ -35,7 +35,7 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
     try {
       await work();
     } catch (err) {
-      notifyError(err, "That did not work", "workspace");
+      notifyError(err, "Could not use that workspace folder", "workspace");
     } finally {
       setBusy(false);
     }

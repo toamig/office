@@ -1,4 +1,4 @@
-import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
+import { ArrowDown, ArrowUp, GripVertical, Plus, Trash2 } from "lucide-react";
 import { useState } from "react";
 import type { Pipeline } from "@shared/types";
 import { useQuery } from "../../lib/hooks";
@@ -122,10 +122,9 @@ function PipelineEditor({
         {stages.map((s, i) => (
           <li
             key={`${i}-${s.id}`}
-            className="ui-surface grid gap-3 p-3"
+            className="stage-card ui-surface grid gap-3 p-3"
             data-testid="stage-editor"
-            draggable
-            onDragStart={() => setDragged(i)}
+            data-dragging={dragged === i ? "true" : undefined}
             onDragOver={(e) => e.preventDefault()}
             onDrop={() => {
               if (dragged !== null) move(dragged, i);
@@ -133,6 +132,23 @@ function PipelineEditor({
             }}
           >
             <div className="flex items-end gap-2">
+              {/* Only this handle starts a drag, so selecting text in the fields below never moves the card. */}
+              <span
+                className="stage-grip"
+                draggable
+                title="Drag to reorder"
+                aria-label="Drag to reorder"
+                data-testid="stage-grip"
+                onDragStart={(e) => {
+                  setDragged(i);
+                  e.dataTransfer.effectAllowed = "move";
+                  const card = e.currentTarget.closest("li");
+                  if (card) e.dataTransfer.setDragImage(card, 16, 16);
+                }}
+                onDragEnd={() => setDragged(null)}
+              >
+                <GripVertical size={16} aria-hidden />
+              </span>
               <span className="ui-muted w-6 text-center num">{i + 1}</span>
               <Input
                 className="w-40"

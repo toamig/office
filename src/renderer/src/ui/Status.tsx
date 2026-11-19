@@ -46,7 +46,7 @@ export function CountPill({
   label,
 }: {
   count: number;
-  tone?: "accent" | "attention" | "muted";
+  tone?: "accent" | "attention" | "danger" | "muted";
   label?: string;
 }) {
   return (

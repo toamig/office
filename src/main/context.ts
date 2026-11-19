@@ -25,6 +25,7 @@ import {
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
 import { GithubService } from "./modules/github/gh";
+import { PendingService } from "./modules/pending/service";
 import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
 import { syncAll, syncProject, type SyncAllDeps } from "./modules/git/syncall";
@@ -78,6 +79,8 @@ export interface AppContext {
   ops: VaultOps;
   /** Questions from headless builders waiting for the owner (plan 9.5). */
   permissions: PermissionBroker;
+  /** What waits on the owner, derived from live state. */
+  pending: PendingService;
   /** Agent conversations shown as chats (M6.5). */
   chat: ChatService;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
@@ -224,6 +227,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     projectsRoot: () => box.current.projectsRoot,
     projectPaths: () => box.current.projectPaths,
     workspaceRoot: () => box.current.workspaceRoot,
+    written: () => bus.emit("brief.changed", {}),
   });
   const sessions = new SessionService({
     db,
@@ -362,6 +366,7 @@ function createLifecycle(
   agents: Agents,
   orch: Orchestration,
   toolsMonitor: ToolsMonitor,
+  pending: PendingService,
 ): Pick<AppContext, "sync" | "syncProject" | "start" | "stop"> {
   const { box, bus, store, notifier } = base;
   const { vault, projects, health } = notes;
@@ -384,7 +389,10 @@ function createLifecycle(
     projectPaths: () => box.current.projectPaths,
     workspaceRoot: () => box.current.workspaceRoot,
     onRepoDone: (id) => void projects.refresh(id),
-    onReport: (report) => notifyFromSyncReport(notifier, report),
+    onReport: (report) => {
+      notifyFromSyncReport(notifier, report);
+      pending.onSyncReport(report);
+    },
   };
 
   let toolsStarted = false;
@@ -482,6 +490,19 @@ export async function createContext(
     const steps = setupState(null).steps;
     if (steps[0]!.met && steps[1]!.met) box.current = updateSettings({ welcomeDone: true });
   }
+  const pending = new PendingService({
+    db,
+    bus,
+    sources: {
+      sessions: () => agents.sessions.list(),
+      tasks: () => orch.tasks.list(),
+      permissions: () => agents.broker.list(),
+      projects: () => notes.projects.list(),
+      waiting: () => notes.vault.allWaiting(),
+      github: () => agents.github.pendingState(),
+    },
+  });
+  agents.github.onChange = () => pending.changed();
   return {
     settings: () => box.current,
     patchSettings: (patch) => (box.current = updateSettings(patch)),
@@ -497,6 +518,7 @@ export async function createContext(
     ntfy,
     ...agents,
     permissions: agents.broker,
+    pending,
     ...orch,
     projects: notes.projects,
     vault: notes.vault,
@@ -506,7 +528,7 @@ export async function createContext(
     onboarding,
     toolsMonitor,
     setupState,
-    ...createLifecycle(base, notes, agents, orch, toolsMonitor),
+    ...createLifecycle(base, notes, agents, orch, toolsMonitor, pending),
   };
 }
 

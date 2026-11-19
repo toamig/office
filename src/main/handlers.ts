@@ -565,12 +565,8 @@ function registerTaskHandlers(ctx: AppContext): void {
   ctx.ipc.handle("tasks.keep", (req) => ctx.tasks.keep(req.id, req.variant));
   ctx.ipc.handle("tasks.cancel", (req) => ctx.tasks.cancel(req.id));
   ctx.ipc.handle("tasks.retry", (req) => ctx.tasks.retry(req.id));
-  ctx.ipc.handle("notifications.list", (req) => ctx.notifier.list(req));
-  ctx.ipc.handle("notifications.markRead", (req) => ctx.notifier.markRead(req.ids));
-  ctx.ipc.handle("notifications.counts", () => ({
-    unread: ctx.notifier.unreadCount(),
-    urgentUnread: ctx.notifier.unreadUrgentCount(),
-  }));
+  ctx.ipc.handle("pending.list", () => ctx.pending.list());
+  ctx.ipc.handle("pending.dismiss", (req) => ctx.pending.dismiss(req.key, req.fingerprint));
 }
 
 /** Vault notes: waiting items, todos, quick notes and health. */

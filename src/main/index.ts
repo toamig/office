@@ -220,7 +220,7 @@ function updateBadge(count: number): void {
   if (process.platform === "win32") {
     mainWindow.setOverlayIcon(
       count > 0 ? nativeImage.createFromBuffer(badgePng(count)) : null,
-      count > 0 ? `${count} unread urgent` : "",
+      count > 0 ? `${count} waiting on you` : "",
     );
   } else {
     app.setBadgeCount(count);
@@ -282,9 +282,9 @@ async function boot(): Promise<void> {
   context.bus.on("settings.changed", refreshChrome);
   nativeTheme.on("updated", refreshChrome);
   context.notifier.addChannel({ id: "desktop", send: showDesktopNotification });
-  context.notifier.onUnreadUrgentChange = updateBadge;
+  context.pending.onCount = updateBadge;
   mainWindow = createWindow();
-  mainWindow.webContents.once("did-finish-load", () => context.notifier.reportUnread());
+  mainWindow.webContents.once("did-finish-load", () => context.pending.changed(true));
   app.on("browser-window-focus", () => void context.projects.refreshAll());
   await context.start();
   void updates.check();
