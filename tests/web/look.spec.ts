@@ -176,6 +176,7 @@ test("the setup dialogs and the projects folder feedback", async () => {
   // The tool login dialog.
   await app.setEnv({ FAKE_LOGGED_IN: "0" });
   await win.getByTestId("tools-check").click();
+  await expect(win.getByTestId("tool-login").first()).toBeVisible({ timeout: 45000 });
   await win.getByTestId("tool-login").first().click();
   await expect(win.getByTestId("tool-dialog")).toBeVisible();
   await shoot(win, "tool-dialog", "light");
