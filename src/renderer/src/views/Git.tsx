@@ -120,7 +120,9 @@ export function Git() {
           <Group>Brain repos</Group>
           {brain.map((r) =>
             r.attention ? (
-              <RepoItem key={r.folder} repo={r} />
+              <div key={r.folder} className="repo-narrow">
+                <RepoItem repo={r} />
+              </div>
             ) : (
               <div key={r.folder} className="ui-row" data-testid="brain-repo">
                 <div className="min-w-0 flex-1">

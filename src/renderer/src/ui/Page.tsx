@@ -24,6 +24,7 @@ export function OverflowMenu({
   trigger,
   testId = "page-more",
   floating = false,
+  size = "md",
 }: {
   items: MoreItem[];
   label?: string;
@@ -32,6 +33,8 @@ export function OverflowMenu({
   testId?: string;
   /** For a menu inside a scrolling list: it is placed on the screen, so the list never clips it. */
   floating?: boolean;
+  /** The size of a word trigger. */
+  size?: "sm" | "md";
 }) {
   const [open, setOpen] = useState(false);
   const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
@@ -81,6 +84,7 @@ export function OverflowMenu({
     <div className="ui-menu-host" ref={box}>
       {trigger ? (
         <Button
+          size={size}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={(e) => {

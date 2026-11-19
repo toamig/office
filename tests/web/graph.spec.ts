@@ -68,7 +68,9 @@ test("the graph shows lanes, a fork, a join, worktree marks and where you are", 
     timeout: 20000,
   });
 
-  // The branch list is a filter: it finds branches, and With a worktree narrows it.
+  // The branch list is a filter: it finds branches, and With a worktree narrows it. A narrow desk keeps it folded.
+  const toggle = win.getByTestId("graph-filters-toggle");
+  if (await toggle.isVisible()) await toggle.click();
   await win.getByTestId("graph-find").fill("feature-b");
   await expect(win.getByTestId("graph-filter-branch")).toHaveCount(1);
   await win.getByTestId("graph-find").fill("");

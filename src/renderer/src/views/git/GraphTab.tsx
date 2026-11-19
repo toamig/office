@@ -1,5 +1,5 @@
 import { GitBranch, GitFork, Wrench } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import type { BranchCompare, BranchInfo, GraphLabel, GraphRow, WorktreeInfo } from "@shared/models";
 import { InspectorSlot } from "../../components/Inspector";
 import { VirtualList } from "../../components/VirtualList";
@@ -105,6 +105,7 @@ function BranchLabel({
       <OverflowMenu
         trigger={label.name}
         floating
+        size="sm"
         testId={`branch-menu-${label.name}`}
         items={[
           ...(label.current
@@ -187,6 +188,17 @@ export function GraphTab({ projectId }: { projectId: string }) {
   const [tools, setTools] = useState(false);
   const [stash, setStash] = useState<string | null>(null);
   const [cmp, setCmp] = useState<BranchCompare | null>(null);
+  // A narrow desk keeps the filters out of the way until they are asked for.
+  const tab = useRef<HTMLDivElement>(null);
+  const [narrow, setNarrow] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
+  useEffect(() => {
+    const el = tab.current;
+    if (!el) return;
+    const watch = new ResizeObserver(([e]) => setNarrow((e?.contentRect.width ?? 0) < 760));
+    watch.observe(el);
+    return () => watch.disconnect();
+  }, []);
 
   const g = graph.data;
   const infoOf = (name: string): BranchInfo | undefined =>
@@ -231,7 +243,7 @@ export function GraphTab({ projectId }: { projectId: string }) {
   };
 
   return (
-    <div className="graph-tab" data-testid="graph-tab">
+    <div className="graph-tab" data-testid="graph-tab" ref={tab}>
       {graph.error && <p className="ui-bad">{graph.error}</p>}
       {stash && (
         <div className="ui-ask flex items-center gap-3" data-testid="stash-offer">
@@ -248,77 +260,90 @@ export function GraphTab({ projectId }: { projectId: string }) {
           <Button onClick={() => setStash(null)}>Cancel</Button>
         </div>
       )}
-      <div className="graph-layout">
-        <aside className="graph-filters" data-testid="graph-filters" aria-label="Filters">
-          <Input
-            label="Find a branch"
-            hideLabel
-            placeholder="Find a branch"
-            value={find}
-            onChange={(e) => setFind(e.target.value)}
-            data-testid="graph-find"
-          />
-          <div className="flex flex-wrap gap-3">
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={only === "worktree"}
-                onChange={(e) => setOnly(e.target.checked ? "worktree" : "all")}
-                data-testid="graph-only-worktrees"
-              />{" "}
-              With a worktree
-            </label>
-            <label className="flex items-center gap-1">
-              <input
-                type="checkbox"
-                checked={remote}
-                onChange={(e) => setRemote(e.target.checked)}
-                data-testid="graph-remotes"
-              />{" "}
-              Remote branches
-            </label>
-          </div>
-          <Group>Branches</Group>
-          {shown.length === 0 && <p className="ui-muted m-0">No branch matches.</p>}
-          {shown.map((b) => (
-            <button
-              key={b.name}
-              type="button"
-              className="graph-filter-row"
-              data-active={focus === b.name ? "true" : undefined}
-              onClick={() => focusBranch(b.name)}
-              data-testid="graph-filter-branch"
-            >
-              <GitBranch size={13} aria-hidden />
-              <span className="truncate">{b.name}</span>
-              {b.current && <span className="ui-muted">current</span>}
-              {withTree.has(b.name) && <GitFork size={13} aria-label="Has a worktree" />}
-            </button>
-          ))}
-          <Group>Worktrees</Group>
-          {(worktrees.data ?? []).filter((w) => w.kind !== "main").length === 0 && (
-            <p className="ui-muted m-0">No other worktrees.</p>
-          )}
-          {(worktrees.data ?? [])
-            .filter((w) => w.kind !== "main")
-            .map((w) => (
+      <div className="flex flex-wrap items-center gap-2">
+        {narrow && (
+          <Button
+            size="sm"
+            onClick={() => setFiltersOpen(!filtersOpen)}
+            data-testid="graph-filters-toggle"
+          >
+            {filtersOpen ? "Hide branches and worktrees" : "Branches and worktrees"}
+          </Button>
+        )}
+        <Button size="sm" onClick={() => setTools(true)} data-testid="graph-tools">
+          <Wrench /> Branch tools
+        </Button>
+      </div>
+      <div className="graph-layout" data-narrow={narrow ? "true" : undefined}>
+        {(!narrow || filtersOpen) && (
+          <aside className="graph-filters" data-testid="graph-filters" aria-label="Filters">
+            <Input
+              label="Find a branch"
+              hideLabel
+              placeholder="Find a branch"
+              value={find}
+              onChange={(e) => setFind(e.target.value)}
+              data-testid="graph-find"
+            />
+            <div className="flex flex-wrap gap-3">
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={only === "worktree"}
+                  onChange={(e) => setOnly(e.target.checked ? "worktree" : "all")}
+                  data-testid="graph-only-worktrees"
+                />{" "}
+                With a worktree
+              </label>
+              <label className="flex items-center gap-1">
+                <input
+                  type="checkbox"
+                  checked={remote}
+                  onChange={(e) => setRemote(e.target.checked)}
+                  data-testid="graph-remotes"
+                />{" "}
+                Remote branches
+              </label>
+            </div>
+            <Group>Branches</Group>
+            {shown.length === 0 && <p className="ui-muted m-0">No branch matches.</p>}
+            {shown.map((b) => (
               <button
-                key={w.path}
+                key={b.name}
                 type="button"
                 className="graph-filter-row"
-                onClick={() => w.branch && focusBranch(w.branch)}
-                title={w.path}
-                data-testid="graph-filter-worktree"
+                data-active={focus === b.name ? "true" : undefined}
+                onClick={() => focusBranch(b.name)}
+                data-testid="graph-filter-branch"
               >
-                <GitFork size={13} aria-hidden />
-                <span className="truncate">{w.branch ?? "detached"}</span>
-                {w.dirty > 0 && <span className="ui-muted">{w.dirty} changed</span>}
+                <GitBranch size={13} aria-hidden />
+                <span className="truncate">{b.name}</span>
+                {b.current && <span className="ui-muted">current</span>}
+                {withTree.has(b.name) && <GitFork size={13} aria-label="Has a worktree" />}
               </button>
             ))}
-          <Button size="sm" onClick={() => setTools(true)} data-testid="graph-tools">
-            <Wrench /> Branch tools
-          </Button>
-        </aside>
+            <Group>Worktrees</Group>
+            {(worktrees.data ?? []).filter((w) => w.kind !== "main").length === 0 && (
+              <p className="ui-muted m-0">No other worktrees.</p>
+            )}
+            {(worktrees.data ?? [])
+              .filter((w) => w.kind !== "main")
+              .map((w) => (
+                <button
+                  key={w.path}
+                  type="button"
+                  className="graph-filter-row"
+                  onClick={() => w.branch && focusBranch(w.branch)}
+                  title={w.path}
+                  data-testid="graph-filter-worktree"
+                >
+                  <GitFork size={13} aria-hidden />
+                  <span className="truncate">{w.branch ?? "detached"}</span>
+                  {w.dirty > 0 && <span className="ui-muted">{w.dirty} changed</span>}
+                </button>
+              ))}
+          </aside>
+        )}
         <div className="graph-main" data-testid="graph-main">
           {g && g.rows.length === 0 && (
             <EmptyState title="No commits yet">

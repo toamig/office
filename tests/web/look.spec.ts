@@ -1,6 +1,7 @@
 import { expect, test, type Page } from "@playwright/test";
-import { mkdirSync } from "node:fs";
+import { appendFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
+import { commit, sh } from "../fixtures/repos/make";
 import { launch, repoRoot } from "./helpers";
 
 // Captures every view in light and dark into test-results/look/ (not committed) so each image can be looked at.
@@ -310,5 +311,126 @@ for (const only of ["light", "dark"] as const)
       await win.getByTestId("git-repo").first().click();
       await win.waitForTimeout(500);
       await shoot(win, "m11-git-dock", only, width);
+      await app.close();
+    });
+
+// The M12 screens: the brief, Needs you, Sessions, Chat (saved and incognito), notes, Brain health and the branch graph.
+for (const only of ["light", "dark"] as const)
+  for (const [width, height] of [
+    [1366, 860],
+    [1920, 1080],
+  ] as const)
+    test(`the M12 screens in ${only} at ${width} wide`, async () => {
+      mkdirSync(out, { recursive: true });
+      const { app, world } = await launch({ world: true, fakeTools: true });
+      if (!world) throw new Error("no world");
+      const alpha = world.code["alpha"]?.work as string;
+      // A history with a fork, a merge, a tag and a worktree; a note with a table and a link; things that need attention.
+      sh(alpha, "checkout", "-q", "-b", "feature-b");
+      commit(alpha, "b.txt", "b\n", "Work on feature-b");
+      sh(alpha, "checkout", "-q", "main");
+      sh(alpha, "checkout", "-q", "-b", "feature-a");
+      commit(alpha, "a.txt", "a\n", "Work on feature-a");
+      sh(alpha, "checkout", "-q", "main");
+      commit(alpha, "m.txt", "m\n", "Work on main");
+      sh(alpha, "merge", "-q", "--no-ff", "feature-a", "-m", "Merge feature-a");
+      sh(alpha, "tag", "v1");
+      writeFileSync(
+        join(world.hub, "Alpha", "Design.md"),
+        "---\ntype: spec\ndomain: meta\nproject: Alpha\nsummary: How the sheep counter plays, in plain words.\ntags: [roadmap]\nanswers:\n  - How does it play?\nauthority: own\n---\n\n# Alpha: design\n\nThe counter shows how many sheep jumped. See [[Alpha/Overview#Positioning and vision]].\n\n## Rules\n\n| Sheep | Points |\n| ----- | ------ |\n| Black | 5 |\n| White | 1 |\n\n## Later\n\nAfter the first version.\n",
+      );
+      writeFileSync(
+        join(world.hub, "Alpha", "_ContentAudit.md"),
+        "# Alpha: content audit\n\n## Currently open\n\n- Alpha pricing notes disagree, see [[Alpha/Overview#Positioning and vision]]\n",
+      );
+      appendFileSync(
+        join(world.hub, ".git", "info", "exclude"),
+        "\nFAIL_VALIDATE\nhub-status.txt\n",
+      );
+      writeFileSync(join(world.hub, "FAIL_VALIDATE"), "1");
+      writeFileSync(
+        join(world.hub, "hub-status.txt"),
+        `${".".padEnd(26)} 2026-11-18  1 uncommitted\n`,
+      );
+      appendFileSync(join(world.hub, "_index.md"), "\nA line the owner added.\n");
+
+      const win = await app.firstWindow();
+      await win.setViewportSize({ width, height });
+      await expect(win.getByTestId("topbar")).toBeVisible();
+      await win.evaluate((t) => window.office.invoke("settings.set", { theme: t }), only);
+      await win.evaluate(() =>
+        window.office.invoke("worktrees.create", { projectId: "alpha", name: "wt one" }),
+      );
+      // Work: a session with a goal, one that needs the owner, a task at its gate, and a saved and an incognito chat.
+      await win.evaluate(() =>
+        window.office.invoke("sessions.start", {
+          providerId: "fake",
+          projectId: "alpha",
+          title: "Tidy the sheep counter",
+          mode: "chat",
+        }),
+      );
+      await win.evaluate(() =>
+        window.office.invoke("tasks.create", {
+          projectId: "alpha",
+          pipeline: "feature",
+          title: "Add a sheep counter",
+          description: "Plan it.",
+          fanout: 1,
+        }),
+      );
+      await win.evaluate(() => window.office.invoke("git.syncAll"));
+      await win.evaluate(() => window.office.invoke("brief.run"));
+
+      await win.getByTestId("rail-home").click();
+      await expect(win.getByTestId("brief-line").first()).toBeVisible({ timeout: 30000 });
+      await expect(win.getByTestId("pending-item").first()).toBeVisible({ timeout: 60000 });
+      await shoot(win, "m12-home", only, width);
+      await win.getByTestId("rail-inbox").click();
+      await expect(win.getByTestId("pending-item").first()).toBeVisible();
+      await win.getByTestId("pending-item").first().click();
+      await shoot(win, "m12-needs-you", only, width);
+      await win.getByTestId("bell").click();
+      await shoot(win, "m12-bell", only, width);
+      await win.keyboard.press("Escape");
+      await win.getByTestId("rail-agents").click();
+      await win.getByTestId("session-row").first().click();
+      await expect(win.getByTestId("chat")).toBeVisible();
+      await shoot(win, "m12-sessions", only, width);
+
+      // Chat: a saved chat named by its first message, and an incognito one beside it.
+      await win.getByTestId("rail-explore").click();
+      await win.getByTestId("explore-start").click();
+      await win
+        .getByTestId("explore")
+        .getByTestId("composer-input")
+        .fill("What would a sheep counter game need?");
+      await win.getByTestId("explore").getByTestId("composer-input").press("Enter");
+      await expect(win.getByTestId("explore").getByTestId("chat")).toContainText("echo:", {
+        timeout: 30000,
+      });
+      await win.getByTestId("chat-incognito").check();
+      await win.getByTestId("explore-start").click();
+      await expect(win.getByTestId("incognito-note")).toBeVisible();
+      await shoot(win, "m12-chat-incognito", only, width);
+      await win.locator('[data-testid="explore-row"]:not([data-incognito])').first().click();
+      await shoot(win, "m12-chat", only, width);
+
+      // The project's notes, the brain's health and the branch graph.
+      await win.getByTestId("rail-projects").click();
+      await win.getByTestId("project-card").filter({ hasText: "Alpha" }).click();
+      await win.getByTestId("tab-notes").click();
+      await expect(win.getByRole("button", { name: "Design" })).toBeVisible({ timeout: 15000 });
+      await win.getByRole("button", { name: "Design" }).click();
+      await expect(win.getByTestId("note-doc")).toContainText("Black");
+      await shoot(win, "m12-notes", only, width);
+      await win.getByTestId("rail-brain").click();
+      await expect(win.getByTestId("health-problem").first()).toBeVisible({ timeout: 30000 });
+      await shoot(win, "m12-brain-health", only, width);
+      await win.getByTestId("rail-git").click();
+      await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+      await expect(win.getByTestId("graph-here")).toHaveCount(1, { timeout: 30000 });
+      await win.waitForTimeout(400);
+      await shoot(win, "m12-git-graph", only, width);
       await app.close();
     });
