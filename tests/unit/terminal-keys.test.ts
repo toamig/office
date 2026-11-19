@@ -87,6 +87,14 @@ describe("Office's shortcuts, in and out of a terminal", () => {
     expect(appShortcut(ctrl("F", { shiftKey: true }), false)).toBeNull();
   });
 
+  it("toggles the inspector with Ctrl+Shift+B everywhere, including in a terminal, and keeps Ctrl+B for the sidebar", () => {
+    expect(appShortcut(ctrl("B", { shiftKey: true }), false)).toEqual({ kind: "inspector" });
+    expect(appShortcut(ctrl("B", { shiftKey: true }), true)).toEqual({ kind: "inspector" });
+    expect(terminalKeyAction(ctrl("B", { shiftKey: true }), false)).toBe("app");
+    expect(appShortcut(ctrl("b"), false)).toEqual({ kind: "sidebar" });
+    expect(appShortcut(ctrl("b"), true)).toBeNull();
+  });
+
   it("binds nothing else", () => {
     for (const letter of ["w", "r", "u", "o", "p", "n", "s", "k"]) {
       expect(appShortcut(ctrl(letter), false)).toBeNull();

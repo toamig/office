@@ -11,6 +11,8 @@ import { prefetchStart } from "./lib/prefetch";
 import { LeaveGuard } from "./components/LeaveGuard";
 import { SIDEBAR_COLLAPSED, useSidebarCollapsed, useSidebarWidth } from "./lib/sidebar";
 import { useGlobalShortcuts } from "./lib/shortcuts";
+import { Inspector } from "./components/Inspector";
+import { useInspector } from "./lib/inspector";
 import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
 import { Agents } from "./views/Agents";
@@ -69,7 +71,10 @@ export default function App() {
   const [collapsed, toggleSidebar] = useSidebarCollapsed();
   const { width: sidebarWidth } = useSidebarWidth();
   const [resizing, setResizing] = useState<number | null>(null);
-  useGlobalShortcuts(toggleSidebar);
+  const inspector = useInspector(view);
+  const [inspectorResizing, setInspectorResizing] = useState<number | null>(null);
+  const inspectorWidth = inspectorResizing ?? inspector.width;
+  useGlobalShortcuts(toggleSidebar, inspector.toggle);
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   // The Agents view is built the first time it is opened and then kept, hidden when the owner leaves it.
   const [agentsOpened, setAgentsOpened] = useState(false);
@@ -116,6 +121,7 @@ export default function App() {
         style={
           {
             "--sidebar-w": `${collapsed ? SIDEBAR_COLLAPSED : (resizing ?? sidebarWidth)}px`,
+            "--inspector-w": `${inspector.open ? inspectorWidth : 0}px`,
           } as React.CSSProperties
         }
       >
@@ -141,6 +147,7 @@ export default function App() {
             </ViewBoundary>
           )}
         </main>
+        <Inspector view={view} width={inspectorWidth} onResizing={setInspectorResizing} />
       </div>
       <SyncReportDialog />
       <QuickSwitcher />

@@ -4,6 +4,8 @@ import type { Layout, SessionRow } from "@shared/models";
 import { office } from "../lib/ipc";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
+import { InspectorSlot } from "../components/Inspector";
+import { AgentInspector } from "./agents/AgentInspector";
 import { CaptureDialog } from "./agents/CaptureDialog";
 import { PaneHeader } from "./agents/PaneHeader";
 import { StartAgentDialog } from "./agents/StartAgentDialog";
@@ -357,6 +359,9 @@ export function Agents({ active: visible }: { active: boolean }) {
         first={sessionList}
         second={work}
       />
+      <InspectorSlot view="agents">
+        <AgentInspector session={layout.active ? byId.get(layout.active) : undefined} />
+      </InspectorSlot>
       {closing && (
         <CaptureDialog
           session={closing}

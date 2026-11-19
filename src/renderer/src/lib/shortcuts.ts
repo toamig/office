@@ -15,6 +15,7 @@ export const SHORTCUTS: Shortcut[] = [
   { keys: "Ctrl+K", label: "Jump to anything" },
   ...RAIL.map((v, i) => ({ keys: `Ctrl+${i + 1}`, label: `Go to ${VIEW_LABELS[v.id]}` })),
   { keys: "Ctrl+B", label: "Show or hide the sidebar" },
+  { keys: "Ctrl+Shift+B", label: "Show or hide the details panel" },
   { keys: "Ctrl+Shift+A", label: "New agent session" },
   { keys: "Ctrl+,", label: "Setup" },
   { keys: "Ctrl+F", label: "Find in the current view" },
@@ -29,7 +30,7 @@ export const SHORTCUTS: Shortcut[] = [
 export const FIND_EVENT = "office-find";
 
 /** The app-wide keys. Ctrl+K lives with the quick switcher; Esc with the dialogs. */
-export function useGlobalShortcuts(toggleSidebar: () => void): void {
+export function useGlobalShortcuts(toggleSidebar: () => void, toggleInspector: () => void): void {
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
       const ui = useUi.getState();
@@ -42,6 +43,7 @@ export function useGlobalShortcuts(toggleSidebar: () => void): void {
       else if (action.kind === "shortcuts") ui.setShortcutsOpen(!ui.shortcutsOpen);
       else if (action.kind === "setup") ui.navigate("setup");
       else if (action.kind === "sidebar") toggleSidebar();
+      else if (action.kind === "inspector") toggleInspector();
       else if (action.kind === "new-agent") ui.navigate("agents", { start: "1" });
       else if (action.kind === "find") window.dispatchEvent(new Event(FIND_EVENT));
       else {
@@ -79,5 +81,5 @@ export function useGlobalShortcuts(toggleSidebar: () => void): void {
       window.removeEventListener("drop", guard);
       off();
     };
-  }, [toggleSidebar]);
+  }, [toggleSidebar, toggleInspector]);
 }

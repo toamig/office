@@ -5,6 +5,7 @@ import { Button, Card, EmptyState, IconButton, notifyDone, notifyError } from ".
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { Dropdown as Select } from "../../ui";
+import { InspectorSlot } from "../../components/Inspector";
 import { VirtualList } from "../../components/VirtualList";
 
 type Mode = "working" | "staged" | "branch";
@@ -71,6 +72,27 @@ export function DiffTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="grid gap-3" data-testid="diff-tab">
+      <InspectorSlot view="git">
+        {file && (
+          <Card title="Selected file" testId="git-file-inspector">
+            <dl className="ui-dl">
+              <dt>Path</dt>
+              <dd className="break-all">{file.path}</dd>
+              <dt>State</dt>
+              <dd>{file.status}</dd>
+              <dt>Lines</dt>
+              <dd className="num">
+                {file.binary ? "Binary" : `+${file.additions} -${file.deletions}`}
+              </dd>
+            </dl>
+            <div className="mt-3">
+              <Button size="sm" onClick={() => void navigator.clipboard.writeText(file.path)}>
+                Copy path
+              </Button>
+            </div>
+          </Card>
+        )}
+      </InspectorSlot>
       <div className="flex flex-wrap items-center gap-3">
         <Select
           value={dir}

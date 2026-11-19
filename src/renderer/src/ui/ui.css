@@ -1143,3 +1143,87 @@ input[type="radio"] {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---- the inspector ---- */
+.inspector {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  overflow: hidden;
+  border-left: 1px solid var(--line);
+  background: var(--rail);
+}
+.inspector[hidden] {
+  display: none;
+}
+.inspector-resizer {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: -3px;
+  z-index: 5;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.inspector-resizer:hover,
+.inspector-resizer:focus-visible {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: none;
+}
+.inspector-head {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-2) var(--space-3);
+  border-bottom: 1px solid var(--line);
+}
+.inspector-title {
+  margin: 0;
+  font-size: var(--text-md);
+  font-weight: 600;
+}
+.inspector-body {
+  display: grid;
+  min-height: 0;
+  flex: 1;
+  align-content: start;
+  gap: var(--space-4);
+  overflow: auto;
+  padding: var(--space-3);
+}
+
+.diagram[data-vertical="true"] {
+  flex-direction: column;
+  align-items: stretch;
+  overflow-x: visible;
+}
+.diagram[data-vertical="true"] .diagram-button {
+  width: 100%;
+}
+.diagram[data-vertical="true"] .diagram-line {
+  flex: 0 0 var(--space-3);
+  width: 1px;
+  height: var(--space-3);
+  align-self: center;
+}
+.diagram[data-vertical="true"] .diagram-you {
+  align-self: center;
+  margin: var(--space-3) 0;
+}
+.diagram[data-vertical="true"] .diagram-you::before,
+.diagram[data-vertical="true"] .diagram-you::after {
+  left: 50%;
+  right: auto;
+  width: 1px;
+  height: var(--space-3);
+}
+.diagram[data-vertical="true"] .diagram-you::before {
+  top: auto;
+  bottom: 100%;
+}
+.diagram[data-vertical="true"] .diagram-you::after {
+  top: 100%;
+}

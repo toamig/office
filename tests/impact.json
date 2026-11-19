@@ -174,7 +174,8 @@
         "tests/web/capture.spec.ts",
         "tests/web/polish.spec.ts",
         "tests/web/speed.spec.ts",
-        "tests/web/m2-flow.spec.ts"
+        "tests/web/m2-flow.spec.ts",
+        "tests/web/inspector.spec.ts"
       ]
     },
     "src/renderer/src/views/agents": {
@@ -183,14 +184,27 @@
         "tests/web/terminal.spec.ts",
         "tests/web/capture.spec.ts",
         "tests/web/hooks.spec.ts",
-        "tests/web/m2-flow.spec.ts"
+        "tests/web/m2-flow.spec.ts",
+        "tests/web/inspector.spec.ts"
       ]
     },
     "src/renderer/src/views/Board.tsx": {
-      "web": ["tests/web/board.spec.ts", "tests/web/tasks.spec.ts", "tests/web/roles.spec.ts"]
+      "web": [
+        "tests/web/board.spec.ts",
+        "tests/web/tasks.spec.ts",
+        "tests/web/roles.spec.ts",
+        "tests/web/inspector.spec.ts",
+        "tests/web/workbench.spec.ts"
+      ]
     },
     "src/renderer/src/views/board": {
-      "web": ["tests/web/board.spec.ts", "tests/web/tasks.spec.ts", "tests/web/roles.spec.ts"]
+      "web": [
+        "tests/web/board.spec.ts",
+        "tests/web/tasks.spec.ts",
+        "tests/web/roles.spec.ts",
+        "tests/web/inspector.spec.ts",
+        "tests/web/workbench.spec.ts"
+      ]
     },
     "src/renderer/src/views/Brain.tsx": {
       "web": ["tests/web/brain.spec.ts"]
@@ -208,10 +222,15 @@
       "web": ["tests/web/explore.spec.ts"]
     },
     "src/renderer/src/views/Git.tsx": {
-      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts"]
+      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts", "tests/web/inspector.spec.ts"]
     },
     "src/renderer/src/views/git": {
-      "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts", "tests/web/speed.spec.ts"]
+      "web": [
+        "tests/web/git.spec.ts",
+        "tests/web/m3-flow.spec.ts",
+        "tests/web/speed.spec.ts",
+        "tests/web/inspector.spec.ts"
+      ]
     },
     "src/renderer/src/views/Home.tsx": {
       "web": ["tests/web/home.spec.ts", "tests/web/board.spec.ts", "tests/web/brain.spec.ts"]
@@ -220,19 +239,30 @@
       "web": ["tests/web/home.spec.ts", "tests/web/permissions.spec.ts", "tests/web/board.spec.ts"]
     },
     "src/renderer/src/views/Inbox.tsx": {
-      "web": ["tests/web/inbox.spec.ts", "tests/web/speed.spec.ts", "tests/web/permissions.spec.ts"]
+      "web": [
+        "tests/web/inbox.spec.ts",
+        "tests/web/speed.spec.ts",
+        "tests/web/permissions.spec.ts",
+        "tests/web/inspector.spec.ts"
+      ]
     },
     "src/renderer/src/views/PreviewTab.tsx": {
       "electron": ["tests/e2e/preview.spec.ts"]
     },
     "src/renderer/src/views/ProjectPage.tsx": {
-      "web": ["tests/web/projects.spec.ts", "tests/web/board.spec.ts", "tests/web/git.spec.ts"]
+      "web": [
+        "tests/web/projects.spec.ts",
+        "tests/web/board.spec.ts",
+        "tests/web/git.spec.ts",
+        "tests/web/inspector.spec.ts"
+      ]
     },
     "src/renderer/src/views/project": {
       "web": [
         "tests/web/projects.spec.ts",
         "tests/web/tasks.spec.ts",
-        "tests/web/onboarding.spec.ts"
+        "tests/web/onboarding.spec.ts",
+        "tests/web/inspector.spec.ts"
       ]
     },
     "src/renderer/src/views/Projects.tsx": {
@@ -350,7 +380,8 @@
         "tests/web/views.spec.ts",
         "tests/web/polish.spec.ts",
         "tests/web/layout.spec.ts",
-        "tests/web/notifications.spec.ts"
+        "tests/web/notifications.spec.ts",
+        "tests/web/workbench.spec.ts"
       ]
     },
     "src/renderer/src/views/Gallery.tsx": {

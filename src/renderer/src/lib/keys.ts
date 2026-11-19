@@ -34,7 +34,7 @@ export function terminalKeyAction(e: KeyLike, hasSelection: boolean): TerminalKe
   if (e.shiftKey) {
     if (key === "c") return "copy";
     if (key === "v") return "paste";
-    if (key === "f" || key === "a") return "app";
+    if (key === "f" || key === "a" || key === "b") return "app";
     if (key === "+" || key === "_") return "app"; // zoom
     return "program";
   }
@@ -60,6 +60,7 @@ export type AppShortcut =
   | { kind: "shortcuts" }
   | { kind: "setup" }
   | { kind: "sidebar" }
+  | { kind: "inspector" }
   | { kind: "new-agent" }
   | { kind: "find" }
   | { kind: "view"; index: number };
@@ -90,7 +91,7 @@ export function appShortcut(e: KeyLike, inTerminal: boolean): AppShortcut | null
       : e.shiftKey
         ? null
         : { kind: "find" };
-  if (key === "b" && !e.shiftKey) return { kind: "sidebar" };
+  if (key === "b") return e.shiftKey ? { kind: "inspector" } : { kind: "sidebar" };
   const digit = Number(e.key);
   if (Number.isInteger(digit) && digit >= 1 && digit <= 9)
     return { kind: "view", index: digit - 1 };

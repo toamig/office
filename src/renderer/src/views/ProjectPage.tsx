@@ -22,7 +22,9 @@ import {
   notifyError,
   type MoreItem,
 } from "../ui";
+import { InspectorSlot } from "../components/Inspector";
 import { PreviewTab } from "./PreviewTab";
+import { ProjectInspector } from "./project/ProjectInspector";
 import { useProjectManage } from "./project/Manage";
 import { RecentRuns } from "./project/RecentRuns";
 
@@ -378,6 +380,9 @@ function ProjectBody({
       more={more}
     >
       {manage.dialogs}
+      <InspectorSlot view="project">
+        <ProjectInspector id={id} />
+      </InspectorSlot>
       <Tabs
         label="Project sections"
         value={tab}

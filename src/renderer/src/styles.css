@@ -40,7 +40,7 @@ body {
   display: grid;
   min-height: 0;
   flex: 1;
-  grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr);
+  grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr) var(--inspector-w, 0px);
 }
 /* The content is a size container: views lay themselves out by its width, not the window's. */
 .app-main {

@@ -55,16 +55,24 @@ export function PipelineDiagram({
   stages,
   onPick,
   picked,
+  vertical = false,
   testId = "pipeline-diagram",
 }: {
   stages: DiagramStage[];
   onPick?: (stageId: string) => void;
   picked?: string;
+  /** Stages top to bottom, for a narrow place such as the inspector. */
+  vertical?: boolean;
   testId?: string;
 }) {
   const now = currentStage(stages);
   return (
-    <ol className="diagram" data-testid={testId} aria-label="Pipeline stages">
+    <ol
+      className="diagram"
+      data-vertical={vertical ? "true" : undefined}
+      data-testid={testId}
+      aria-label="Pipeline stages"
+    >
       {stages.map((s, i) => {
         const working = s.status === "running";
         return (

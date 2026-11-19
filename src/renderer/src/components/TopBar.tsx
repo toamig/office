@@ -1,4 +1,5 @@
-import { ArrowLeft, ArrowRight, PanelLeft, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, PanelLeft, PanelRight, RefreshCw, Search } from "lucide-react";
+import { useInspector } from "../lib/inspector";
 import { office } from "../lib/ipc";
 import { useSidebarCollapsed } from "../lib/sidebar";
 import { useUi } from "../stores/ui";
@@ -45,6 +46,7 @@ export function TopBar() {
   const { view, history, at, back, forward, syncing, setSyncing, setSyncReport, setSwitcherOpen } =
     useUi();
   const [, toggleSidebar] = useSidebarCollapsed();
+  const inspector = useInspector(view);
   const sync = async (): Promise<void> => {
     setSyncing(true);
     try {
@@ -105,6 +107,15 @@ export function TopBar() {
         <Search size={14} /> Jump to anything
         <kbd>Ctrl+K</kbd>
       </button>
+      {inspector.available && (
+        <BarButton
+          label={`${inspector.open ? "Hide" : "Show"} the details (Ctrl+Shift+B)`}
+          onClick={inspector.toggle}
+          testId="inspector-toggle"
+        >
+          <PanelRight size={16} />
+        </BarButton>
+      )}
       <NotificationBell />
       <Button onClick={() => void sync()} disabled={syncing} data-testid="sync-all">
         <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />

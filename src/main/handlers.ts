@@ -487,6 +487,8 @@ function registerConfigHandlers(ctx: AppContext): void {
       zoom: s.zoom,
       sidebarCollapsed: s.sidebarCollapsed,
       sidebarWidth: s.sidebarWidth,
+      inspectorWidth: s.inspectorWidth,
+      inspectorHidden: s.inspectorHidden,
       panes: s.panes,
       sessionMode: s.sessionMode,
       quietHours: s.quietHours ?? null,
@@ -497,10 +499,13 @@ function registerConfigHandlers(ctx: AppContext): void {
   ctx.ipc.handle("settings.get", () => appSettings());
   ctx.ipc.handle("settings.set", (req) => {
     queueMicrotask(() => ctx.bus.emit("settings.changed", {}));
-    const { quietHours, panes, ...rest } = req;
+    const { quietHours, panes, inspectorHidden, ...rest } = req;
     ctx.patchSettings({
       ...rest,
       ...(panes === undefined ? {} : { panes: { ...ctx.settings().panes, ...panes } }),
+      ...(inspectorHidden === undefined
+        ? {}
+        : { inspectorHidden: { ...ctx.settings().inspectorHidden, ...inspectorHidden } }),
       ...(quietHours === undefined ? {} : { quietHours: quietHours ?? undefined }),
     });
     return appSettings();

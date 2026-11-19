@@ -888,6 +888,8 @@ export const AppSettings = z.object({
   zoom: z.number(),
   sidebarCollapsed: z.boolean(),
   sidebarWidth: z.number(),
+  inspectorWidth: z.number(),
+  inspectorHidden: z.record(z.string(), z.boolean()),
   panes: z.record(z.string(), z.number()),
   sessionMode: z.enum(["chat", "terminal"]),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
@@ -906,6 +908,9 @@ export const AppSettingsPatch = z.object({
   zoom: z.number().int().min(80).max(150).optional(),
   sidebarCollapsed: z.boolean().optional(),
   sidebarWidth: z.number().int().min(200).max(320).optional(),
+  inspectorWidth: z.number().int().min(280).max(480).optional(),
+  /** Views to show or hide the inspector in, by view id; merged into the saved ones. */
+  inspectorHidden: z.record(z.string(), z.boolean()).optional(),
   /** Divider positions to remember, by pane id; they are merged into the saved ones. */
   panes: z.record(z.string(), z.number()).optional(),
   sessionMode: z.enum(["chat", "terminal"]).optional(),

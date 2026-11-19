@@ -1,22 +1,13 @@
 import { Check } from "lucide-react";
 import { useState } from "react";
 import type { NotificationRow } from "@shared/models";
+import { InspectorSlot } from "../components/Inspector";
 import { PermissionRequests } from "../components/PermissionRequests";
 import { VirtualList } from "../components/VirtualList";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { useUi, type ViewId } from "../stores/ui";
-import {
-  Banner,
-  Button,
-  Dropdown,
-  EmptyState,
-  Page,
-  SplitPane,
-  StatusBadge,
-  Time,
-  notifyError,
-} from "../ui";
+import { Banner, Button, Dropdown, EmptyState, Page, StatusBadge, Time, notifyError } from "../ui";
 
 /** A notification kind in words: "git.conflict" reads "Git conflict". */
 export function kindLabel(kind: string): string {
@@ -135,44 +126,40 @@ export function Inbox() {
           Sync conflicts, agents that need you and new items for you will show up.
         </EmptyState>
       )}
-      <SplitPane
-        id="inbox"
-        defaultSize={460}
-        min={280}
-        minSecond={320}
-        first={
-          <VirtualList
-            items={rows}
-            estimate={64}
-            itemKey={(n) => n.id}
-            renderItem={(n) => (
-              <div
-                data-testid="notification"
-                className="ui-row"
-                role="button"
-                tabIndex={0}
-                data-clickable="true"
-                data-selected={n.id === selected ? "true" : undefined}
-                style={{ opacity: n.readAt ? 0.65 : 1 }}
-                onClick={() => pick(n)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") pick(n);
-                }}
-              >
-                <div className="min-w-0 flex-1">
-                  <div className="font-medium">{n.title}</div>
-                  {n.body && <div className="ui-line-sub truncate">{n.body}</div>}
-                </div>
-                {n.urgent && <StatusBadge status="failed" label="Urgent" />}
-                <span className="ui-line-sub">
-                  <Time iso={n.createdAt} />
-                </span>
+      <div className="ui-surface min-h-0 flex-1 overflow-auto" data-testid="inbox-list">
+        <VirtualList
+          items={rows}
+          estimate={64}
+          itemKey={(n) => n.id}
+          renderItem={(n) => (
+            <div
+              data-testid="notification"
+              className="ui-row"
+              role="button"
+              tabIndex={0}
+              data-clickable="true"
+              data-selected={n.id === selected ? "true" : undefined}
+              style={{ opacity: n.readAt ? 0.65 : 1 }}
+              onClick={() => pick(n)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") pick(n);
+              }}
+            >
+              <div className="min-w-0 flex-1">
+                <div className="font-medium">{n.title}</div>
+                {n.body && <div className="ui-line-sub truncate">{n.body}</div>}
               </div>
-            )}
-          />
-        }
-        second={<Detail note={current} onOpen={() => current && open(current)} />}
-      />
+              {n.urgent && <StatusBadge status="failed" label="Urgent" />}
+              <span className="ui-line-sub">
+                <Time iso={n.createdAt} />
+              </span>
+            </div>
+          )}
+        />
+      </div>
+      <InspectorSlot view="inbox">
+        <Detail note={current} onOpen={() => current && open(current)} />
+      </InspectorSlot>
     </Page>
   );
 }

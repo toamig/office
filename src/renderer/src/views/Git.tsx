@@ -4,7 +4,9 @@ import { PrsPanel } from "../components/PrsPanel";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { EmptyState, Group, Page, SplitPane, StatusBadge, Tabs } from "../ui";
+import { InspectorSlot } from "../components/Inspector";
 import { BranchesTab } from "./git/BranchesTab";
+import { GitInspector } from "./git/GitInspector";
 import { CommitTab } from "./git/CommitTab";
 import { DiffTab } from "./git/DiffTab";
 import { WorktreesTab } from "./git/WorktreesTab";
@@ -128,6 +130,7 @@ export function Git() {
 
   return (
     <Page title="Git" testId="git" fill>
+      <InspectorSlot view="git">{current && <GitInspector projectId={current.id} />}</InspectorSlot>
       <SplitPane
         id="git"
         defaultSize={340}

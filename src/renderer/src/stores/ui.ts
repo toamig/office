@@ -42,6 +42,9 @@ interface UiState {
   stayHere: () => void;
   leaveAnyway: () => void;
   sidebarCollapsed: boolean;
+  /** The element the inspector's content is drawn into (set by the shell). */
+  inspectorNode: HTMLElement | null;
+  setInspectorNode: (node: HTMLElement | null) => void;
   setSidebarCollapsed: (collapsed: boolean) => void;
   syncing: boolean;
   syncReport: SyncReport | null;
@@ -110,6 +113,8 @@ export const useUi = create<UiState>((set, get) => ({
     if (to) set({ view: to.view, params: to.params, at: at + 1, visits: get().visits + 1 });
   },
   sidebarCollapsed: false,
+  inspectorNode: null,
+  setInspectorNode: (inspectorNode) => set({ inspectorNode }),
   setSidebarCollapsed: (sidebarCollapsed) => set({ sidebarCollapsed }),
   syncing: false,
   syncReport: null,

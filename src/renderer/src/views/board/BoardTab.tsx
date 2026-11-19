@@ -17,7 +17,9 @@ import {
   Time,
   notifyError,
 } from "../../ui";
+import { InspectorSlot } from "../../components/Inspector";
 import { diagramStages } from "./diagram";
+import { TaskInspector } from "./TaskInspector";
 import { TaskDetail } from "./TaskDetail";
 
 const columns: Array<{ id: string; title: string; match: (t: TaskView) => boolean }> = [
@@ -244,6 +246,9 @@ export function BoardTab({
           )
         }
       />
+      <InspectorSlot view="board">
+        <TaskInspector id={open} />
+      </InspectorSlot>
       {creating && (
         <NewTask
           onClose={onCloseCreate}
