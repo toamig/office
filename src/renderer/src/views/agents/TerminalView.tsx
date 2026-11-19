@@ -13,6 +13,8 @@ import { FIND_EVENT } from "../../lib/shortcuts";
 import { useTheme } from "../../lib/theme";
 
 const SCROLLBACK_LINES = 10_000;
+/** The terminal's own text size, in pixels (xterm draws it, so it is a number and not a token). */
+const TERMINAL_FONT_SIZE = 13;
 const FONT = '"Cascadia Mono", Consolas, ui-monospace, monospace';
 
 /**
@@ -46,7 +48,7 @@ export function TerminalView({ id }: { id: string }) {
     if (!el) return;
     const term = new Terminal({
       scrollback: SCROLLBACK_LINES,
-      fontSize: 13,
+      fontSize: TERMINAL_FONT_SIZE,
       lineHeight: 1.25,
       fontFamily: FONT,
       cursorBlink: true,

@@ -1,18 +1,9 @@
 import { Check, RotateCcw, X } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "../../components/Markdown";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import { Button, Card, EmptyState, IconButton, StatusBadge, Textarea, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-
-const tone = (s: string): "neutral" | "good" | "warn" | "bad" =>
-  s === "done" || s === "approved"
-    ? "good"
-    : s === "failed"
-      ? "bad"
-      : s === "waiting-gate" || s === "waiting-permission" || s === "running"
-        ? "warn"
-        : "neutral";
 
 function BuildDiff({
   projectId,
@@ -29,19 +20,19 @@ function BuildDiff({
   const files = diff.data?.files ?? [];
   return (
     <div data-testid="task-diff">
-      {diff.error && <ErrorBanner message={diff.error} />}
+      {diff.error && <p className="ui-bad">{diff.error}</p>}
       {files.length === 0 && !diff.loading && (
-        <EmptyState>No changes on this branch yet.</EmptyState>
+        <EmptyState title="No changes yet">Nothing has changed on this branch.</EmptyState>
       )}
       {files.map((f) => (
         <details key={f.path} className="mb-2" open>
           <summary className="font-medium">
             {f.path}{" "}
-            <span style={{ color: "var(--muted)" }}>
+            <span className="ui-muted">
               +{f.additions} -{f.deletions}
             </span>
           </summary>
-          <div className="font-mono text-[12.5px]">
+          <div className="font-mono text-[length:var(--text-sm)]">
             {f.hunks.flatMap((h) =>
               h.lines.map((l, i) => (
                 <div
@@ -49,9 +40,9 @@ function BuildDiff({
                   style={{
                     background:
                       l.kind === "add"
-                        ? "color-mix(in srgb, var(--good) 16%, transparent)"
+                        ? "color-mix(in srgb, var(--success-fg) 16%, transparent)"
                         : l.kind === "del"
-                          ? "color-mix(in srgb, var(--bad) 16%, transparent)"
+                          ? "color-mix(in srgb, var(--danger-fg) 16%, transparent)"
                           : "transparent",
                   }}
                   className="whitespace-pre-wrap break-all px-2"
@@ -73,24 +64,26 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
   const [stage, setStage] = useState<string | null>(null);
   const [comment, setComment] = useState("");
   const [rejecting, setRejecting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [confirmKeep, setConfirmKeep] = useState<number | null>(null);
 
   const t = task.data;
   const run = async (work: () => Promise<void>): Promise<void> => {
-    setError(null);
     try {
       await work();
       task.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", `task-${id}`);
     }
   };
   if (!t)
     return (
-      <Panel title="Task">
-        {task.error ? <ErrorBanner message={task.error} /> : <EmptyState>Loading...</EmptyState>}
-      </Panel>
+      <Card title="Task">
+        {task.error ? (
+          <p className="ui-bad">{task.error}</p>
+        ) : (
+          <p className="ui-muted">Loading...</p>
+        )}
+      </Card>
     );
 
   const shown =
@@ -98,55 +91,49 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
     t.stages[Math.min(t.stageIndex, t.stages.length - 1)];
   const waiting = t.status === "waiting-gate";
   return (
-    <Panel
+    <Card
       title={t.title}
       action={
-        <Button variant="ghost" aria-label="Close task" onClick={onClose}>
-          <X size={14} />
-        </Button>
+        <IconButton label="Close task" size="sm" onClick={onClose}>
+          <X />
+        </IconButton>
       }
     >
       <div data-testid="task-detail">
-        {error && <ErrorBanner message={error} />}
-        <div className="mb-2 flex flex-wrap items-center gap-2">
-          <Chip>{t.projectName}</Chip>
-          <Chip>{t.pipelineName}</Chip>
-          <Chip tone={tone(t.status)}>{t.status}</Chip>
-          {t.branch && <Chip>{t.branch}</Chip>}
+        <div className="ui-badges mb-2">
+          <StatusBadge status={t.status} />
+          <span>{t.projectName}</span>
+          <span className="ui-muted">{t.pipelineName}</span>
+          {t.branch && <code className="ui-path">{t.branch}</code>}
         </div>
-        <p className="mt-0" style={{ color: "var(--muted)" }}>
-          {t.description}
-        </p>
+        <p className="mt-0 ui-muted">{t.description}</p>
         <div className="mb-3 flex flex-wrap gap-1">
           {t.stages.map((s) => (
-            <button
+            <Button
               key={s.stageId}
+              size="sm"
               data-testid="stage-tab"
               data-status={s.status}
+              aria-pressed={shown?.stageId === s.stageId}
+              variant={shown?.stageId === s.stageId ? "secondary" : "ghost"}
               onClick={() => setStage(s.stageId)}
-              className="rounded border px-2 py-1"
-              style={{
-                borderColor: shown?.stageId === s.stageId ? "var(--accent)" : "var(--line)",
-                background: "transparent",
-                color: "var(--text)",
-              }}
             >
-              {s.stageId} <Chip tone={tone(s.status)}>{s.status}</Chip>
-            </button>
+              {s.stageId} <StatusBadge status={s.status} />
+            </Button>
           ))}
         </div>
         {shown && (
           <div className="mb-3">
-            <div className="mb-1 text-[12px]" style={{ color: "var(--muted)" }}>
+            <div className="mb-1 text-[length:var(--text-xs)] ui-muted">
               {shown.role} on {shown.provider ?? "an unknown provider"}
             </div>
-            {shown.error && <ErrorBanner message={shown.error} />}
+            {shown.error && <p className="ui-bad">{shown.error}</p>}
             {t.outputs[shown.stageId] ? (
               <div data-testid="stage-output">
                 <Markdown>{t.outputs[shown.stageId] as string}</Markdown>
               </div>
             ) : (
-              <EmptyState>No output yet.</EmptyState>
+              <p className="ui-muted">No output yet.</p>
             )}
             {shown.worktree && t.worktree && (
               <BuildDiff projectId={t.projectId} worktree={t.worktree} />
@@ -171,18 +158,16 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
               {t.variants.map((v) => (
                 <div
                   key={v.n}
-                  className="rounded border p-2"
-                  style={{ borderColor: "var(--line)" }}
+                  className="ui-surface p-3"
                   data-testid="variant"
                   data-status={v.status}
                 >
                   <div className="mb-1 flex items-center gap-1.5">
                     <span className="font-medium">Builder {v.n}</span>
-                    <Chip tone={tone(v.status === "kept" ? "done" : v.status)}>{v.status}</Chip>
+                    <StatusBadge status={v.status} />
                   </div>
                   <div
-                    className="mb-1 text-[12px]"
-                    style={{ color: "var(--muted)" }}
+                    className="mb-1 text-[length:var(--text-xs)] ui-muted"
                     data-testid="variant-checks"
                   >
                     {v.status === "failed"
@@ -200,7 +185,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
                     v.status === "done" &&
                     (confirmKeep === v.n ? (
                       <div className="mt-2" data-testid="keep-confirm">
-                        <div className="mb-1 text-[12.5px]" style={{ color: "var(--warn)" }}>
+                        <div className="ui-warn mb-1">
                           This merges {v.branch} into the task branch and removes the other
                           builders' worktrees. Continue?
                         </div>
@@ -231,19 +216,14 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
         {waiting && (
           <div className="grid gap-2">
             {rejecting && (
-              <textarea
+              <Textarea
+                label="Rejection comment"
+                hideLabel
                 value={comment}
                 onChange={(e) => setComment(e.target.value)}
                 rows={3}
                 placeholder="What should change? The stage runs again with this added."
-                aria-label="Rejection comment"
                 data-testid="reject-comment"
-                className="rounded border px-2 py-1"
-                style={{
-                  borderColor: "var(--line)",
-                  background: "var(--bg)",
-                  color: "var(--text)",
-                }}
               />
             )}
             <div className="flex gap-2">
@@ -252,7 +232,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
                 onClick={() => void run(() => office.invoke("tasks.approve", { id }))}
                 data-testid="task-approve"
               >
-                <Check size={13} /> Approve
+                <Check /> Approve
               </Button>
               {!rejecting ? (
                 <Button onClick={() => setRejecting(true)} data-testid="task-reject-open">
@@ -279,7 +259,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
         {t.status === "done" && (
           <div className="mt-3">
             {t.recorded ? (
-              <Chip tone="good">Recorded in the project notes</Chip>
+              <StatusBadge status="saved" label="Recorded in the project notes" />
             ) : (
               <Button
                 onClick={() => void run(() => office.invoke("tasks.record", { id }))}
@@ -296,7 +276,7 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
               onClick={() => void run(() => office.invoke("tasks.retry", { id }))}
               data-testid="task-retry"
             >
-              <RotateCcw size={13} /> Retry this stage
+              <RotateCcw /> Retry this stage
             </Button>
           )}
           {(t.status === "running" || waiting || t.status === "failed") && (
@@ -309,6 +289,6 @@ export function TaskDetail({ id, onClose }: { id: string; onClose: () => void })
           )}
         </div>
       </div>
-    </Panel>
+    </Card>
   );
 }

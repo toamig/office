@@ -16,6 +16,7 @@ export function Dialog({
   wide = false,
   sheet = false,
   testId,
+  attrs,
 }: {
   title: string;
   onClose: () => void;
@@ -24,6 +25,8 @@ export function Dialog({
   wide?: boolean;
   sheet?: boolean;
   testId?: string;
+  /** Extra attributes for the scrim, such as a data-phase a test waits on. */
+  attrs?: Record<string, string>;
 }) {
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -55,7 +58,7 @@ export function Dialog({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
   return createPortal(
-    <div className="ui-scrim" data-testid={testId}>
+    <div className="ui-scrim" data-testid={testId} {...attrs}>
       <div
         ref={box}
         className="ui-dialog"

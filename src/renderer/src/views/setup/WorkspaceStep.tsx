@@ -1,9 +1,9 @@
 import { useState } from "react";
 import type { BrainResult, WorkspaceInspection } from "@shared/models";
 import { useUnsaved } from "../../components/LeaveGuard";
-import { Button, Chip, ErrorBanner } from "../../components/ui";
+import { Button, StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
-import { fieldClass, fieldStyle, PathField } from "./PathField";
+import { fieldClass, PathField } from "./PathField";
 
 /**
  * Choosing the workspace: a folder that is already here, or a git repo to clone. Office keeps the project
@@ -21,7 +21,6 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
   const [inspection, setInspection] = useState<WorkspaceInspection | null>(null);
   const [configPath, setConfigPath] = useState("Office/workspace.json");
   const [create, setCreate] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   // A folder that is chosen but not yet used is a change that is not saved.
   useUnsaved(
@@ -32,12 +31,11 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
   );
 
   const guard = async (work: () => Promise<void>): Promise<void> => {
-    setError(null);
     setBusy(true);
     try {
       await work();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", "workspace");
     } finally {
       setBusy(false);
     }
@@ -90,11 +88,6 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
 
   return (
     <div data-testid="wizard">
-      {error && (
-        <div className="mb-3" data-testid="wizard-error">
-          <ErrorBanner message={error} />
-        </div>
-      )}
       {!inspection && (
         <>
           <p className="mb-3 mt-0">
@@ -132,7 +125,7 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
           </div>
           {mode === "new" && !created && (
             <>
-              <p className="mt-0" style={{ color: "var(--muted)" }}>
+              <p className="ui-muted mt-0">
                 A new brain is one git repo in a folder: a README, the rules agents follow, a
                 Projects folder and your workspace config. Pick a new or empty folder for it.
               </p>
@@ -157,7 +150,6 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
                   <span className="w-40">Repo name</span>
                   <input
                     className={fieldClass}
-                    style={fieldStyle}
                     value={repoName}
                     onChange={(e) => setRepoName(e.target.value)}
                     aria-label="Repo name"
@@ -178,16 +170,14 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
           {mode === "new" && created && (
             <div data-testid="brain-created">
               <p className="mt-0">
-                <Chip tone="good">Created</Chip> {created.path}
+                <StatusBadge status="saved" label="Created" /> {created.path}
               </p>
-              <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
-                {created.files.join(", ")}
-              </div>
+              <div className="ui-muted">{created.files.join(", ")}</div>
               {created.github.repo && <p>Private GitHub repo: {created.github.repo}</p>}
               {created.github.error && (
-                <ErrorBanner
-                  message={`The brain is made, but the GitHub repo was not: ${created.github.error}`}
-                />
+                <p className="ui-warn">
+                  The brain is made, but the GitHub repo was not: {created.github.error}
+                </p>
               )}
             </div>
           )}
@@ -217,7 +207,6 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
                 <span className="w-40">Git URL</span>
                 <input
                   className={fieldClass}
-                  style={fieldStyle}
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
                   data-testid="setup-url"
@@ -246,18 +235,17 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
       {inspection && (
         <>
           <p className="mb-3 mt-0">
-            {inspection.hasBrainHub ? (
-              <Chip tone="good">brain hub</Chip>
-            ) : (
-              <Chip>plain folder</Chip>
-            )}{" "}
-            Found {inspection.configs.length} config file(s) in {root}.
+            <StatusBadge
+              status="info"
+              label={inspection.hasBrainHub ? "Brain hub" : "Plain folder"}
+            />{" "}
+            Found {inspection.configs.length} config{" "}
+            {inspection.configs.length === 1 ? "file" : "files"} in {root}.
           </p>
           <label className="mb-2 flex items-center gap-2">
             <span className="w-40">Config file</span>
             <input
               className={fieldClass}
-              style={fieldStyle}
               value={configPath}
               onChange={(e) => setConfigPath(e.target.value)}
               data-testid="setup-config"

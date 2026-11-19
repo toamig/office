@@ -3,12 +3,19 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatState, SessionRow } from "@shared/models";
 import { PermissionRequests } from "../../components/PermissionRequests";
-import { Chip, ErrorBanner } from "../../components/ui";
+import { StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
-import { Select } from "../../components/Select";
+import { Dropdown as Select } from "../../ui";
 import { StatusChip } from "../../components/StatusChip";
+
+/** The Codex sandbox levels in words. */
+const SANDBOX_LABELS: Record<string, string> = {
+  "read-only": "read only",
+  "workspace-write": "can write to the workspace",
+  "danger-full-access": "full access",
+};
 
 /** The permission modes in words, as the header shows them. */
 const PERMISSION_LABELS: Record<string, string> = {
@@ -62,7 +69,6 @@ function useConversation(id: string): { conversation: Conversation; ready: boole
 export function ChatView({ session, onChanged }: { session: SessionRow; onChanged: () => void }) {
   const { conversation, ready } = useConversation(session.id);
   const [state, setState] = useState<ChatState | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
 
@@ -88,11 +94,10 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
   }, [conversation]);
 
   const run = async (work: () => Promise<unknown>): Promise<void> => {
-    setError(null);
     try {
       await work();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", session.id);
     }
   };
 
@@ -160,9 +165,13 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
           </>
         )}
         {state && state.kind === "codex" && (
-          <Chip tone="warn">
-            <span data-testid="chat-sandbox">sandbox: {state.sandbox}</span>
-          </Chip>
+          <span data-testid="chat-sandbox">
+            <StatusBadge
+              status="info"
+              tone="attention"
+              label={`Sandbox: ${SANDBOX_LABELS[state.sandbox] ?? state.sandbox}`}
+            />
+          </span>
         )}
         {conversation.working && (
           <button
@@ -188,7 +197,6 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
           <SquareTerminal size={13} /> Open in terminal
         </button>
       </header>
-      {error && <ErrorBanner message={error} />}
       <div
         className="chat-scroll"
         ref={list}

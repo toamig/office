@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, pick } from "./helpers";
+import { launch, pick, toasts } from "./helpers";
 
 test("Setup shows the workspace, the tools with their problems and fixes, and the inventory", async () => {
   const { app, world, data } = await launch({ world: true, fakeTools: true });
@@ -24,7 +24,7 @@ test("Setup shows the workspace, the tools with their problems and fixes, and th
   await expect(codex).toContainText("npm i -g @openai/codex");
   await expect(
     win.getByTestId("tool-row").filter({ has: win.getByText("Claude Code", { exact: true }) }),
-  ).toContainText("logged in");
+  ).toContainText(/logged in/i);
 
   // The inventory is read from the fake home, read only.
   await expect(win.getByTestId("inventory")).toContainText("example-plugin@market");
@@ -56,7 +56,7 @@ test("a bad folder shows a clear error and keeps the welcome step open", async (
   await win.getByTestId("mode-folder").click();
   await win.getByTestId("setup-root").fill(join(base, "nowhere"));
   await win.getByTestId("setup-use-folder").click();
-  await expect(win.getByTestId("wizard-error")).toContainText("is not a folder");
+  await expect(toasts(win).filter({ hasText: "is not a folder" })).toBeVisible();
   await app.close();
 });
 
@@ -72,7 +72,7 @@ test("automations: add one, run it now, and see it finish", async () => {
   await win.getByTestId("automation-prompt").fill("Summarise yesterday");
   await win.getByTestId("automation-save").click();
   const row = win.getByTestId("automation-row").filter({ hasText: "nightly-brief" });
-  await expect(row).toContainText("last run never");
+  await expect(row).toContainText(/last run never/i);
   const config = JSON.parse(readFileSync(join(world.hub, world.workspaceConfigPath), "utf8"));
   expect(config.automations).toEqual([
     {
@@ -86,7 +86,7 @@ test("automations: add one, run it now, and see it finish", async () => {
   ]);
 
   await row.getByTestId("automation-run").click();
-  await expect(row).toContainText("last run just now", { timeout: 60000 });
+  await expect(row).toContainText(/last run just now/i, { timeout: 60000 });
   await win.getByTestId("rail-inbox").click();
   await expect(win.getByTestId("notification").first()).toContainText(
     "Automation finished: nightly-brief",
@@ -98,7 +98,7 @@ test("automations: add one, run it now, and see it finish", async () => {
   await pick(win, "automation-project", { label: "Alpha" });
   await win.getByTestId("automation-prompt").fill("x");
   await win.getByTestId("automation-save").click();
-  await expect(win.getByTestId("automation-error")).toContainText("not a valid cron expression");
+  await expect(toasts(win).filter({ hasText: "not a valid cron expression" })).toBeVisible();
   await app.close();
 });
 

@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { existsSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch, terminalText, pick } from "./helpers";
+import { launch, terminalText, pick, toasts } from "./helpers";
 
 test("branches: create, a dirty switch is refused with a stash offer, and the stash works", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
@@ -15,7 +15,7 @@ test("branches: create, a dirty switch is refused with a stash offer, and the st
   await win.getByTestId("new-branch-name").fill("feature-x");
   await win.getByTestId("create-branch").click();
   await expect(win.getByTestId("branch-row").filter({ hasText: "feature-x" })).toContainText(
-    "current",
+    /current/i,
   );
   expect(sh(alpha, "branch", "--show-current").trim()).toBe("feature-x");
 
@@ -30,7 +30,7 @@ test("branches: create, a dirty switch is refused with a stash offer, and the st
   expect(sh(alpha, "branch", "--show-current").trim()).toBe("feature-x");
   await win.getByTestId("stash-switch").click();
   await expect(win.getByTestId("branch-row").filter({ hasText: "main" }).first()).toContainText(
-    "current",
+    /current/i,
   );
   expect(sh(alpha, "stash", "list")).toContain("office: before switching to main");
   await app.close();
@@ -70,7 +70,7 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
 
   // A running process holds its folder open on Windows, so the agent is stopped before the removal.
   await win.getByTestId("stop-session").click();
-  await expect(win.getByTestId("session-status").first()).toContainText(/exited/i);
+  await expect(win.getByTestId("session-status").first()).toContainText(/ended/i);
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
   await win.getByTestId("git-tab-worktrees").click();
@@ -131,9 +131,7 @@ test("diff review: two line comments go to the agent that owns the worktree as o
   await expect(win.getByTestId("comment-item")).toHaveCount(2);
 
   await win.getByTestId("send-to-agent").click();
-  await expect(win.getByTestId("review-sent")).toContainText(
-    "Sent your comments to the running agent",
-  );
+  await expect(toasts(win).filter({ hasText: "Comments sent" })).toBeVisible();
 
   await win.getByTestId("rail-agents").click();
   await win.getByTestId("session-row").filter({ hasText: "Reviewed" }).click();

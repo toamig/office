@@ -10,10 +10,10 @@ import {
   Palette,
   Settings,
 } from "lucide-react";
-import type { ComponentType } from "react";
+import { useState, type ComponentType, type KeyboardEvent, type PointerEvent } from "react";
 import { useQuery } from "../lib/hooks";
 import { prefetchView } from "../lib/prefetch";
-import { useSidebarCollapsed } from "../lib/sidebar";
+import { SIDEBAR_MAX, SIDEBAR_MIN, useSidebarCollapsed, useSidebarWidth } from "../lib/sidebar";
 import { VIEW_LABELS } from "../lib/views";
 import { useUi, type ViewId } from "../stores/ui";
 
@@ -31,7 +31,14 @@ export const RAIL: Array<{ id: ViewId; icon: ComponentType<{ size?: number }> }>
 ];
 
 /** The sidebar: icons and labels, or icons only when collapsed. */
-export function Sidebar() {
+export function Sidebar({
+  width,
+  onResizing,
+}: {
+  /** The width the shell is showing now (the saved one, or the one just dragged to). */
+  width: number;
+  onResizing?: (width: number) => void;
+}) {
   const { view, navigate } = useUi();
   const [collapsed] = useSidebarCollapsed();
   const counts = useQuery("notifications.counts", undefined, [
@@ -39,13 +46,25 @@ export function Sidebar() {
     "notification.read",
   ]);
   const unread = counts.data?.unread ?? 0;
+  const { save } = useSidebarWidth();
+  const [dragged, setDragged] = useState<number | null>(null);
+  const move = (e: PointerEvent<HTMLDivElement>): void => {
+    if (e.buttons !== 1) return;
+    const left = e.currentTarget.parentElement?.getBoundingClientRect().left ?? 0;
+    const next = Math.round(Math.min(Math.max(e.clientX - left, SIDEBAR_MIN), SIDEBAR_MAX));
+    setDragged(next);
+    onResizing?.(next);
+  };
+  const keys = (e: KeyboardEvent<HTMLDivElement>): void => {
+    const by = e.key === "ArrowLeft" ? -16 : e.key === "ArrowRight" ? 16 : 0;
+    if (by === 0) return;
+    e.preventDefault();
+    const next = Math.min(Math.max(width + by, SIDEBAR_MIN), SIDEBAR_MAX);
+    onResizing?.(next);
+    save(next);
+  };
   return (
-    <nav
-      data-testid="rail"
-      data-collapsed={collapsed}
-      className="sidebar"
-      style={{ width: collapsed ? 52 : 196 }}
-    >
+    <nav data-testid="rail" data-collapsed={collapsed} className="sidebar">
       {RAIL.map((v) => (
         <button
           key={v.id}
@@ -79,6 +98,27 @@ export function Sidebar() {
           <Palette size={16} />
           {!collapsed && <span className="sidebar-label">Gallery</span>}
         </button>
+      )}
+      {!collapsed && (
+        <div
+          className="sidebar-resizer"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize the sidebar"
+          aria-valuenow={dragged ?? width}
+          aria-valuemin={SIDEBAR_MIN}
+          aria-valuemax={SIDEBAR_MAX}
+          tabIndex={0}
+          data-testid="sidebar-resizer"
+          onPointerDown={(e) => e.currentTarget.setPointerCapture(e.pointerId)}
+          onPointerMove={move}
+          onPointerUp={() => {
+            // The width stays where it was dragged; the saved setting catches up on its own.
+            if (dragged !== null) save(dragged);
+            setDragged(null);
+          }}
+          onKeyDown={keys}
+        />
       )}
     </nav>
   );

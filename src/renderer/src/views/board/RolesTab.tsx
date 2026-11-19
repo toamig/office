@@ -1,12 +1,9 @@
 import { useState } from "react";
 import type { Role } from "@shared/types";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import { Button, Card, Dropdown, EmptyState, notifyDone, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { Select } from "../../components/Select";
 
-const field = "rounded border px-2 py-1";
-const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
 const EFFORTS = ["", "low", "medium", "high", "xhigh", "max"] as const;
 
 function RoleForm({
@@ -22,32 +19,26 @@ function RoleForm({
 }) {
   const providers = useQuery("providers.list");
   const [draft, setDraft] = useState<Role>(role);
-  const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
   const models = providers.data?.find((p) => p.id === draft.provider)?.models ?? [];
 
   const save = async (): Promise<void> => {
-    setError(null);
-    setSaved(false);
     try {
       await office.invoke("roles.save", { id, role: draft });
-      setSaved(true);
+      notifyDone("Role saved", "It is in the workspace config.", `role-${id}`);
       onSaved();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", "roles");
     }
   };
   const remove = async (): Promise<void> => {
-    setError(null);
     try {
       await office.invoke("roles.remove", { id });
       onRemoved();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", "roles");
     }
   };
   const set = <K extends keyof Role>(key: K, value: Role[K] | undefined): void => {
-    setSaved(false);
     setDraft((d) => {
       const next = { ...d } as Record<string, unknown>;
       if (value === undefined || value === "") delete next[key];
@@ -58,16 +49,9 @@ function RoleForm({
 
   return (
     <div className="grid gap-2.5" data-testid="role-form">
-      {error && (
-        <div data-testid="role-error">
-          <ErrorBanner message={error} />
-        </div>
-      )}
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Provider
-        <Select
-          className={field}
-          style={fieldStyle}
+        <Dropdown
           value={draft.provider}
           onChange={(e) => set("provider", e.target.value)}
           data-testid="role-provider"
@@ -80,13 +64,11 @@ function RoleForm({
           {!providers.data?.some((p) => p.id === draft.provider) && (
             <option value={draft.provider}>{draft.provider}</option>
           )}
-        </Select>
+        </Dropdown>
       </label>
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Model
         <input
-          className={field}
-          style={fieldStyle}
           list="role-models"
           value={draft.model ?? ""}
           placeholder="provider default"
@@ -101,9 +83,7 @@ function RoleForm({
       </label>
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Effort
-        <Select
-          className={field}
-          style={fieldStyle}
+        <Dropdown
           value={draft.effort ?? ""}
           onChange={(e) => set("effort", (e.target.value || undefined) as Role["effort"])}
           data-testid="role-effort"
@@ -113,13 +93,11 @@ function RoleForm({
               {e || "provider default"}
             </option>
           ))}
-        </Select>
+        </Dropdown>
       </label>
       <label className="grid grid-cols-[130px_1fr] items-center gap-2">
         Permission mode
         <input
-          className={field}
-          style={fieldStyle}
           value={draft.permissionMode ?? ""}
           placeholder="for example: plan"
           onChange={(e) => set("permissionMode", e.target.value)}
@@ -136,14 +114,12 @@ function RoleForm({
       <label className="grid grid-cols-[130px_1fr] items-start gap-2">
         <span>
           Allowed commands
-          <span className="block text-[12px]" style={{ color: "var(--muted)" }}>
+          <span className="block text-[length:var(--text-xs)] ui-muted">
             one rule per line, for example Bash(git commit:*). Claude Code only: Codex roles run in
             Codex&apos;s own sandbox and ignore this.
           </span>
         </span>
         <textarea
-          className={field}
-          style={fieldStyle}
           rows={5}
           value={draft.allowedCommands.join("\n")}
           onChange={(e) =>
@@ -161,8 +137,6 @@ function RoleForm({
       <label className="grid grid-cols-[130px_1fr] items-start gap-2">
         Instructions
         <textarea
-          className={field}
-          style={fieldStyle}
           rows={5}
           value={draft.instructions}
           onChange={(e) => set("instructions", e.target.value)}
@@ -176,7 +150,6 @@ function RoleForm({
         <Button onClick={() => void remove()} data-testid="role-remove">
           Delete
         </Button>
-        {saved && <Chip tone="good">Saved to the workspace config</Chip>}
       </div>
     </div>
   );
@@ -186,32 +159,27 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
   const projects = useQuery("projects.list");
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const [projectId, setProjectId] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const overrides =
     workspace.data?.workspace?.projects.find((p) => p.id === projectId)?.roles ?? {};
 
   const set = async (role: string, target: string | null): Promise<void> => {
-    setError(null);
     try {
       await office.invoke("roles.setOverride", { projectId, role, target });
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", "roles");
     }
   };
   return (
-    <Panel title="Project overrides">
-      <p className="mt-0 text-[12.5px]" style={{ color: "var(--muted)" }}>
+    <Card title="Project overrides">
+      <p className="mt-0 text-[length:var(--text-sm)] ui-muted">
         A project can use another role whenever a pipeline or the Start agent dialog asks for one,
         for example a project whose builder is Codex.
       </p>
-      {error && <ErrorBanner message={error} />}
-      <Select
+      <Dropdown
         value={projectId}
         onChange={(e) => setProjectId(e.target.value)}
         aria-label="Override project"
         data-testid="override-project"
-        className={field}
-        style={fieldStyle}
       >
         <option value="">Choose a project</option>
         {(projects.data ?? []).map((p) => (
@@ -219,18 +187,16 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
             {p.name}
           </option>
         ))}
-      </Select>
+      </Dropdown>
       {projectId &&
         roleIds.map((role) => (
           <div key={role} className="mt-2 flex items-center gap-2">
             <span className="w-28">{role}</span>
-            <Select
+            <Dropdown
               value={overrides[role] ?? ""}
               onChange={(e) => void set(role, e.target.value || null)}
               aria-label={`Override for ${role}`}
               data-testid={`override-${role}`}
-              className={field}
-              style={fieldStyle}
             >
               <option value="">uses its own role</option>
               {roleIds
@@ -240,10 +206,10 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
                     use {r}
                   </option>
                 ))}
-            </Select>
+            </Dropdown>
           </div>
         ))}
-    </Panel>
+    </Card>
   );
 }
 
@@ -252,13 +218,11 @@ export function RolesTab() {
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const [selected, setSelected] = useState("");
   const [newId, setNewId] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const roles = workspace.data?.workspace?.roles ?? {};
   const ids = Object.keys(roles);
   const current = roles[selected] ? selected : ids[0];
 
   const create = async (): Promise<void> => {
-    setError(null);
     try {
       await office.invoke("roles.save", {
         id: newId.trim(),
@@ -267,33 +231,34 @@ export function RolesTab() {
       setSelected(newId.trim());
       setNewId("");
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That did not work", "roles");
     }
   };
 
   return (
     <div className="grid gap-4 lg:grid-cols-[220px_1fr]" data-testid="roles-tab">
       <div>
-        {ids.length === 0 && <EmptyState>No roles yet. Add one below.</EmptyState>}
+        {ids.length === 0 && <EmptyState title="No roles yet">Add one below.</EmptyState>}
         {ids.map((id) => (
           <div
             key={id}
             data-testid="role-row"
+            className="ui-row"
+            role="button"
+            tabIndex={0}
+            data-clickable="true"
+            data-selected={current === id ? "true" : undefined}
             onClick={() => setSelected(id)}
-            className="rounded border px-3 py-2"
-            style={{
-              marginBottom: 4,
-              borderColor: "var(--line)",
-              background: current === id ? "var(--panel)" : "transparent",
-            }}
+            onKeyDown={(e) => e.key === "Enter" && setSelected(id)}
           >
-            <div className="font-medium">{id}</div>
-            <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-              {roles[id]?.provider} {roles[id]?.model ?? ""}
+            <div className="min-w-0 flex-1">
+              <div className="font-medium">{id}</div>
+              <div className="ui-line-sub">
+                {roles[id]?.provider} {roles[id]?.model ?? ""}
+              </div>
             </div>
           </div>
         ))}
-        {error && <ErrorBanner message={error} />}
         <form
           className="mt-2 flex gap-1.5"
           onSubmit={(e) => {
@@ -307,8 +272,7 @@ export function RolesTab() {
             placeholder="new-role-id"
             aria-label="New role id"
             data-testid="new-role-id"
-            className={`${field} min-w-0 flex-1`}
-            style={fieldStyle}
+            className="min-w-0 flex-1"
           />
           <Button type="submit" disabled={!newId.trim()} data-testid="new-role">
             Add
@@ -317,7 +281,7 @@ export function RolesTab() {
       </div>
       <div className="grid content-start gap-4">
         {current && roles[current] && (
-          <Panel title={`Role: ${current}`}>
+          <Card title={`Role: ${current}`}>
             <RoleForm
               key={current}
               id={current}
@@ -325,7 +289,7 @@ export function RolesTab() {
               onSaved={workspace.reload}
               onRemoved={() => setSelected("")}
             />
-          </Panel>
+          </Card>
         )}
         <Overrides roleIds={ids} />
       </div>

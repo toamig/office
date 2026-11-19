@@ -49,6 +49,17 @@ export const useNotes = create<NoteState>((set, get) => ({
   dismiss: (id) => set((s) => ({ live: s.live.filter((n) => n.id !== id) })),
 }));
 
+/** An error from an action, as a notification that stays until it is closed or replaced by a newer result for the same subject. */
+export function notifyError(err: unknown, title = "That did not work", subject?: string): number {
+  const message = err instanceof Error ? err.message : String(err);
+  return notify({ tone: "danger", title, detail: message, subject });
+}
+
+/** A good result: a short notification that leaves by itself. */
+export function notifyDone(title: string, detail?: string, subject?: string): number {
+  return notify({ tone: "success", title, detail, subject });
+}
+
 /** Shows the result of an action. Callable from anywhere, not only from components. */
 export function notify(input: NoteInput): number {
   return useNotes.getState().push(input);

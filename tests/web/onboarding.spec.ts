@@ -2,7 +2,7 @@ import { expect, test } from "@playwright/test";
 import { execFileSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, pageMenu, toasts } from "./helpers";
 
 const sh = (cwd: string, ...args: string[]): string =>
   execFileSync("git", ["-C", cwd, ...args], { encoding: "utf8" });
@@ -66,7 +66,7 @@ test("a new brain refuses a folder that already has files", async () => {
   writeFileSync(join(folder, "x.txt"), "x");
   await win.getByTestId("brain-folder").fill(folder);
   await win.getByTestId("brain-create").click();
-  await expect(win.getByTestId("wizard-error")).toContainText("already has files");
+  await expect(toasts(win).filter({ hasText: "already has files" })).toBeVisible();
   await app.close();
 });
 
@@ -126,7 +126,7 @@ test("Add projects lists only new repos, adds notes in a hub, matches existing n
 
   await win.getByTestId("add-projects-close").click();
   await expect(win.getByTestId("project-card")).toHaveCount(4);
-  await expect(win.getByTestId("projects")).not.toContainText("folder missing");
+  await expect(win.getByTestId("projects")).not.toContainText(/folder missing/i);
 
   // A new notes repo for the last one, through the fake gh.
   await win.getByTestId("add-projects-open").click();
@@ -156,7 +156,7 @@ test("the agent pointer: shown first, only its file committed, nothing outside t
 
   await win.getByTestId("rail-projects").click();
   await win.getByTestId("project-card").filter({ hasText: "Alpha" }).click();
-  await win.getByTestId("project-pointer-add").click();
+  await pageMenu(win, "project-pointer-add");
   await expect(win.getByTestId("pointer-text")).toContainText("<!-- office:begin -->");
   await expect(win.getByTestId("pointer-text")).toContainText("Overview.md");
   // The text names a folder an agent can open on this PC, and the choice shows where it goes by default.
@@ -179,7 +179,7 @@ test("the agent pointer: shown first, only its file committed, nothing outside t
   // Not pushed: the repo's own earlier commit and the pointer's are both still local.
   expect(sh(alpha.work, "status", "-sb").split("\n")[0]).toContain("ahead 2");
 
-  await win.getByTestId("project-pointer-remove").click();
+  await pageMenu(win, "project-pointer-remove");
   await win.getByTestId("pointer-confirm").click();
   await expect(win.getByTestId("pointer-report")).toContainText("removed");
   await win.getByTestId("pointer-close").click();
@@ -197,7 +197,7 @@ test("the agent pointer can go in CLAUDE.local.md: this PC only, never committed
 
   await win.getByTestId("rail-projects").click();
   await win.getByTestId("project-card").filter({ hasText: "Alpha" }).click();
-  await win.getByTestId("project-pointer-add").click();
+  await pageMenu(win, "project-pointer-add");
   await win.getByTestId("pointer-target-local").check();
   await expect(win.getByTestId("pointer-files")).toContainText("Alpha: CLAUDE.local.md");
   // Nothing about pushing: the file is never committed.
@@ -213,7 +213,7 @@ test("the agent pointer can go in CLAUDE.local.md: this PC only, never committed
   expect(sh(alpha.work, "rev-parse", "HEAD").trim()).toBe(head);
   expect(sh(alpha.work, "status", "--porcelain").trim()).toBe("");
 
-  await win.getByTestId("project-pointer-remove").click();
+  await pageMenu(win, "project-pointer-remove");
   await win.getByTestId("pointer-confirm").click();
   await expect(win.getByTestId("pointer-report")).toContainText("removed");
   await win.getByTestId("pointer-close").click();
@@ -229,7 +229,7 @@ test("Remove from Office drops only the workspace entry", async () => {
   const win = await app.firstWindow();
   await win.getByTestId("rail-projects").click();
   await win.getByTestId("project-card").filter({ hasText: "Beta" }).click();
-  await win.getByTestId("project-remove").click();
+  await pageMenu(win, "project-remove");
   await expect(win.getByTestId("remove-confirm")).toContainText("Its notes, its code");
   await win.getByTestId("remove-yes").click();
   await expect(win.getByTestId("projects")).toBeVisible();

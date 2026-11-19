@@ -348,11 +348,27 @@
         "tests/web/a11y.spec.ts",
         "tests/web/look.spec.ts",
         "tests/web/views.spec.ts",
-        "tests/web/polish.spec.ts"
+        "tests/web/polish.spec.ts",
+        "tests/web/layout.spec.ts",
+        "tests/web/notifications.spec.ts"
       ]
     },
     "src/renderer/src/views/Gallery.tsx": {
       "web": ["tests/web/gallery.spec.ts"]
+    },
+    "src/renderer/src/components/Sidebar.tsx": {
+      "web": [
+        "tests/web/layout.spec.ts",
+        "tests/web/notifications.spec.ts",
+        "tests/web/gallery.spec.ts"
+      ]
+    },
+    "src/renderer/src/components/TopBar.tsx": {
+      "web": [
+        "tests/web/layout.spec.ts",
+        "tests/web/notifications.spec.ts",
+        "tests/web/gallery.spec.ts"
+      ]
     }
   }
 }

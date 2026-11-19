@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
-import { launch, terminalText, pick } from "./helpers";
+import { launch, terminalText, pick, toasts } from "./helpers";
 
 // The M3 milestone check on fixtures: a worktree, a fake builder working in it, its diff reviewed with
 // a comment, a commit of the chosen file, and a push to the bare remote.
@@ -48,7 +48,7 @@ test("worktree, fake builder, review with a comment, commit and push to the bare
   await win.getByTestId("comment-text").fill("add a test for this");
   await win.getByTestId("comment-save").click();
   await win.getByTestId("send-to-agent").click();
-  await expect(win.getByTestId("review-sent")).toContainText("Sent your comments");
+  await expect(toasts(win).filter({ hasText: "Comments sent" })).toBeVisible();
 
   // Commit only that file, and push: the first push sets the upstream on the bare remote.
   await win.getByTestId("git-tab-commit").click();
@@ -56,7 +56,7 @@ test("worktree, fake builder, review with a comment, commit and push to the bare
   await expect(win.getByTestId("commit-file")).toHaveCount(1);
   await win.getByTestId("commit-message").fill("Builder: add the built file");
   await win.getByTestId("commit-push").click();
-  await expect(win.getByTestId("commit-note")).toContainText("pushed");
+  await expect(toasts(win).filter({ hasText: /pushed/i })).toBeVisible();
 
   expect(sh(made.path, "log", "-1", "--format=%s").trim()).toBe("Builder: add the built file");
   expect(sh(alpha.bare, "log", "office/review-flow", "-1", "--format=%s").trim()).toBe(
@@ -89,9 +89,9 @@ test("the PRs and CI tab lists pull requests and runs for a repo on GitHub", asy
   await win.getByTestId("git-tab-prs").click();
   await expect(win.getByTestId("pr-row")).toHaveCount(3);
   await expect(win.getByTestId("pr-row").first()).toContainText("Add the sheep counter");
-  await expect(win.getByTestId("pr-row").first()).toContainText("review required");
+  await expect(win.getByTestId("pr-row").first()).toContainText(/review needed/i);
   await expect(win.getByTestId("run-row")).toHaveCount(3);
-  await expect(win.getByTestId("run-row").first()).toContainText("failure");
+  await expect(win.getByTestId("run-row").first()).toContainText(/failed/i);
 
   // A repo that is not on GitHub says so instead of calling gh.
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();

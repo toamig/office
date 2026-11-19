@@ -1,30 +1,27 @@
 import { useState } from "react";
 import type { AppSettingsPatch } from "@shared/models";
-import { Segmented } from "../../components/Segmented";
-import { Button, Chip, ErrorBanner, Panel } from "../../components/ui";
+import { Button, Card, SegmentedControl as Segmented, notifyDone, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { PALETTES } from "@shared/theme";
 
-const field = "rounded border px-2 py-1";
-const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
-
-const KINDS = [
-  "agent.needs-you",
-  "agent.done",
-  "agent.failed",
-  "git.conflict",
-  "git.push-failed",
-  "git.behind",
-  "ci.failed",
-  "pr.review-requested",
-  "vault.waiting-new",
-  "vault.write-failed",
-  "task.gate",
-  "task.done",
-  "automation.done",
-  "brief.ready",
-  "permission.request",
+/** What a notification kind is called on screen, by the value the code uses. */
+const KINDS: Array<[string, string]> = [
+  ["agent.needs-you", "An agent needs you"],
+  ["agent.done", "An agent finished"],
+  ["agent.failed", "An agent failed"],
+  ["git.conflict", "A sync conflict"],
+  ["git.push-failed", "A push failed"],
+  ["git.behind", "A repo is behind"],
+  ["ci.failed", "Checks failed"],
+  ["pr.review-requested", "A review was requested"],
+  ["vault.waiting-new", "A new item waits on you"],
+  ["vault.write-failed", "A note could not be written"],
+  ["task.gate", "A task waits for approval"],
+  ["task.done", "A task finished"],
+  ["automation.done", "An automation ran"],
+  ["brief.ready", "The morning brief is ready"],
+  ["permission.request", "An agent asks permission"],
 ];
 
 /** Theme, accent and density, plus the notification rules: quiet hours, muted projects, what is urgent, ntfy. */
@@ -32,8 +29,6 @@ export function PreferencesPanel() {
   const settings = useQuery("settings.get");
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const projects = useQuery("projects.list");
-  const [error, setError] = useState<string | null>(null);
-  const [note, setNote] = useState<string | null>(null);
   const [topic, setTopic] = useState<string | null>(null);
   const [artRoot, setArtRoot] = useState<string | null>(null);
   // What was just chosen shows at once; it is dropped when the saved settings catch up, or when saving fails.
@@ -56,14 +51,12 @@ export function PreferencesPanel() {
   const rules = workspace.data?.workspace?.notifications;
 
   const run = async (work: () => Promise<unknown>): Promise<void> => {
-    setError(null);
-    setNote(null);
     try {
       await work();
       settings.reload();
       workspace.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That setting was not saved", "preferences");
     }
   };
   const set = (patch: AppSettingsPatch): Promise<void> => {
@@ -91,10 +84,8 @@ export function PreferencesPanel() {
     list.includes(item) ? list.filter((x) => x !== item) : [...list, item];
 
   return (
-    <div className="grid gap-4" data-testid="preferences">
-      {error && <ErrorBanner message={error} />}
-      {note && <Chip tone="good">{note}</Chip>}
-      <Panel title="Appearance">
+    <div className="contents" data-testid="preferences">
+      <Card title="Appearance" testId="panel-appearance">
         {s && (
           <div className="grid gap-2.5">
             <div className="flex items-center gap-4">
@@ -134,14 +125,13 @@ export function PreferencesPanel() {
             </div>
           </div>
         )}
-      </Panel>
-      <Panel title="Art vault">
+      </Card>
+      <Card title="Art vault" testId="panel-art-vault">
         {s && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="w-28">Folder</span>
             <input
-              className={`${field} min-w-[280px] flex-1`}
-              style={fieldStyle}
+              className="min-w-[280px] flex-1"
               placeholder="A folder outside your project repos"
               value={artRoot ?? s.artVaultRoot}
               onChange={(e) => setArtRoot(e.target.value)}
@@ -152,28 +142,26 @@ export function PreferencesPanel() {
               onClick={() =>
                 void set({ artVaultRoot: (artRoot ?? s.artVaultRoot).trim() }).then(() => {
                   setArtRoot(null);
-                  setNote("Saved.");
+                  notifyDone("Saved", undefined, "preferences");
                 })
               }
               data-testid="art-vault-save"
             >
               Save
             </Button>
-            <span className="w-full text-[12px]" style={{ color: "var(--muted)" }}>
+            <span className="ui-helper w-full">
               A finished Art request is copied to a folder named after its project in here.
             </span>
           </div>
         )}
-      </Panel>
-      <Panel title="Notification rules">
+      </Card>
+      <Card title="Notification rules" testId="panel-notification-rules">
         {s && rules && (
           <div className="grid gap-3">
             <div className="flex flex-wrap items-center gap-2">
               <span className="w-28">Quiet hours</span>
               <input
                 type="time"
-                className={field}
-                style={fieldStyle}
                 value={s.quietHours?.from ?? "22:00"}
                 aria-label="Quiet from"
                 data-testid="quiet-from"
@@ -186,8 +174,6 @@ export function PreferencesPanel() {
               to
               <input
                 type="time"
-                className={field}
-                style={fieldStyle}
                 value={s.quietHours?.to ?? "07:00"}
                 aria-label="Quiet to"
                 data-testid="quiet-to"
@@ -200,9 +186,9 @@ export function PreferencesPanel() {
               {s.quietHours ? (
                 <Button onClick={() => void set({ quietHours: null })}>Turn off</Button>
               ) : (
-                <Chip>off</Chip>
+                <span className="ui-muted">Off</span>
               )}
-              <span className="text-[12px]" style={{ color: "var(--muted)" }}>
+              <span className="text-[length:var(--text-xs)] ui-muted">
                 Urgent alerts are held back, but still land in the inbox.
               </span>
             </div>
@@ -231,7 +217,7 @@ export function PreferencesPanel() {
             <div>
               <div className="mb-1">What counts as urgent (desktop alert and phone ping)</div>
               <div className="flex flex-wrap gap-x-4 gap-y-1">
-                {KINDS.map((k) => (
+                {KINDS.map(([k, name]) => (
                   <label key={k} className="flex items-center gap-1">
                     <input
                       type="checkbox"
@@ -245,7 +231,7 @@ export function PreferencesPanel() {
                       }
                       data-testid={`urgent-${k}`}
                     />{" "}
-                    {k}
+                    {name}
                   </label>
                 ))}
               </div>
@@ -253,8 +239,7 @@ export function PreferencesPanel() {
             <div className="flex flex-wrap items-center gap-2">
               <span className="w-28">Phone pings</span>
               <input
-                className={`${field} min-w-[280px] flex-1`}
-                style={fieldStyle}
+                className="min-w-[280px] flex-1"
                 placeholder="https://ntfy.sh/your-private-topic"
                 value={topic ?? rules.ntfyTopicUrl ?? ""}
                 onChange={(e) => setTopic(e.target.value)}
@@ -268,7 +253,7 @@ export function PreferencesPanel() {
                       ntfyTopicUrl: topic ?? rules.ntfyTopicUrl ?? "",
                     });
                     setTopic(null);
-                    setNote("Saved.");
+                    notifyDone("Saved", undefined, "preferences");
                   })
                 }
                 data-testid="ntfy-save"
@@ -279,21 +264,21 @@ export function PreferencesPanel() {
                 onClick={() =>
                   void run(async () => {
                     await office.invoke("notifications.testPing");
-                    setNote("Test ping sent.");
+                    notifyDone("Test ping sent", "Check your phone.", "preferences");
                   })
                 }
                 data-testid="ntfy-test"
               >
                 Send a test ping
               </Button>
-              <div className="basis-full text-[12px]" style={{ color: "var(--muted)" }}>
+              <div className="basis-full text-[length:var(--text-xs)] ui-muted">
                 Anyone who knows the topic can read the pings, so pick a hard-to-guess name. Only
                 urgent notifications are sent.
               </div>
             </div>
           </div>
         )}
-      </Panel>
+      </Card>
     </div>
   );
 }

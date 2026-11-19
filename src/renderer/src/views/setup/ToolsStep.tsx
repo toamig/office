@@ -1,7 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { ToolStatus } from "@shared/models";
-import { Button, Chip, EmptyState, ErrorBanner } from "../../components/ui";
+import { Banner, Button, Skeleton, StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { ToolRunDialog, type ToolRun } from "./ToolRunDialog";
@@ -26,7 +26,6 @@ function fixCommand(t: ToolStatus): string | null {
  */
 export function ToolsStep() {
   const tools = useQuery("setup.detectTools", undefined, ["setup.changed"]);
-  const [error, setError] = useState<string | null>(null);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<ToolRun | null>(null);
 
@@ -35,7 +34,7 @@ export function ToolsStep() {
     try {
       await office.invoke("setup.recheckTools");
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not check the tools", "tools");
     } finally {
       setChecking(false);
     }
@@ -43,7 +42,6 @@ export function ToolsStep() {
 
   /** Opens the tool's login, or a command that fixes it, in a dialog of its own. */
   const start = async (kind: "login" | "run", tool: ToolStatus): Promise<void> => {
-    setError(null);
     try {
       const session = await office.invoke(
         kind === "login" ? "setup.loginSession" : "setup.installSession",
@@ -57,53 +55,43 @@ export function ToolsStep() {
         again: () => void start(kind, tool),
       });
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, `Could not start ${tool.label}`, "tools");
     }
   };
 
   return (
     <div data-testid="tools-step">
       <div className="mb-2 flex items-center">
-        <span className="flex-1" style={{ color: "var(--muted)" }}>
+        <span className="flex-1 ui-muted">
           Office drives your own command-line tools with your own logins. It never sees a password.
         </span>
-        <Button
-          variant="ghost"
-          onClick={() => void recheck()}
-          disabled={checking}
-          aria-label="Check again"
-          data-testid="tools-check"
-        >
-          <RefreshCw size={13} /> {checking ? "Checking..." : "Check again"}
+        <Button onClick={() => void recheck()} disabled={checking} data-testid="tools-check">
+          <RefreshCw /> {checking ? "Checking..." : "Check again"}
         </Button>
       </div>
-      {tools.error && <ErrorBanner message={tools.error} />}
-      {error && <ErrorBanner message={error} />}
-      {tools.loading && <EmptyState>Checking tools...</EmptyState>}
+      {tools.error && <Banner tone="danger">{tools.error}</Banner>}
+      {tools.loading && !tools.data && <Skeleton width={30} />}
       <div data-testid="tools">
         {tools.data?.map((t) => (
-          <div
-            key={t.id}
-            className="flex items-start gap-3 border-b py-2"
-            style={{ borderColor: "var(--line)" }}
-            data-testid="tool-row"
-          >
+          <div key={t.id} className="ui-line" data-testid="tool-row">
             <span className="w-32 font-medium">{t.label}</span>
-            {t.installed ? (
-              <Chip tone="good">installed {t.version ?? ""}</Chip>
-            ) : (
-              <Chip tone="bad">missing</Chip>
-            )}
-            {t.loggedIn === true && <Chip tone="good">logged in</Chip>}
-            {t.loggedIn === false && <Chip tone="warn">not logged in</Chip>}
-            <div className="flex-1 text-[12.5px]">
+            <span className="ui-badges">
+              {t.installed ? (
+                <StatusBadge status="installed" label={`Installed ${t.version ?? ""}`.trim()} />
+              ) : (
+                <StatusBadge status="missing" />
+              )}
+              {t.loggedIn === true && <StatusBadge status="logged-in" />}
+              {t.loggedIn === false && <StatusBadge status="not-logged-in" />}
+            </span>
+            <div className="ui-line-main">
               {NEEDED[t.id] && (
-                <div style={{ color: "var(--muted)" }} data-testid="tool-needed">
+                <div className="ui-muted" data-testid="tool-needed">
                   {NEEDED[t.id]}
                 </div>
               )}
-              {t.problem && <div style={{ color: "var(--warn)" }}>{t.problem}</div>}
-              {t.fix && <div style={{ color: "var(--muted)" }}>Fix: {t.fix}</div>}
+              {t.problem && <div className="ui-warn">{t.problem}</div>}
+              {t.fix && <div className="ui-muted">Fix: {t.fix}</div>}
             </div>
             {t.installed && t.loggedIn === false && (
               <Button onClick={() => void start("login", t)} data-testid="tool-login">

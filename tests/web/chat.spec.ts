@@ -127,7 +127,7 @@ test("a Codex chat runs two turns on one thread and shows its sandbox", async ()
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
   await openChat(win, { providerId: "codex", title: "Codex chat" });
-  await expect(win.getByTestId("chat-sandbox")).toContainText("workspace-write");
+  await expect(win.getByTestId("chat-sandbox")).toContainText("can write to the workspace");
   await say(win, "first question");
   await expect(win.getByTestId("chat-turn")).toHaveCount(1, { timeout: 30000 });
   await expect(win.getByTestId("chat")).toContainText("FAKE CODEX: first question");

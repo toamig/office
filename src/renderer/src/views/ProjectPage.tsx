@@ -1,13 +1,29 @@
-import { Code, FolderOpen, Play, Plus, RefreshCw } from "lucide-react";
+import { Play } from "lucide-react";
 import { useState } from "react";
+import type { ProjectSummary } from "@shared/models";
+import { labelOf } from "@shared/tone";
 import { Markdown } from "../components/Markdown";
 import { PrsPanel } from "../components/PrsPanel";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
+import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
-import { timeAgo, useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
+import {
+  Banner,
+  Button,
+  Card,
+  CardGrid,
+  EmptyState,
+  Input,
+  Page,
+  StatusBadge,
+  Tabs,
+  Time,
+  notify,
+  notifyError,
+  type MoreItem,
+} from "../ui";
 import { PreviewTab } from "./PreviewTab";
-import { ProjectManage } from "./project/Manage";
+import { useProjectManage } from "./project/Manage";
 import { RecentRuns } from "./project/RecentRuns";
 
 type Tab = "overview" | "todos" | "agents" | "notes" | "preview";
@@ -15,44 +31,56 @@ type Tab = "overview" | "todos" | "agents" | "notes" | "preview";
 function Overview({ id }: { id: string }) {
   const detail = useQuery("projects.get", { id }, ["project.status"]);
   const d = detail.data;
-  if (detail.error) return <ErrorBanner message={detail.error} />;
+  if (detail.error) return <Banner tone="danger">{detail.error}</Banner>;
   if (!d) return null;
   const s = d.status;
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Git state">
+    <CardGrid>
+      <Card title="Git state" testId="panel-git-state">
         {!s && (
-          <EmptyState>
-            {d.summary.exists ? "This folder is not a git repo." : "The project folder is missing."}
+          <EmptyState title={d.summary.exists ? "Not a git repo" : "The project folder is missing"}>
+            {d.summary.exists
+              ? "This folder is not a git repo."
+              : "Locate it from the Projects page."}
           </EmptyState>
         )}
         {s && (
-          <div className="grid grid-cols-[110px_1fr] gap-y-1" data-testid="git-state">
-            <span style={{ color: "var(--muted)" }}>Branch</span>
-            <span>{s.detached ? "detached HEAD" : s.branch}</span>
-            <span style={{ color: "var(--muted)" }}>Upstream</span>
-            <span>{s.upstream ?? "none"}</span>
-            <span style={{ color: "var(--muted)" }}>Ahead / behind</span>
-            <span>
-              {s.ahead} / {s.behind}
-            </span>
-            <span style={{ color: "var(--muted)" }}>Last commit</span>
-            <span>
-              {d.lastCommit
-                ? `${d.lastCommit.subject} (${timeAgo(d.lastCommit.date)})`
-                : "none yet"}
-            </span>
-            <span style={{ color: "var(--muted)" }}>Origin</span>
-            <span className="break-all">{d.origin ?? "none"}</span>
-          </div>
+          <dl className="ui-dl" data-testid="git-state">
+            <dt>Branch</dt>
+            <dd>{s.detached ? "Detached HEAD" : s.branch}</dd>
+            <dt>Upstream</dt>
+            <dd>{s.upstream ?? "None"}</dd>
+            <dt>To push and pull</dt>
+            <dd>
+              <span className="ui-badges">
+                {s.ahead === 0 && s.behind === 0 && <StatusBadge status="up-to-date" />}
+                {s.ahead > 0 && <StatusBadge status="ahead" label={`${s.ahead} to push`} />}
+                {s.behind > 0 && <StatusBadge status="behind" label={`${s.behind} to pull`} />}
+              </span>
+            </dd>
+            <dt>Last commit</dt>
+            <dd>
+              {d.lastCommit ? (
+                <>
+                  {d.lastCommit.subject} (<Time iso={d.lastCommit.date} />)
+                </>
+              ) : (
+                "None yet"
+              )}
+            </dd>
+            <dt>Origin</dt>
+            <dd className="break-all">{d.origin ?? "None"}</dd>
+          </dl>
         )}
-      </Panel>
-      <Panel title={`Changed files (${s?.files.length ?? 0})`}>
-        {s?.files.length === 0 && <EmptyState>Working tree is clean.</EmptyState>}
-        <ul className="m-0 max-h-72 list-none overflow-auto p-0 font-mono text-[12.5px]">
+      </Card>
+      <Card title={`Changed files (${s?.files.length ?? 0})`} testId="panel-changed">
+        {s?.files.length === 0 && (
+          <EmptyState title="Nothing changed">The working tree is clean.</EmptyState>
+        )}
+        <ul className="m-0 max-h-72 list-none overflow-auto p-0">
           {s?.files.slice(0, 60).map((f) => (
-            <li key={f.path}>
-              <span style={{ color: "var(--muted)" }}>
+            <li key={f.path} className="ui-path">
+              <span className="ui-muted">
                 {f.index}
                 {f.worktree}
               </span>{" "}
@@ -60,114 +88,109 @@ function Overview({ id }: { id: string }) {
             </li>
           ))}
         </ul>
-      </Panel>
+      </Card>
       <PrsPanel projectId={id} />
       <RecentRuns id={id} />
-    </div>
+    </CardGrid>
   );
 }
 
 function Todos({ id }: { id: string }) {
   const items = useQuery("vault.openItems", { projectId: id }, ["vault.changed"]);
   const [text, setText] = useState("");
-  const [error, setError] = useState<string | null>(null);
   const add = async (): Promise<void> => {
     if (!text.trim()) return;
-    setError(null);
     try {
       await office.invoke("vault.addWaiting", { projectId: id, text });
       setText("");
       items.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not add that", `todo-${id}`);
     }
   };
   const tick = async (raw: string): Promise<void> => {
-    setError(null);
     try {
       await office.invoke("vault.tickWaiting", { projectId: id, raw });
       items.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not mark that done", `todo-${id}`);
     }
   };
   const tickTodo = async (line: number, itemText: string, checked: boolean): Promise<void> => {
-    setError(null);
     try {
       await office.invoke("vault.tickTodo", { projectId: id, line, text: itemText, checked });
       items.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not change that todo", `todo-${id}`);
     }
   };
   const v = items.data;
   return (
-    <div className="grid gap-4 lg:grid-cols-2">
-      <Panel title="Waiting on you">
-        {error && <ErrorBanner message={error} />}
+    <CardGrid>
+      <Card title="Waiting on you" testId="panel-project-waiting">
         <form
-          className="mb-3 flex gap-2"
+          className="mb-3 flex items-end gap-2"
           onSubmit={(e) => {
             e.preventDefault();
             void add();
           }}
         >
-          <input
+          <Input
+            className="flex-1"
+            label="New waiting item"
+            hideLabel
             value={text}
             onChange={(e) => setText(e.target.value)}
             placeholder="Add something that waits on you"
-            aria-label="New waiting item"
-            className="flex-1 rounded border px-2 py-1"
-            style={{ borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" }}
           />
           <Button type="submit" data-testid="add-waiting">
-            <Plus size={13} /> Add
+            Add
           </Button>
         </form>
         {v && !v.exists && (
-          <EmptyState>
-            This project has no OpenItems note yet. Adding an item creates it.
-          </EmptyState>
+          <EmptyState title="No OpenItems note yet">Adding an item creates it.</EmptyState>
         )}
         {v?.exists && v.waiting.length === 0 && (
-          <EmptyState>Nothing is waiting on you here.</EmptyState>
+          <EmptyState title="Nothing is waiting on you here">
+            Items you add show up here.
+          </EmptyState>
         )}
         {v?.waiting.map((w) => (
-          <div
-            key={w.raw}
-            className="flex items-start gap-2 border-b py-1.5"
-            style={{ borderColor: "var(--line)" }}
-            data-testid="project-waiting"
-          >
-            <div className="flex-1">
+          <div key={w.raw} className="ui-line" data-testid="project-waiting">
+            <div className="ui-line-main">
               {w.text}
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+              <div className="ui-line-sub">
                 {w.date}
                 {w.source ? `, ${w.source}` : ""}
               </div>
             </div>
-            <Button onClick={() => void tick(w.raw)} data-testid="project-done">
+            <Button size="sm" onClick={() => void tick(w.raw)} data-testid="project-done">
               Done
             </Button>
           </div>
         ))}
         {v?.unparsed.map((u) => (
-          <div key={u.line} className="py-1">
-            <Chip tone="warn">unparsed</Chip> <code>{u.text}</code>
+          <div key={u.line} className="ui-line">
+            <StatusBadge status="behind" label="Not understood" />
+            <code className="ui-line-main">{u.text}</code>
           </div>
         ))}
-      </Panel>
-      <Panel title="Todos">
-        {v?.groups.length === 0 && <EmptyState>No other sections in OpenItems.</EmptyState>}
+      </Card>
+      <Card title="Todos" testId="panel-todos">
+        {v?.groups.length === 0 && (
+          <EmptyState title="No other sections">
+            OpenItems has nothing besides what waits on you.
+          </EmptyState>
+        )}
         {v?.groups.map((g) => (
-          <div key={g.heading} className="mb-3">
-            <div className="mb-1 font-semibold">{g.heading}</div>
+          <section key={g.heading}>
+            <h3 className="ui-group">{g.heading}</h3>
             <ul className="m-0 list-none p-0">
               {g.items.map((i) => (
                 <li
                   key={i.line}
-                  className="flex items-start gap-2"
-                  style={{ opacity: i.checked ? 0.55 : 1 }}
+                  className="flex items-start gap-2 py-1"
+                  style={{ opacity: i.checked ? 0.6 : 1 }}
                 >
                   <input
                     type="checkbox"
@@ -180,10 +203,10 @@ function Todos({ id }: { id: string }) {
                 </li>
               ))}
             </ul>
-          </div>
+          </section>
         ))}
-      </Panel>
-    </div>
+      </Card>
+    </CardGrid>
   );
 }
 
@@ -191,27 +214,20 @@ function ProjectAgents({ id }: { id: string }) {
   const navigate = useUi((s) => s.navigate);
   const sessions = useQuery("sessions.list", { projectId: id }, ["session.status"]);
   return (
-    <Panel title="Agents here">
+    <Card title="Agents here" testId="panel-project-agents">
       {sessions.data?.length === 0 && (
-        <EmptyState>No agent sessions for this project yet.</EmptyState>
+        <EmptyState title="No agent sessions yet">Start one with the button at the top.</EmptyState>
       )}
       {sessions.data?.map((s) => (
-        <div
-          key={s.id}
-          className="flex items-center gap-2 border-b py-1.5"
-          style={{ borderColor: "var(--line)" }}
-          data-testid="project-session"
-        >
-          <span className="flex-1">{s.title ?? s.provider}</span>
-          <Chip
-            tone={s.status === "needs-you" ? "warn" : s.status === "failed" ? "bad" : "neutral"}
-          >
-            {s.status}
-          </Chip>
-          <Button onClick={() => navigate("agents", { project: id, session: s.id })}>Open</Button>
+        <div key={s.id} className="ui-line" data-testid="project-session">
+          <div className="ui-line-main">{s.title ?? s.provider}</div>
+          <StatusBadge status={s.status} />
+          <Button size="sm" onClick={() => navigate("agents", { project: id, session: s.id })}>
+            Open
+          </Button>
         </div>
       ))}
-    </Panel>
+    </Card>
   );
 }
 
@@ -220,12 +236,18 @@ function Notes({ id, initial }: { id: string; initial?: string }) {
   const note = useQuery("notes.read", { projectId: id, name }, ["vault.changed"]);
   const names = Array.from(new Set(["Overview", "OpenItems", ...(initial ? [initial] : [])]));
   return (
-    <Panel
+    <Card
       title="Notes"
+      testId="panel-notes"
       action={
         <div className="flex gap-1">
           {names.map((n) => (
-            <Button key={n} variant={n === name ? "primary" : "default"} onClick={() => setName(n)}>
+            <Button
+              key={n}
+              size="sm"
+              variant={n === name ? "primary" : "secondary"}
+              onClick={() => setName(n)}
+            >
               {n}
             </Button>
           ))}
@@ -233,127 +255,146 @@ function Notes({ id, initial }: { id: string; initial?: string }) {
       }
     >
       {note.data && !note.data.exists && (
-        <EmptyState>There is no {name} note for this project.</EmptyState>
+        <EmptyState title={`No ${name} note`}>This project has no {name} note yet.</EmptyState>
       )}
-      {note.data?.exists && <Markdown>{note.data.markdown}</Markdown>}
-    </Panel>
+      {note.data?.exists && (
+        <div className="reading">
+          <Markdown>{note.data.markdown}</Markdown>
+        </div>
+      )}
+    </Card>
   );
 }
 
 /** A project's page: git state, todos, agents and notes. */
-export function ProjectPage({
-  id,
-  tab: initialTab,
-  note,
-}: {
-  id: string;
-  tab?: string;
-  note?: string;
-}) {
+export function ProjectPage({ id, tab, note }: { id: string; tab?: string; note?: string }) {
   const navigate = useUi((s) => s.navigate);
   const projects = useQuery("projects.list", undefined, ["project.status", "workspace.changed"]);
   const project = projects.data?.find((p) => p.id === id);
-  const [tab, setTab] = useState<Tab>((initialTab as Tab | undefined) ?? "overview");
-  const [message, setMessage] = useState<string | null>(null);
-  const [syncing, setSyncing] = useState(false);
-  const unreal = useQuery("projects.unrealFile", { id }).data;
+  if (!project) {
+    return (
+      <Page
+        title="Project not found"
+        testId="project-page"
+        breadcrumb={[{ label: "Projects", onClick: () => navigate("projects") }]}
+      >
+        <EmptyState
+          title="That project is not in the workspace config"
+          action={<Button onClick={() => navigate("projects")}>Back to projects</Button>}
+        />
+      </Page>
+    );
+  }
+  return <ProjectBody project={project} {...(tab ? { tab } : {})} {...(note ? { note } : {})} />;
+}
 
-  const run = async (work: () => Promise<unknown>): Promise<void> => {
-    setMessage(null);
+function ProjectBody({
+  project,
+  tab: initialTab,
+  note,
+}: {
+  project: ProjectSummary;
+  tab?: string;
+  note?: string;
+}) {
+  const id = project.id;
+  const navigate = useUi((s) => s.navigate);
+  const [tab, setTab] = useState<Tab>((initialTab as Tab | undefined) ?? "overview");
+  const unreal = useQuery("projects.unrealFile", { id }).data;
+  const manage = useProjectManage(project);
+
+  const run = async (title: string, work: () => Promise<unknown>): Promise<void> => {
     try {
       await work();
     } catch (err) {
-      setMessage((err as Error).message);
+      notifyError(err, title, `project-${id}`);
     }
   };
   const sync = async (): Promise<void> => {
-    setSyncing(true);
-    await run(async () => {
+    try {
       const report = await office.invoke("git.syncProject", { id });
       const r = report.repos[0];
-      setMessage(
-        r ? `${r.name}: ${r.action}${r.reason ? ` (${r.reason})` : ""}` : "Nothing to sync",
-      );
-    });
-    setSyncing(false);
+      if (!r) notify({ tone: "info", title: "Nothing to sync", subject: `sync-${id}` });
+      else {
+        const ok = ["pulled", "pushed", "pulled-and-pushed", "up-to-date"].includes(r.action);
+        notify({
+          tone: ok ? "success" : r.action === "conflict" ? "danger" : "attention",
+          title: `${r.name}: ${labelOf(r.action).toLowerCase()}`,
+          detail: r.reason,
+          subject: `sync-${id}`,
+        });
+      }
+    } catch (err) {
+      notifyError(err, "Sync did not finish", `sync-${id}`);
+    }
   };
 
-  if (!project) {
-    return (
-      <div className="p-6">
-        <EmptyState>That project is not in the workspace config.</EmptyState>
-        <div className="text-center">
-          <Button onClick={() => navigate("projects")}>Back to projects</Button>
-        </div>
-      </div>
-    );
-  }
-  const tabs: Array<[Tab, string]> = [
-    ["overview", "Overview"],
-    ["todos", "Todos"],
-    ["agents", "Agents"],
-    ["notes", "Notes"],
-    ["preview", "Preview"],
+  const more: MoreItem[] = [
+    { label: "Sync", onSelect: () => void sync(), testId: "project-sync" },
+    {
+      label: "Open in editor",
+      onSelect: () =>
+        void run("Could not open the editor", () => office.invoke("projects.openEditor", { id })),
+    },
+    ...(unreal
+      ? [
+          {
+            label: "Open in Unreal",
+            onSelect: () =>
+              void run("Could not open Unreal", () => office.invoke("projects.openUnreal", { id })),
+            testId: "open-unreal",
+          },
+        ]
+      : []),
+    {
+      label: "Open folder",
+      onSelect: () =>
+        void run("Could not open the folder", () => office.invoke("projects.openFolder", { id })),
+    },
+    ...manage.items,
   ];
   return (
-    <div className="p-4" data-testid="project-page">
-      <div className="mb-3 flex flex-wrap items-center gap-2">
-        <h1 className="m-0 mr-2 text-lg font-semibold">{project.name}</h1>
-        {project.group && <Chip>{project.group}</Chip>}
-        {project.waiting > 0 && <Chip tone="warn">{project.waiting} waiting</Chip>}
-        <div className="flex-1" />
+    <Page
+      testId="project-page"
+      title={project.name}
+      breadcrumb={[{ label: "Projects", onClick: () => navigate("projects") }]}
+      subtitle={
+        <span className="ui-badges">
+          {project.group && <span>{project.group}</span>}
+          {project.waiting > 0 && (
+            <StatusBadge status="waiting" label={`${project.waiting} waiting`} />
+          )}
+        </span>
+      }
+      primary={
         <Button
+          variant="primary"
           onClick={() => navigate("agents", { project: id, start: "1" })}
           data-testid="start-agent"
         >
-          <Play size={13} /> Start agent
+          <Play /> Start agent
         </Button>
-        <Button onClick={() => void run(() => office.invoke("projects.openEditor", { id }))}>
-          <Code size={13} /> Open in editor
-        </Button>
-        {unreal && (
-          <Button
-            onClick={() => void run(() => office.invoke("projects.openUnreal", { id }))}
-            data-testid="open-unreal"
-          >
-            <Code size={13} /> Open in Unreal
-          </Button>
-        )}
-        <Button onClick={() => void run(() => office.invoke("projects.openFolder", { id }))}>
-          <FolderOpen size={13} /> Open folder
-        </Button>
-        <Button onClick={() => void sync()} disabled={syncing} data-testid="project-sync">
-          <RefreshCw size={13} className={syncing ? "animate-spin" : ""} /> Sync
-        </Button>
-      </div>
-      <ProjectManage project={project} onError={setMessage} />
-      {message && (
-        <div className="mb-3" data-testid="project-message">
-          <ErrorBanner message={message} />
-        </div>
-      )}
-      <div className="mb-3 flex gap-1 border-b" style={{ borderColor: "var(--line)" }}>
-        {tabs.map(([t, label]) => (
-          <button
-            key={t}
-            onClick={() => setTab(t)}
-            data-testid={`tab-${t}`}
-            className="border-0 bg-transparent px-3 py-1.5"
-            style={{
-              color: "var(--text)",
-              borderBottom: tab === t ? "2px solid var(--accent)" : "2px solid transparent",
-              fontWeight: tab === t ? 600 : 400,
-            }}
-          >
-            {label}
-          </button>
-        ))}
-      </div>
+      }
+      more={more}
+    >
+      {manage.dialogs}
+      <Tabs
+        label="Project sections"
+        value={tab}
+        onChange={setTab}
+        items={[
+          { id: "overview", label: "Overview", testId: "tab-overview" },
+          { id: "todos", label: "Todos", testId: "tab-todos" },
+          { id: "agents", label: "Agents", testId: "tab-agents" },
+          { id: "notes", label: "Notes", testId: "tab-notes" },
+          { id: "preview", label: "Preview", testId: "tab-preview" },
+        ]}
+      />
       {tab === "overview" && <Overview id={id} />}
       {tab === "todos" && <Todos id={id} />}
       {tab === "agents" && <ProjectAgents id={id} />}
       {tab === "preview" && <PreviewTab projectId={id} />}
       {tab === "notes" && <Notes id={id} {...(note ? { initial: note } : {})} />}
-    </div>
+    </Page>
   );
 }

@@ -1,6 +1,6 @@
 /** The design system's components. Views use only these (plan DesignSystem 1: components). */
 export { Button, IconButton, type ButtonVariant, type ControlSize } from "./Button";
-export { Input, PathField } from "./Field";
+export { Input, PathField, Textarea } from "./Field";
 export { Select as Dropdown } from "../components/Select";
 export { Segmented as SegmentedControl } from "../components/Segmented";
 export { Tabs, type TabItem } from "./Tabs";
@@ -12,8 +12,13 @@ export {
   NotificationStack,
   NotificationBell,
   notify,
+  notifyDone,
+  notifyError,
   useNotes,
   lifetimeOf,
   type Note,
   type NoteTone,
 } from "./Notifications";
+export { CardGrid, OverflowMenu, Page, PageHeader, type MoreItem } from "./Page";
+export { SplitPane } from "./SplitPane";
+export { Group, LinkButton, Muted, ShortPath, Time } from "./Text";

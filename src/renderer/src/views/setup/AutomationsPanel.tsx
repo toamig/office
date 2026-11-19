@@ -1,12 +1,19 @@
 import { Play, Trash2 } from "lucide-react";
 import { useState } from "react";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import {
+  Button,
+  Card,
+  EmptyState,
+  IconButton,
+  Input,
+  StatusBadge,
+  Textarea,
+  Time,
+  notifyError,
+} from "../../ui";
 import { office } from "../../lib/ipc";
-import { timeAgo, useQuery } from "../../lib/hooks";
-import { Select } from "../../components/Select";
-
-const field = "rounded border px-2 py-1";
-const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
+import { useQuery } from "../../lib/hooks";
+import { Dropdown as Select } from "../../ui";
 
 /** Scheduled prompts on any project: a cron expression, a role and a prompt. Missed runs fire once at start. */
 export function AutomationsPanel() {
@@ -22,38 +29,30 @@ export function AutomationsPanel() {
   const [project, setProject] = useState("");
   const [role, setRole] = useState("researcher");
   const [prompt, setPrompt] = useState("");
-  const [error, setError] = useState<string | null>(null);
 
   const run = async (work: () => Promise<void>): Promise<void> => {
-    setError(null);
     try {
       await work();
       automations.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "That automation was not saved", "automations");
     }
   };
 
   return (
-    <Panel title="Automations">
-      <p className="mt-0 text-[12.5px]" style={{ color: "var(--muted)" }}>
-        Each automation runs a prompt on a project on a schedule (cron: minute, hour, day, month,
-        weekday). A run that was due while Office was closed happens once when it starts again.
+    <Card title="Automations" testId="panel-automations">
+      <p className="ui-muted mt-0">
+        Each automation runs a prompt on a project on a schedule (a cron schedule: minute, hour,
+        day, month, weekday). A run that was due while Office was closed happens once when it starts
+        again.
       </p>
-      {(error || automations.error) && (
-        <div data-testid="automation-error">
-          <ErrorBanner message={error ?? automations.error ?? ""} />
-        </div>
-      )}
+      {automations.error && <p className="ui-bad">{automations.error}</p>}
       <div data-testid="automations">
-        {automations.data?.length === 0 && <EmptyState>No automations yet.</EmptyState>}
+        {automations.data?.length === 0 && (
+          <EmptyState title="No automations yet">Add one below.</EmptyState>
+        )}
         {automations.data?.map((a) => (
-          <div
-            key={a.id}
-            className="flex items-center gap-2 border-b py-2"
-            style={{ borderColor: "var(--line)" }}
-            data-testid="automation-row"
-          >
+          <div key={a.id} className="ui-line" data-testid="automation-row">
             <input
               type="checkbox"
               checked={a.enabled}
@@ -73,14 +72,14 @@ export function AutomationsPanel() {
             />
             <div className="min-w-0 flex-1">
               <div className="font-medium">
-                {a.id} <code className="text-[12px]">{a.cron}</code>
-                {!a.valid && <Chip tone="bad">invalid cron</Chip>}
+                {a.id} <code className="ui-path">{a.cron}</code>
+                {!a.valid && <StatusBadge status="failed" label="Invalid schedule" />}
               </div>
-              <div className="truncate text-[12px]" style={{ color: "var(--muted)" }}>
+              <div className="truncate text-[length:var(--text-xs)] ui-muted">
                 {a.project} / {a.role}: {a.prompt}
               </div>
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-                last run {a.lastFiredAt ? timeAgo(a.lastFiredAt) : "never"}, next{" "}
+              <div className="text-[length:var(--text-xs)] ui-muted">
+                Last run <Time iso={a.lastFiredAt} />, next{" "}
                 {a.nextRun ? new Date(a.nextRun).toLocaleString() : "unknown"}
               </div>
             </div>
@@ -88,16 +87,15 @@ export function AutomationsPanel() {
               onClick={() => void run(() => office.invoke("automations.runNow", { id: a.id }))}
               data-testid="automation-run"
             >
-              <Play size={13} /> Run now
+              <Play /> Run now
             </Button>
-            <Button
-              variant="ghost"
-              aria-label={`Delete ${a.id}`}
+            <IconButton
+              label={`Delete ${a.id}`}
               onClick={() => void run(() => office.invoke("automations.remove", { id: a.id }))}
               data-testid="automation-delete"
             >
-              <Trash2 size={13} />
-            </Button>
+              <Trash2 />
+            </IconButton>
           </div>
         ))}
       </div>
@@ -119,28 +117,22 @@ export function AutomationsPanel() {
           });
         }}
       >
-        <div className="flex flex-wrap gap-2">
-          <input
-            className={field}
-            style={fieldStyle}
-            placeholder="id, for example nightly-brief"
+        <div className="flex flex-wrap items-end gap-2">
+          <Input
+            label="Automation name"
+            placeholder="for example nightly-brief"
             value={id}
             onChange={(e) => setId(e.target.value)}
-            aria-label="Automation id"
             data-testid="automation-id"
           />
-          <input
-            className={field}
-            style={fieldStyle}
-            placeholder="cron"
+          <Input
+            label="Schedule (cron)"
+            placeholder="0 3 * * *"
             value={cron}
             onChange={(e) => setCron(e.target.value)}
-            aria-label="Cron expression"
             data-testid="automation-cron"
           />
           <Select
-            className={field}
-            style={fieldStyle}
             value={project}
             onChange={(e) => setProject(e.target.value)}
             aria-label="Automation project"
@@ -154,8 +146,6 @@ export function AutomationsPanel() {
             ))}
           </Select>
           <Select
-            className={field}
-            style={fieldStyle}
             value={role}
             onChange={(e) => setRole(e.target.value)}
             aria-label="Automation role"
@@ -168,14 +158,12 @@ export function AutomationsPanel() {
             ))}
           </Select>
         </div>
-        <textarea
-          className={field}
-          style={fieldStyle}
+        <Textarea
+          label="Prompt"
           rows={2}
           placeholder="The prompt to run"
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
-          aria-label="Automation prompt"
           data-testid="automation-prompt"
         />
         <div>
@@ -189,6 +177,6 @@ export function AutomationsPanel() {
           </Button>
         </div>
       </form>
-    </Panel>
+    </Card>
   );
 }

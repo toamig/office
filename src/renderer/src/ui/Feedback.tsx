@@ -41,7 +41,7 @@ export function Banner({
   action,
   testId,
 }: {
-  tone?: Extract<Tone, "attention" | "danger" | "info" | "success">;
+  tone?: Extract<Tone, "attention" | "danger" | "info">;
   children: ReactNode;
   action?: ReactNode;
   testId?: string;

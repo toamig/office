@@ -130,7 +130,7 @@ test("the shortcuts sheet fits the window without scrolling, and its note is who
   await expect(sheet).toBeVisible();
   const note = win.getByTestId("shortcuts-terminal-note");
   await expect(note).toBeInViewport({ ratio: 1 });
-  const dialog = sheet.locator(".dialog");
+  const dialog = sheet.locator(".ui-dialog");
   const box = await dialog.boundingBox();
   expect(box?.y).toBeGreaterThanOrEqual(0);
   expect((box?.y ?? 0) + (box?.height ?? 0)).toBeLessThanOrEqual(860);

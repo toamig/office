@@ -78,14 +78,12 @@ function SwitcherPanel() {
     navigate(item.link.view as ViewId, item.link.params ?? {});
   };
   return (
-    <div
-      className="dialog-backdrop"
-      style={{ alignItems: "flex-start", paddingTop: 96 }}
-      onClick={() => setSwitcherOpen(false)}
-    >
+    <div className="ui-scrim" data-align="top" onClick={() => setSwitcherOpen(false)}>
       <div
-        className="w-[560px] rounded border"
-        style={{ background: "var(--panel)", borderColor: "var(--line)" }}
+        className="ui-switcher"
+        role="dialog"
+        aria-modal="true"
+        aria-label="Jump to anything"
         onClick={(e) => e.stopPropagation()}
         data-testid="switcher"
       >
@@ -107,14 +105,11 @@ function SwitcherPanel() {
               setIndex((i) => Math.max(i - 1, 0));
             } else if (e.key === "Enter" && results[index]) open(results[index].item);
           }}
-          className="w-full border-0 border-b bg-transparent px-3 py-2.5 outline-none"
-          style={{ borderColor: "var(--line)", color: "var(--text)" }}
+          className="ui-switcher-input"
         />
         <ul className="m-0 max-h-80 list-none overflow-auto p-1">
           {results.length === 0 && (
-            <li className="px-3 py-3 text-center" style={{ color: "var(--muted)" }}>
-              Nothing matches. Try a project name.
-            </li>
+            <li className="ui-muted p-3">Nothing matches. Try a project name.</li>
           )}
           {results.map((r, i) => (
             <li
@@ -122,14 +117,14 @@ function SwitcherPanel() {
               data-testid="switcher-item"
               onMouseEnter={() => setIndex(i)}
               onClick={() => open(r.item)}
-              className="flex items-center gap-2 rounded px-3 py-1.5"
-              style={{ background: i === index ? "var(--rail)" : "transparent" }}
+              className="ui-row"
+              data-selected={i === index ? "true" : undefined}
             >
-              <span className="w-16 text-[11px] uppercase" style={{ color: "var(--muted)" }}>
+              <span className="w-16 text-[length:var(--text-xs)] ui-muted">
                 {kindLabel[r.item.kind]}
               </span>
               <span className="flex-1">{r.item.label}</span>
-              {r.item.detail && <span style={{ color: "var(--muted)" }}>{r.item.detail}</span>}
+              {r.item.detail && <span className="ui-muted">{r.item.detail}</span>}
             </li>
           ))}
         </ul>

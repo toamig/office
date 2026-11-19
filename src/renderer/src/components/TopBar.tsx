@@ -3,7 +3,7 @@ import { office } from "../lib/ipc";
 import { useSidebarCollapsed } from "../lib/sidebar";
 import { useUi } from "../stores/ui";
 import { VIEW_LABELS } from "../lib/views";
-import { Button } from "./ui";
+import { Button, NotificationBell, notify, notifyError } from "../ui";
 
 /** The padding that keeps controls clear of the native window buttons drawn in the corner. */
 const BUTTONS_CLEARANCE =
@@ -48,7 +48,26 @@ export function TopBar() {
   const sync = async (): Promise<void> => {
     setSyncing(true);
     try {
-      setSyncReport(await office.invoke("git.syncAll"));
+      const report = await office.invoke("git.syncAll");
+      const bad = report.repos.filter((r) => r.action === "conflict" || r.action === "failed");
+      const skipped = report.repos.filter((r) => r.action === "skipped");
+      const moved = report.repos.filter((r) =>
+        ["pulled", "pushed", "pulled-and-pushed"].includes(r.action),
+      );
+      const parts = [
+        moved.length > 0 ? `${moved.length} updated` : "",
+        skipped.length > 0 ? `${skipped.length} skipped` : "",
+        bad.length > 0 ? `${bad.length} with a problem` : "",
+      ].filter(Boolean);
+      notify({
+        tone: bad.length > 0 ? "danger" : skipped.length > 0 ? "attention" : "success",
+        title: `Synced ${report.repos.length} ${report.repos.length === 1 ? "repo" : "repos"}`,
+        detail: parts.length > 0 ? parts.join(", ") : "Everything was up to date",
+        subject: "sync-all",
+        action: { label: "View details", run: () => setSyncReport(report) },
+      });
+    } catch (err) {
+      notifyError(err, "Sync all did not finish", "sync-all");
     } finally {
       setSyncing(false);
     }
@@ -86,6 +105,7 @@ export function TopBar() {
         <Search size={14} /> Jump to anything
         <kbd>Ctrl+K</kbd>
       </button>
+      <NotificationBell />
       <Button onClick={() => void sync()} disabled={syncing} data-testid="sync-all">
         <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />
         {syncing ? "Syncing..." : "Sync all"}

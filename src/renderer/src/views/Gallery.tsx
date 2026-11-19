@@ -1,4 +1,4 @@
-import { Plus, Settings } from "lucide-react";
+import { Plus, RefreshCw, Settings } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { STATUS } from "@shared/tone";
 import {
@@ -116,13 +116,29 @@ export function Gallery() {
             </Button>
           </div>
         ))}
-        <div className="grid gap-2">
-          <IconButton label="Add a project">
-            <Plus size={16} />
-          </IconButton>
-          <IconButton label="Settings" size="sm">
-            <Settings size={16} />
-          </IconButton>
+        <div className="grid gap-2" data-testid="gallery-icons">
+          <div className="flex items-center gap-2">
+            <IconButton label="Add a project">
+              <Plus />
+            </IconButton>
+            <IconButton label="Settings">
+              <Settings />
+            </IconButton>
+            <IconButton label="Sync">
+              <RefreshCw />
+            </IconButton>
+          </div>
+          <div className="flex items-center gap-2">
+            <IconButton label="Add a project, small" size="sm">
+              <Plus />
+            </IconButton>
+            <IconButton label="Settings, small" size="sm">
+              <Settings />
+            </IconButton>
+            <IconButton label="Sync, small" size="sm">
+              <RefreshCw />
+            </IconButton>
+          </div>
         </div>
       </Section>
 
@@ -196,7 +212,6 @@ export function Gallery() {
           </Banner>
           <Banner tone="danger">Claude Code is not logged in.</Banner>
           <Banner tone="info">An update is downloading.</Banner>
-          <Banner tone="success">Everything is in sync.</Banner>
         </div>
         <div className="grid w-[260px] gap-2">
           <Skeleton width={26} />

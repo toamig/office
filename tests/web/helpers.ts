@@ -15,6 +15,25 @@ export {
 } from "../support/prepare";
 export type { LaunchOptions } from "../support/prepare";
 
+/** The notifications in the corner: the result of an action, which leaves by itself. */
+export const toasts = (page: Page) => page.getByTestId("notification-toast");
+
+/** Opens a page header's overflow menu and clicks one of its items. */
+export async function pageMenu(page: Page, itemTestId: string): Promise<void> {
+  await page.getByTestId("page-more").click();
+  await page.getByTestId(itemTestId).click();
+}
+
+/** Clicks Sync all, and opens the report from the summary notification ("View details"). */
+export async function syncAllReport(page: Page) {
+  await page.getByTestId("sync-all").click();
+  await toasts(page)
+    .filter({ hasText: "Synced" })
+    .getByRole("button", { name: "View details" })
+    .click();
+  return page.getByTestId("sync-report");
+}
+
 /** The Electron binary: run as plain Node (ELECTRON_RUN_AS_NODE), so the native modules load as built. */
 const electronBinary = (): string => createRequire(__filename)("electron") as string;
 

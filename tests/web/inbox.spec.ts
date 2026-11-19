@@ -1,6 +1,6 @@
 import { expect, test } from "@playwright/test";
 import { commit, sh } from "../fixtures/repos/make";
-import { launch } from "./helpers";
+import { launch, syncAllReport } from "./helpers";
 
 test("a sync conflict lands in the inbox once, even when repeated", async () => {
   const { app, world } = await launch({ world: true });
@@ -15,12 +15,12 @@ test("a sync conflict lands in the inbox once, even when repeated", async () => 
   commit(alpha.work, "README.md", "# local\n", "local edit");
 
   const win = await app.firstWindow();
-  await win.getByTestId("sync-all").click();
-  await expect(win.getByTestId("sync-report")).toContainText("Conflict");
-  await win.getByLabel("Close").click();
-  await win.getByTestId("sync-all").click();
-  await expect(win.getByTestId("sync-report")).toBeVisible();
-  await win.getByLabel("Close").click();
+  const first = await syncAllReport(win);
+  await expect(first).toContainText("Conflict");
+  await win.getByRole("button", { name: "Close" }).click();
+  const second = await syncAllReport(win);
+  await expect(second).toBeVisible();
+  await win.getByRole("button", { name: "Close" }).click();
 
   await win.getByTestId("rail-inbox").click();
   await expect(win.getByTestId("notification")).toHaveCount(1);

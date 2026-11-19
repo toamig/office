@@ -1,7 +1,6 @@
 import { useEffect } from "react";
-import { createPortal } from "react-dom";
 import { useUi } from "../stores/ui";
-import { Button } from "./ui";
+import { Button, Dialog } from "../ui";
 
 /**
  * Registers a change that is not saved yet while the message is set: the window asks before it closes, and a move to
@@ -28,32 +27,27 @@ export function LeaveGuard() {
   const stay = useUi((s) => s.stayHere);
   const leave = useUi((s) => s.leaveAnyway);
   if (!pending) return null;
-  return createPortal(
-    <div className="dialog-backdrop" data-testid="leave-guard">
-      <div className="dialog w-[460px] max-w-[92vw]">
-        <header className="dialog-header">
-          <span className="font-semibold">You have changes that are not saved</span>
-        </header>
-        <div className="p-4">
-          {Object.values(unsaved).map((m) => (
-            <p key={m} className="mb-2 mt-0">
-              {m}
-            </p>
-          ))}
-        </div>
-        <footer
-          className="flex justify-end gap-2 border-t px-4 py-2.5"
-          style={{ borderColor: "var(--line)" }}
-        >
+  return (
+    <Dialog
+      title="You have changes that are not saved"
+      testId="leave-guard"
+      onClose={stay}
+      footer={
+        <>
           <Button onClick={leave} data-testid="leave-anyway">
             Leave without saving
           </Button>
           <Button variant="primary" onClick={stay} data-testid="leave-stay">
             Stay and save
           </Button>
-        </footer>
-      </div>
-    </div>,
-    document.body,
+        </>
+      }
+    >
+      {Object.values(unsaved).map((m) => (
+        <p key={m} className="mb-2 mt-0">
+          {m}
+        </p>
+      ))}
+    </Dialog>
   );
 }

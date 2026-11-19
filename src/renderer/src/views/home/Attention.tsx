@@ -1,13 +1,10 @@
 import { ExternalLink } from "lucide-react";
 import type { NotificationRow, TaskView } from "@shared/models";
 import { PermissionRequests } from "../../components/PermissionRequests";
-import { Button } from "../../components/ui";
-import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
+import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
-
-const rowClass = "flex items-start gap-2 border-b py-1.5";
-const lineStyle = { borderColor: "var(--line)" };
+import { Button } from "../../ui";
 
 /** Unread notifications of the given kinds, for the Home panels that watch them. */
 export function useUnreadOfKind(kinds: string[]): { rows: NotificationRow[]; reload: () => void } {
@@ -30,37 +27,35 @@ export function GatesAndReviews() {
       {gates.map((t) => {
         const stage = t.stages[t.stageIndex];
         return (
-          <div key={t.id} className={rowClass} style={lineStyle} data-testid="waiting-gate">
-            <div className="flex-1">
+          <div key={t.id} className="ui-line" data-testid="waiting-gate">
+            <div className="ui-line-main">
               <div>
                 Approve {stage?.stageId ?? "the stage"} of &quot;{t.title}&quot;
               </div>
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>
+              <div className="ui-line-sub">
                 {t.projectName}, {t.pipelineName}
               </div>
             </div>
             <Button
               variant="ghost"
+              size="sm"
               onClick={() => navigate("board", { task: t.id })}
               data-testid="open-waiting-gate"
             >
-              <ExternalLink size={13} /> Open
+              <ExternalLink /> Open
             </Button>
           </div>
         );
       })}
       {reviews.rows.map((n) => (
-        <div key={n.id} className={rowClass} style={lineStyle} data-testid="waiting-review">
-          <div className="flex-1">
+        <div key={n.id} className="ui-line" data-testid="waiting-review">
+          <div className="ui-line-main">
             <div>{n.title}</div>
-            {n.body && (
-              <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-                {n.body}
-              </div>
-            )}
+            {n.body && <div className="ui-line-sub">{n.body}</div>}
           </div>
           <Button
             variant="ghost"
+            size="sm"
             onClick={() => void office.invoke("notifications.markRead", { ids: [n.id] })}
             data-testid="dismiss-waiting-review"
           >

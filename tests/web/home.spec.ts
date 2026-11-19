@@ -32,6 +32,6 @@ test("Home lists live agents and task approvals next to the notes' waiting items
 
   // The Today panel is always there, even with no automations.
   await win.getByTestId("rail-home").click();
-  await expect(win.getByText("No automations are due today.")).toBeVisible();
+  await expect(win.getByText("Nothing due today")).toBeVisible();
   await app.close();
 });

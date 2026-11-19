@@ -29,9 +29,7 @@ export class ViewBoundary extends Component<Props, State> {
         <div className="p-6" data-testid="view-error">
           <div className="mx-auto max-w-md text-center">
             <div className="mb-1 text-base font-semibold">This view hit a problem</div>
-            <div className="mb-3 text-selectable" style={{ color: "var(--muted)" }}>
-              {this.state.error.message}
-            </div>
+            <div className="mb-3 text-selectable ui-muted">{this.state.error.message}</div>
             <Button
               onClick={() => this.setState((s) => ({ error: null, attempt: s.attempt + 1 }))}
               data-testid="view-reload"

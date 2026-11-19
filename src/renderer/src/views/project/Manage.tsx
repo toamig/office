@@ -1,25 +1,19 @@
-import { Archive, Pin, PinOff } from "lucide-react";
 import { useState } from "react";
 import type { ProjectSummary } from "@shared/models";
-import { Button } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { Button, Dialog, Input, notifyError, type MoreItem } from "../../ui";
 import { PointerDialog } from "../onboarding/PointerDialog";
 
-const field = "rounded border px-2 py-1";
-const fieldStyle = { borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" };
-
-/** Pin, group and archive one project. The change is written to the workspace config. */
-export function ProjectManage({
-  project,
-  onError,
-}: {
-  project: ProjectSummary;
-  onError: (message: string) => void;
-}) {
-  const [group, setGroup] = useState<string | null>(null);
+/** The secondary actions of a project page, as menu items, and the dialogs they open. */
+export function useProjectManage(project: ProjectSummary): {
+  items: MoreItem[];
+  dialogs: React.ReactNode;
+} {
   const [pointer, setPointer] = useState<"add" | "remove" | null>(null);
   const [removing, setRemoving] = useState(false);
+  const [grouping, setGrouping] = useState(false);
+  const [group, setGroup] = useState("");
   const navigate = useUi((s) => s.navigate);
   const update = async (patch: {
     pinned?: boolean;
@@ -29,77 +23,105 @@ export function ProjectManage({
     try {
       await office.invoke("projects.update", { id: project.id, ...patch });
     } catch (err) {
-      onError((err as Error).message);
+      notifyError(err, `Could not change ${project.name}`, `project-${project.id}`);
     }
   };
-  return (
-    <div className="mb-3 flex flex-wrap items-center gap-2" data-testid="project-manage">
-      <Button onClick={() => void update({ pinned: !project.pinned })} data-testid="project-pin">
-        {project.pinned ? <PinOff size={13} /> : <Pin size={13} />}
-        {project.pinned ? " Unpin" : " Pin"}
-      </Button>
-      <input
-        className={field}
-        style={fieldStyle}
-        placeholder="Group"
-        value={group ?? project.group ?? ""}
-        onChange={(e) => setGroup(e.target.value)}
-        aria-label="Group"
-        data-testid="project-group"
-      />
-      <Button
-        disabled={group === null}
-        onClick={() => void update({ group: group ?? "" }).then(() => setGroup(null))}
-        data-testid="project-group-save"
-      >
-        Set group
-      </Button>
-      <Button onClick={() => void update({ archived: true })} data-testid="project-archive">
-        <Archive size={13} /> Archive
-      </Button>
-      <Button onClick={() => setPointer("add")} data-testid="project-pointer-add">
-        Agent pointer
-      </Button>
-      <Button onClick={() => setPointer("remove")} data-testid="project-pointer-remove">
-        Remove the pointer
-      </Button>
-      <Button onClick={() => setRemoving(true)} data-testid="project-remove">
-        Remove from Office
-      </Button>
+  const items: MoreItem[] = [
+    {
+      label: project.pinned ? "Unpin" : "Pin",
+      onSelect: () => void update({ pinned: !project.pinned }),
+      testId: "project-pin",
+    },
+    {
+      label: "Set group...",
+      onSelect: () => {
+        setGroup(project.group ?? "");
+        setGrouping(true);
+      },
+      testId: "project-group-open",
+    },
+    {
+      label: "Archive",
+      onSelect: () => void update({ archived: true }),
+      testId: "project-archive",
+    },
+    {
+      label: "Add the agent pointer...",
+      onSelect: () => setPointer("add"),
+      testId: "project-pointer-add",
+    },
+    {
+      label: "Remove the agent pointer...",
+      onSelect: () => setPointer("remove"),
+      testId: "project-pointer-remove",
+    },
+    {
+      label: "Remove from Office...",
+      onSelect: () => setRemoving(true),
+      danger: true,
+      testId: "project-remove",
+    },
+  ];
+  const dialogs = (
+    <>
       {pointer && (
         <PointerDialog ids={[project.id]} mode={pointer} onClose={() => setPointer(null)} />
       )}
-      {removing && (
-        <div className="dialog-backdrop" data-testid="remove-confirm">
-          <div className="dialog w-[480px] max-w-[92vw]">
-            <header className="dialog-header">
-              <span className="font-semibold">Remove {project.name} from Office?</span>
-            </header>
-            <p className="m-0 p-4">
-              Only the entry in the workspace config goes. Its notes, its code and the agent pointer
-              stay where they are, and you can add the project again later.
-            </p>
-            <footer
-              className="flex justify-end gap-2 border-t px-4 py-2.5"
-              style={{ borderColor: "var(--line)" }}
-            >
-              <Button onClick={() => setRemoving(false)}>Cancel</Button>
+      {grouping && (
+        <Dialog
+          title={`Group for ${project.name}`}
+          onClose={() => setGrouping(false)}
+          testId="group-dialog"
+          footer={
+            <>
+              <Button onClick={() => setGrouping(false)}>Cancel</Button>
               <Button
                 variant="primary"
+                data-testid="project-group-save"
+                onClick={() => void update({ group }).then(() => setGrouping(false))}
+              >
+                Set group
+              </Button>
+            </>
+          }
+        >
+          <Input
+            label="Group"
+            helper="Projects with the same group sit together on the Projects page. Leave it empty for none."
+            value={group}
+            onChange={(e) => setGroup(e.target.value)}
+            data-testid="project-group"
+          />
+        </Dialog>
+      )}
+      {removing && (
+        <Dialog
+          title={`Remove ${project.name} from Office?`}
+          onClose={() => setRemoving(false)}
+          testId="remove-confirm"
+          footer={
+            <>
+              <Button onClick={() => setRemoving(false)}>Cancel</Button>
+              <Button
+                variant="danger"
                 data-testid="remove-yes"
                 onClick={() =>
                   void office.invoke("onboarding.remove", { id: project.id }).then(
                     () => navigate("projects"),
-                    (err: Error) => onError(err.message),
+                    (err: unknown) => notifyError(err, `Could not remove ${project.name}`),
                   )
                 }
               >
                 Remove from Office
               </Button>
-            </footer>
-          </div>
-        </div>
+            </>
+          }
+        >
+          Only the entry in the workspace config goes. Its notes, its code and the agent pointer
+          stay where they are, and you can add the project again later.
+        </Dialog>
       )}
-    </div>
+    </>
   );
+  return { items, dialogs };
 }

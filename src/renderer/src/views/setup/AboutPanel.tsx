@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import type { UpdateStatus } from "@shared/models";
-import { Button, Chip, ErrorBanner, Panel } from "../../components/ui";
 import { office } from "../../lib/ipc";
+import { Button, Card, StatusBadge, notifyError } from "../../ui";
 
 const label: Record<UpdateStatus["state"], string> = {
   disabled: "Updates are off",
@@ -17,7 +17,6 @@ const label: Record<UpdateStatus["state"], string> = {
 /** The version, and the state of automatic updates from GitHub Releases. */
 export function AboutPanel() {
   const [status, setStatus] = useState<UpdateStatus | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     void office.invoke("app.update.status").then(setStatus);
@@ -25,37 +24,39 @@ export function AboutPanel() {
   }, []);
 
   const check = (): void => {
-    setError(null);
-    office.invoke("app.update.check").then(setStatus, (err: Error) => setError(err.message));
+    office
+      .invoke("app.update.check")
+      .then(setStatus, (err: unknown) => notifyError(err, "The update check failed", "update"));
   };
 
   return (
-    <Panel title="About Office">
+    <Card title="About Office" testId="panel-about">
       <div data-testid="about">
-        {error && <ErrorBanner message={error} />}
         {status && (
-          <div className="grid gap-2">
-            <div className="flex items-center gap-2">
-              <span>Version</span>
-              <Chip>{status.version}</Chip>
-              <Chip
-                tone={
-                  status.state === "error"
-                    ? "bad"
-                    : status.state === "downloaded"
-                      ? "good"
-                      : "neutral"
-                }
-              >
-                {label[status.state]}
-              </Chip>
-              {status.newVersion && <Chip tone="good">new: {status.newVersion}</Chip>}
-            </div>
-            {status.detail && (
-              <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
-                {status.detail}
-              </div>
-            )}
+          <div className="grid gap-3">
+            <dl className="ui-dl">
+              <dt>Version</dt>
+              <dd className="num">{status.version}</dd>
+              <dt>Updates</dt>
+              <dd className="ui-badges">
+                <StatusBadge
+                  status={
+                    status.state === "error"
+                      ? "failed"
+                      : status.state === "downloaded" || status.state === "up-to-date"
+                        ? "done"
+                        : status.state === "downloading" || status.state === "checking"
+                          ? "running"
+                          : "info"
+                  }
+                  label={label[status.state]}
+                />
+                {status.newVersion && (
+                  <StatusBadge status="info" label={`New version ${status.newVersion}`} />
+                )}
+              </dd>
+            </dl>
+            {status.detail && <div className="ui-muted">{status.detail}</div>}
             <div className="flex gap-2">
               <Button disabled={!status.enabled} onClick={check} data-testid="update-check">
                 Check for updates
@@ -73,6 +74,6 @@ export function AboutPanel() {
           </div>
         )}
       </div>
-    </Panel>
+    </Card>
   );
 }

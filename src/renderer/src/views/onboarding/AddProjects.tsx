@@ -1,10 +1,10 @@
 import { useEffect, useState } from "react";
 import type { OnboardingItem, OnboardingReport, ScanCandidate } from "@shared/models";
-import { Button, Chip, EmptyState, ErrorBanner } from "../../components/ui";
-import { Select } from "../../components/Select";
+import { Button, EmptyState, StatusBadge, notifyError } from "../../ui";
+import { Dropdown as Select } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { fieldClass, fieldStyle } from "../setup/PathField";
+import { fieldClass } from "../setup/PathField";
 import { PointerDialog } from "./PointerDialog";
 
 interface Row {
@@ -42,7 +42,6 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
   const [hubRepos, setHubRepos] = useState<string[]>([]);
   const [plan, setPlan] = useState<string[]>([]);
   const [report, setReport] = useState<OnboardingReport | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [pointer, setPointer] = useState<string[] | null>(null);
 
@@ -54,7 +53,7 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
         setRows(found.candidates.map(rowOf));
         setHubRepos(found.hubRepos);
       },
-      (err: Error) => alive && setError(err.message),
+      (err: unknown) => alive && notifyError(err, "Could not look for projects", "add-projects"),
     );
     return () => {
       alive = false;
@@ -95,7 +94,6 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
 
   const add = async (): Promise<void> => {
     setBusy(true);
-    setError(null);
     try {
       const done = await office.invoke("onboarding.add", { items: items() });
       setReport(done);
@@ -105,7 +103,7 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
         onDone?.();
       }
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "The projects were not added", "add-projects");
     } finally {
       setBusy(false);
     }
@@ -131,9 +129,8 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
 
   return (
     <div data-testid="add-projects">
-      {error && <ErrorBanner message={error} />}
       <div className="mb-2 flex items-center gap-2">
-        <span className="flex-1" style={{ color: "var(--muted)" }}>
+        <span className="flex-1 ui-muted">
           Code repos under your projects folder that are not in Office yet.
         </span>
         <Button onClick={() => void browse()} data-testid="add-browse">
@@ -148,18 +145,13 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
         </Button>
       </div>
       {rows !== null && rows.length === 0 && (
-        <EmptyState>
-          Nothing new here: every repo under the projects folder is already in Office.
+        <EmptyState title="Nothing new here">
+          Every repo under the projects folder is already in Office.
         </EmptyState>
       )}
       <div data-testid="scan-list">
         {(rows ?? []).map((r, i) => (
-          <div
-            key={r.candidate.path}
-            className="grid items-center gap-2 border-b py-1.5"
-            style={{ borderColor: "var(--line)", gridTemplateColumns: "24px 1.3fr 1fr 1.2fr" }}
-            data-testid="scan-row"
-          >
+          <div key={r.candidate.path} className="ui-line scan-row" data-testid="scan-row">
             <input
               type="checkbox"
               checked={r.picked}
@@ -170,15 +162,13 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
             <div>
               <input
                 className={`${fieldClass} w-full`}
-                style={fieldStyle}
                 value={r.name}
                 onChange={(e) => update(i, { name: e.target.value })}
                 aria-label="Name"
                 data-testid="scan-name"
               />
               <div
-                className="mt-0.5 truncate text-[11.5px]"
-                style={{ color: "var(--muted)" }}
+                className="mt-0.5 truncate text-[length:var(--text-xs)] ui-muted"
                 title={r.candidate.path}
               >
                 {baseName(r.candidate.path)}
@@ -190,7 +180,6 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
             </div>
             <input
               className={`${fieldClass} w-full`}
-              style={fieldStyle}
               value={r.group}
               placeholder="Group"
               onChange={(e) => update(i, { group: e.target.value })}
@@ -198,7 +187,7 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
               data-testid="scan-group"
             />
             <div className="flex items-center gap-1.5">
-              {r.candidate.notes && <Chip tone="good">notes found</Chip>}
+              {r.candidate.notes && <StatusBadge status="saved" label="Notes found" />}
               <Select
                 value={r.notes === "new" && kind === "brain-hub" ? `new-${r.hub}` : r.notes}
                 onChange={(e) => {
@@ -209,12 +198,6 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
                 }}
                 aria-label="Notes"
                 data-testid="scan-notes"
-                className="rounded border px-1 py-0.5"
-                style={{
-                  borderColor: "var(--line)",
-                  background: "var(--panel)",
-                  color: "var(--text)",
-                }}
               >
                 {kind === "brain-hub" ? (
                   <>
@@ -236,11 +219,7 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
         ))}
       </div>
       {plan.length > 0 && (
-        <div
-          className="mt-3 rounded border p-3"
-          style={{ borderColor: "var(--line)" }}
-          data-testid="add-plan"
-        >
+        <div className="ui-surface mt-3 p-3" data-testid="add-plan">
           <div className="mb-1 font-medium">This will:</div>
           <ul className="m-0 pl-5">
             {plan.map((line) => (
@@ -253,15 +232,16 @@ export function AddProjects({ onDone }: { onDone?: () => void }) {
         <div className="mt-3" data-testid="add-report">
           {report.steps.map((s) => (
             <div key={s.id} className="flex items-center gap-2 py-0.5">
-              <Chip tone={s.status === "done" ? "good" : "bad"}>
-                {s.status === "done" ? "Added" : "Failed"}
-              </Chip>
+              <StatusBadge
+                status={s.status === "done" ? "done" : "failed"}
+                label={s.status === "done" ? "Added" : "Failed"}
+              />
               <span>{s.label}</span>
-              {s.status === "failed" && <span style={{ color: "var(--bad)" }}>{s.result}</span>}
+              {s.status === "failed" && <span className="ui-bad">{s.result}</span>}
             </div>
           ))}
           {!report.ok && (
-            <div style={{ color: "var(--muted)" }}>
+            <div className="ui-muted">
               It stopped at the one that failed; the ones before it are added, the ones after it are
               not.
             </div>

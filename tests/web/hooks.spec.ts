@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, relayUrl, terminalText } from "./helpers";
+import { launch, relayUrl, terminalText, toasts } from "./helpers";
 
 test("a simulated hook POST moves a session to needs-you and raises an urgent notification", async () => {
   const { app, data } = await launch({ world: true, fakeTools: true });
@@ -33,7 +33,7 @@ test("a simulated hook POST moves a session to needs-you and raises an urgent no
   const note = win.getByTestId("notification");
   await expect(note).toHaveCount(1);
   await expect(note).toContainText("Hooked needs you");
-  await expect(note).toContainText("urgent");
+  await expect(note).toContainText(/urgent/i);
   await app.close();
 });
 
@@ -57,8 +57,8 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
   );
   await win.getByTestId("hooks-confirm").click();
   // "not installed" contains "installed", so wait for the words that mean it is done.
-  await expect(win.getByTestId("hooks-claude")).not.toContainText("not installed");
-  await expect(win.getByTestId("hooks-message")).toBeVisible();
+  await expect(win.getByTestId("hooks-claude")).not.toContainText(/not installed/i);
+  await expect(toasts(win).filter({ hasText: "Hooks installed" })).toBeVisible();
   expect(readFileSync(join(home, ".claude", "settings.json"), "utf8")).toContain(
     "office-relay.mjs",
   );
@@ -88,7 +88,7 @@ test("installing the hooks from Setup shows the exact diff, and a real hook run 
   await win.getByTestId("rail-setup").click();
   await win.getByTestId("uninstall-claude").click();
   await win.getByTestId("hooks-confirm").click();
-  await expect(win.getByTestId("hooks-claude")).toContainText("not installed");
+  await expect(win.getByTestId("hooks-claude")).toContainText(/not installed/i);
   expect(readFileSync(join(home, ".claude", "settings.json"), "utf8")).not.toContain(
     "office-relay",
   );

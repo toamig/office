@@ -1,10 +1,10 @@
 import { MessageSquarePlus, Send, X } from "lucide-react";
 import { useState } from "react";
 import type { DiffFile, ReviewComment } from "@shared/models";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import { Button, Card, EmptyState, IconButton, notifyDone, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { Select } from "../../components/Select";
+import { Dropdown as Select } from "../../ui";
 import { VirtualList } from "../../components/VirtualList";
 
 type Mode = "working" | "staged" | "branch";
@@ -24,12 +24,6 @@ function diffRows(file: DiffFile): DiffRow[] {
   return rows;
 }
 
-const bg = {
-  add: "color-mix(in srgb, var(--good) 16%, transparent)",
-  del: "color-mix(in srgb, var(--bad) 16%, transparent)",
-  ctx: "transparent",
-} as const;
-
 /** Changed files and a unified diff with line comments that can go back to the agent that made the change. */
 export function DiffTab({ projectId }: { projectId: string }) {
   const worktrees = useQuery("worktrees.list", { projectId }, ["project.status"]);
@@ -47,8 +41,6 @@ export function DiffTab({ projectId }: { projectId: string }) {
   const [comments, setComments] = useState<ReviewComment[]>([]);
   const [editing, setEditing] = useState<{ file: string; line: number } | null>(null);
   const [draft, setDraft] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const files = diff.data?.files ?? [];
   const file: DiffFile | undefined = files.find((f) => f.path === selected) ?? files[0];
@@ -60,22 +52,20 @@ export function DiffTab({ projectId }: { projectId: string }) {
     setDraft("");
   };
   const send = async (): Promise<void> => {
-    setError(null);
-    setMessage(null);
     try {
       const result = await office.invoke("diff.sendComments", {
         projectId,
         ...(dir ? { dir } : {}),
         comments,
       });
-      setMessage(
-        result.started
-          ? "Started a builder session with your comments."
-          : "Sent your comments to the running agent.",
+      notifyDone(
+        result.started ? "Started a builder session" : "Comments sent",
+        result.started ? "It has your comments." : "The running agent has your comments.",
+        "review",
       );
       setComments([]);
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not send the comments", "review");
     }
   };
 
@@ -87,8 +77,6 @@ export function DiffTab({ projectId }: { projectId: string }) {
           onChange={(e) => setDir(e.target.value)}
           aria-label="Checkout"
           data-testid="diff-dir"
-          className="rounded border px-1 py-0.5"
-          style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
         >
           <option value="">Project folder</option>
           {(worktrees.data ?? [])
@@ -115,8 +103,6 @@ export function DiffTab({ projectId }: { projectId: string }) {
             value={baseName}
             onChange={(e) => setBase(e.target.value)}
             aria-label="Base branch"
-            className="rounded border px-1 py-0.5"
-            style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
           >
             {(branches.data?.local ?? []).map((b) => (
               <option key={b.name} value={b.name}>
@@ -126,20 +112,13 @@ export function DiffTab({ projectId }: { projectId: string }) {
           </Select>
         )}
       </div>
-      {(diff.error || error) && <ErrorBanner message={diff.error ?? error ?? ""} />}
-      {message && (
-        <div data-testid="review-sent">
-          <Chip tone="good">{message}</Chip>
-        </div>
+      {diff.error && <p className="ui-bad">{diff.error}</p>}
+      {files.length === 0 && !diff.loading && (
+        <EmptyState title="No changes to review">There is nothing different here.</EmptyState>
       )}
-      {files.length === 0 && !diff.loading && <EmptyState>No changes to review here.</EmptyState>}
       {files.length > 0 && (
         <div className="grid gap-3 lg:grid-cols-[260px_1fr]">
-          <div
-            className="rounded border"
-            style={{ borderColor: "var(--line)", background: "var(--panel)" }}
-            data-testid="diff-files"
-          >
+          <div className="ui-surface" data-testid="diff-files">
             <VirtualList
               items={files}
               estimate={50}
@@ -148,27 +127,23 @@ export function DiffTab({ projectId }: { projectId: string }) {
                 <div
                   data-testid="diff-file"
                   onClick={() => setSelected(f.path)}
-                  className="border-b px-2 py-1.5"
-                  style={{
-                    borderColor: "var(--line)",
-                    background: file?.path === f.path ? "var(--rail)" : "transparent",
-                  }}
+                  className="ui-row"
+                  data-clickable="true"
+                  data-selected={file?.path === f.path ? "true" : undefined}
                 >
-                  <div className="truncate font-medium">{f.path}</div>
-                  <div className="text-[12px]" style={{ color: "var(--muted)" }}>
-                    {f.status}
-                    {f.binary ? ", binary" : ` +${f.additions} -${f.deletions}`}
+                  <div className="min-w-0 flex-1">
+                    <div className="truncate font-medium">{f.path}</div>
+                    <div className="text-[length:var(--text-xs)] ui-muted">
+                      {f.status}
+                      {f.binary ? ", binary" : ` +${f.additions} -${f.deletions}`}
+                    </div>
                   </div>
                 </div>
               )}
             />
           </div>
-          <div
-            className="min-w-0 rounded border"
-            style={{ borderColor: "var(--line)", background: "var(--panel)" }}
-            data-testid="diff-view"
-          >
-            {file?.binary && <EmptyState>Binary file.</EmptyState>}
+          <div className="ui-surface min-w-0" data-testid="diff-view">
+            {file?.binary && <EmptyState title="Binary file">There is no text to show.</EmptyState>}
             {file && (
               <VirtualList
                 items={diffRows(file)}
@@ -176,32 +151,23 @@ export function DiffTab({ projectId }: { projectId: string }) {
                 itemKey={(row) => row.key}
                 renderItem={(row) => {
                   if (row.kind === "header") {
-                    return (
-                      <div
-                        className="px-2 py-0.5 font-mono text-[12.5px]"
-                        style={{ color: "var(--muted)", background: "var(--rail)" }}
-                      >
-                        {row.header}
-                      </div>
-                    );
+                    return <div className="diff-hunk">{row.header}</div>;
                   }
                   const { h, l, index } = row;
                   const lineNo = l.newNo ?? l.oldNo ?? 0;
                   const here = comments.filter((c) => c.file === file.path && c.line === lineNo);
                   const open = editing?.file === file.path && editing.line === lineNo;
                   return (
-                    <div key={`${h.header}-${index}`} className="font-mono text-[12.5px]">
-                      <div
-                        className="group flex"
-                        style={{ background: bg[l.kind] }}
-                        data-testid="diff-line"
-                      >
+                    <div
+                      key={`${h.header}-${index}`}
+                      className="font-mono text-[length:var(--text-sm)]"
+                    >
+                      <div className={`group flex diff-${l.kind}`} data-testid="diff-line">
                         <button
                           aria-label={`Comment on line ${lineNo}`}
                           title="Comment on this line"
                           onClick={() => setEditing({ file: file.path, line: lineNo })}
-                          className="w-14 shrink-0 border-0 bg-transparent px-1 text-right"
-                          style={{ color: "var(--muted)" }}
+                          className="w-14 shrink-0 border-0 bg-transparent px-1 text-right ui-muted"
                           data-testid="comment-line"
                         >
                           {l.newNo ?? l.oldNo ?? ""}
@@ -211,14 +177,11 @@ export function DiffTab({ projectId }: { projectId: string }) {
                         </span>
                         <span className="whitespace-pre-wrap break-all">{l.text}</span>
                         {here.length > 0 && (
-                          <MessageSquarePlus size={12} className="ml-2 mt-0.5 shrink-0" />
+                          <MessageSquarePlus size={14} className="ml-2 mt-0.5 shrink-0" />
                         )}
                       </div>
                       {open && (
-                        <div
-                          className="flex gap-2 border-y px-2 py-1.5"
-                          style={{ borderColor: "var(--line)", background: "var(--bg)" }}
-                        >
+                        <div className="diff-comment">
                           <input
                             autoFocus
                             value={draft}
@@ -227,12 +190,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
                             placeholder={`Comment on ${file.path}:${lineNo}`}
                             aria-label="Comment text"
                             data-testid="comment-text"
-                            className="flex-1 rounded border px-2 py-1 font-sans"
-                            style={{
-                              borderColor: "var(--line)",
-                              background: "var(--panel)",
-                              color: "var(--text)",
-                            }}
+                            className="flex-1 font-sans"
                           />
                           <Button variant="primary" onClick={addComment} data-testid="comment-save">
                             Add
@@ -246,17 +204,19 @@ export function DiffTab({ projectId }: { projectId: string }) {
               />
             )}
             {file?.truncated && (
-              <EmptyState>This file is long; only its first 3000 lines are shown.</EmptyState>
+              <p className="ui-muted p-3">
+                This file is long; only its first 3000 lines are shown.
+              </p>
             )}
           </div>
         </div>
       )}
       {comments.length > 0 && (
-        <Panel
+        <Card
           title={`Comments (${comments.length})`}
           action={
             <Button variant="primary" onClick={() => void send()} data-testid="send-to-agent">
-              <Send size={13} /> Send to agent
+              <Send /> Send to agent
             </Button>
           }
         >
@@ -271,17 +231,17 @@ export function DiffTab({ projectId }: { projectId: string }) {
                   {c.file}:{c.line}
                 </code>
                 <span className="flex-1">{c.text}</span>
-                <Button
-                  variant="ghost"
-                  aria-label="Remove comment"
+                <IconButton
+                  size="sm"
+                  label="Remove comment"
                   onClick={() => setComments((all) => all.filter((_, j) => j !== i))}
                 >
-                  <X size={12} />
-                </Button>
+                  <X />
+                </IconButton>
               </div>
             ))}
           </div>
-        </Panel>
+        </Card>
       )}
     </div>
   );

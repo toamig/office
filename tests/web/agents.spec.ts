@@ -54,7 +54,7 @@ test("a fake agent session starts from the dialog, shows its status and takes it
   await win.locator(".xterm").click();
   await win.keyboard.type("quit");
   await win.keyboard.press("Enter");
-  await expect(win.getByTestId("session-status").first()).toContainText(/exited/i);
+  await expect(win.getByTestId("session-status").first()).toContainText(/ended/i);
   await win.getByTestId("resume-session").first().click();
   await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/i);
   await expect(win.getByTestId("session-row")).toHaveCount(1);

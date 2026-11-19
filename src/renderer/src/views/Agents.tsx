@@ -1,17 +1,26 @@
 import { Archive, LayoutGrid, Play, Rows2, Columns2, Square, X } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { Layout, SessionRow } from "@shared/models";
-import { Button, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
-import { timeAgo, useQuery } from "../lib/hooks";
+import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { CaptureDialog } from "./agents/CaptureDialog";
 import { PaneHeader } from "./agents/PaneHeader";
 import { StartAgentDialog } from "./agents/StartAgentDialog";
 import { SessionSurface } from "./agents/SessionSurface";
-import { Select } from "../components/Select";
 import { StatusChip } from "../components/StatusChip";
 import { VirtualList } from "../components/VirtualList";
+import {
+  Banner,
+  Button,
+  Dropdown,
+  EmptyState,
+  IconButton,
+  Page,
+  SplitPane,
+  Time,
+  notifyError,
+} from "../ui";
 
 const EMPTY: Layout = { open: [], active: null, split: "single", panes: [] };
 const CAPACITY: Record<Layout["split"], number> = { single: 1, columns: 2, rows: 2, grid: 4 };
@@ -32,12 +41,10 @@ function SessionList({
   const projects = useQuery("projects.list");
   const name = (id: string | null): string => projects.data?.find((p) => p.id === id)?.name ?? "";
   return (
-    <div
-      className="flex w-72 shrink-0 flex-col overflow-auto border-r"
-      style={{ borderColor: "var(--line)" }}
-      data-testid="session-list"
-    >
-      {sessions.length === 0 && <EmptyState>No sessions yet. Start an agent to begin.</EmptyState>}
+    <div className="flex h-full flex-col" data-testid="session-list">
+      {sessions.length === 0 && (
+        <EmptyState title="No sessions yet">Start an agent to begin.</EmptyState>
+      )}
       <VirtualList
         items={sessions}
         estimate={58}
@@ -64,66 +71,66 @@ function SessionList({
                   else if (choice === "close") onCloseSession(s);
                 });
             }}
-            className="session-row border-b px-3 py-2"
-            style={{
-              borderColor: "var(--line)",
-              background: active === s.id ? "var(--panel)" : undefined,
-            }}
+            className="session-row ui-row"
+            data-selected={active === s.id ? "true" : undefined}
+            data-clickable="true"
           >
-            <div className="flex items-center gap-2">
-              <span className="flex-1 truncate font-medium">{s.title ?? s.provider}</span>
-              <span data-testid="session-status">
-                <StatusChip status={s.status} />
-              </span>
-            </div>
-            <div
-              className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[12px]"
-              style={{ color: "var(--muted)" }}
-            >
-              {name(s.projectId) && <span>{name(s.projectId)}</span>}
-              {s.branch && <span>{s.branch}</span>}
-              {s.role && <span>role {s.role}</span>}
-              <span>{timeAgo(s.updatedAt)}</span>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <span className="flex-1 truncate font-medium">{s.title ?? s.provider}</span>
+                <span data-testid="session-status">
+                  <StatusChip status={s.status} />
+                </span>
+              </div>
+              <div className="ui-line-sub mt-1 flex flex-wrap gap-x-3">
+                {name(s.projectId) && <span>{name(s.projectId)}</span>}
+                {s.branch && <span>{s.branch}</span>}
+                {s.role && <span>Role: {s.role}</span>}
+                <Time iso={s.updatedAt} />
+              </div>
             </div>
             <div className="session-actions flex gap-0.5">
               {!s.running && s.mode !== "chat" && (
-                <Button
+                <IconButton
+                  size="sm"
+                  label="Resume"
                   onClick={(e) => {
                     e.stopPropagation();
                     void office
                       .invoke("sessions.resume", { id: s.id })
-                      .then(onChanged, () => undefined);
+                      .then(onChanged, (err: unknown) =>
+                        notifyError(err, "Could not resume that session", s.id),
+                      );
                   }}
-                  aria-label="Resume"
                   data-testid="resume-session"
                 >
-                  <Play size={12} />
-                </Button>
+                  <Play />
+                </IconButton>
               )}
               {s.running && (
-                <Button
-                  variant="ghost"
+                <IconButton
+                  size="sm"
+                  label="Stop"
                   onClick={(e) => {
                     e.stopPropagation();
                     void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
                   }}
-                  aria-label="Stop"
                   data-testid="stop-session"
                 >
-                  <Square size={12} />
-                </Button>
+                  <Square />
+                </IconButton>
               )}
-              <Button
-                variant="ghost"
+              <IconButton
+                size="sm"
+                label="Close and wrap up"
                 onClick={(e) => {
                   e.stopPropagation();
                   onCloseSession(s);
                 }}
-                aria-label="Close and wrap up"
                 data-testid="close-session"
               >
-                <Archive size={12} />
-              </Button>
+                <Archive />
+              </IconButton>
             </div>
           </div>
         )}
@@ -235,19 +242,90 @@ export function Agents({ active: visible }: { active: boolean }) {
     ["grid", LayoutGrid, "Four panes"],
   ];
 
+  const sessionList = (
+    <SessionList
+      sessions={list}
+      active={layout.active}
+      onOpen={open}
+      onChanged={sessions.reload}
+      onCloseSession={setClosing}
+    />
+  );
+  const work = (
+    <div className="flex h-full min-w-0 flex-col">
+      <div className="agent-tabs" data-testid="tabs">
+        {openIds.map((id) => {
+          const s = byId.get(id);
+          return (
+            <div
+              key={id}
+              data-testid="tab"
+              className="agent-tab"
+              data-active={layout.active === id}
+              onClick={() => update({ ...layout, active: id })}
+            >
+              {s?.title ?? id.slice(0, 8)}
+              <IconButton
+                size="sm"
+                label="Close tab"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  closeTab(id);
+                }}
+              >
+                <X />
+              </IconButton>
+            </div>
+          );
+        })}
+      </div>
+      {shown.length === 0 && (
+        <EmptyState title="Nothing open">
+          Open a session from the list, or start a new agent.
+        </EmptyState>
+      )}
+      <div className={`grid min-h-0 flex-1 gap-1 p-1 ${gridClass}`} data-testid="panes">
+        {shown.map((id, index) => (
+          <div key={`${index}-${id}`} className="agent-pane" data-testid="pane">
+            {(layout.split !== "single" || byId.get(id)?.mode !== "chat") && (
+              <PaneHeader
+                session={byId.get(id)}
+                options={openIds.map((o) => ({ id: o, title: byId.get(o)?.title ?? o }))}
+                split={layout.split !== "single"}
+                onPick={(next) => setPane(index, next)}
+                onChanged={() => sessions.reload()}
+              />
+            )}
+            <div className="ui-panel-bg min-h-0 flex-1">
+              {byId.get(id) && (
+                <SessionSurface
+                  session={byId.get(id) as SessionRow}
+                  onChanged={() => sessions.reload()}
+                />
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
   return (
-    <div className="flex h-full flex-col" data-testid="agents">
-      <div
-        className="flex items-center gap-2 border-b px-3 py-2"
-        style={{ borderColor: "var(--line)" }}
-      >
-        <h1 className="m-0 mr-2 text-lg font-semibold">Agents</h1>
-        <Select
+    <Page
+      title="Agents"
+      testId="agents"
+      fill
+      primary={
+        <Button variant="primary" onClick={() => setStarting(true)} data-testid="start-agent-open">
+          <Play /> Start agent
+        </Button>
+      }
+    >
+      <div className="flex flex-none items-center gap-2">
+        <Dropdown
           value={filter}
           onChange={(e) => setFilter(e.target.value)}
           aria-label="Project filter"
-          className="rounded border px-1 py-0.5"
-          style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
         >
           <option value="">All projects</option>
           {(projects.data ?? []).map((p) => (
@@ -255,102 +333,30 @@ export function Agents({ active: visible }: { active: boolean }) {
               {p.name}
             </option>
           ))}
-        </Select>
+        </Dropdown>
         <div className="flex-1" />
         {splits.map(([id, Icon, label]) => (
-          <Button
+          <IconButton
             key={id}
-            variant={layout.split === id ? "primary" : "ghost"}
-            aria-label={label}
-            title={label}
+            label={label}
+            variant={layout.split === id ? "secondary" : "ghost"}
+            aria-pressed={layout.split === id}
             onClick={() => update({ ...layout, split: id })}
             data-testid={`split-${id}`}
           >
-            <Icon size={14} />
-          </Button>
+            <Icon />
+          </IconButton>
         ))}
-        <Button variant="primary" onClick={() => setStarting(true)} data-testid="start-agent-open">
-          <Play size={13} /> Start agent
-        </Button>
       </div>
-      {sessions.error && <ErrorBanner message={sessions.error} />}
-      <div className="flex min-h-0 flex-1">
-        <SessionList
-          sessions={list}
-          active={layout.active}
-          onOpen={open}
-          onChanged={sessions.reload}
-          onCloseSession={setClosing}
-        />
-        <div className="flex min-w-0 flex-1 flex-col">
-          <div
-            className="flex gap-1 border-b px-2 pt-1"
-            style={{ borderColor: "var(--line)" }}
-            data-testid="tabs"
-          >
-            {openIds.map((id) => {
-              const s = byId.get(id);
-              return (
-                <div
-                  key={id}
-                  data-testid="tab"
-                  onClick={() => update({ ...layout, active: id })}
-                  className="flex items-center gap-1.5 rounded-t border border-b-0 px-2 py-1"
-                  style={{
-                    borderColor: "var(--line)",
-                    background: layout.active === id ? "var(--panel)" : "transparent",
-                  }}
-                >
-                  {s?.title ?? id.slice(0, 8)}
-                  <button
-                    aria-label="Close tab"
-                    title="Close tab"
-                    className="border-0 bg-transparent p-0"
-                    style={{ color: "var(--muted)" }}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      closeTab(id);
-                    }}
-                  >
-                    <X size={12} />
-                  </button>
-                </div>
-              );
-            })}
-          </div>
-          {shown.length === 0 && (
-            <EmptyState>Open a session from the list, or start a new agent.</EmptyState>
-          )}
-          <div className={`grid min-h-0 flex-1 gap-1 p-1 ${gridClass}`} data-testid="panes">
-            {shown.map((id, index) => (
-              <div
-                key={`${index}-${id}`}
-                className="flex min-h-0 min-w-0 flex-col rounded border"
-                style={{ borderColor: "var(--line)" }}
-                data-testid="pane"
-              >
-                {(layout.split !== "single" || byId.get(id)?.mode !== "chat") && (
-                  <PaneHeader
-                    session={byId.get(id)}
-                    options={openIds.map((o) => ({ id: o, title: byId.get(o)?.title ?? o }))}
-                    split={layout.split !== "single"}
-                    onPick={(next) => setPane(index, next)}
-                    onChanged={() => sessions.reload()}
-                  />
-                )}
-                <div className="min-h-0 flex-1" style={{ background: "var(--panel)" }}>
-                  {byId.get(id) && (
-                    <SessionSurface
-                      session={byId.get(id) as SessionRow}
-                      onChanged={() => sessions.reload()}
-                    />
-                  )}
-                </div>
-              </div>
-            ))}
-          </div>
-        </div>
-      </div>
+      {sessions.error && <Banner tone="danger">{sessions.error}</Banner>}
+      <SplitPane
+        id="agents"
+        defaultSize={320}
+        min={240}
+        minSecond={420}
+        first={sessionList}
+        second={work}
+      />
       {closing && (
         <CaptureDialog
           session={closing}
@@ -376,6 +382,6 @@ export function Agents({ active: visible }: { active: boolean }) {
           }}
         />
       )}
-    </div>
+    </Page>
   );
 }

@@ -2,10 +2,9 @@ import { Send } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { AskResult } from "@shared/models";
 import { Markdown } from "../../components/Markdown";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import { Button, Card, Dropdown, EmptyState, Input, LinkButton } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { Select } from "../../components/Select";
 
 interface Turn {
   id: number;
@@ -70,16 +69,14 @@ export function AskPanel({ onOpenNote }: { onOpenNote: (path: string) => void })
   };
 
   return (
-    <Panel title="Ask the brain">
+    <Card title="Ask the brain" testId="panel-ask">
       <div className="mb-3 flex items-center gap-2">
-        <span style={{ color: "var(--muted)" }}>Scope</span>
-        <Select
+        <span className="ui-muted">Scope</span>
+        <Dropdown
           value={scope}
           onChange={(e) => setScope(e.target.value)}
           aria-label="Scope"
           data-testid="ask-scope"
-          className="rounded border px-1 py-0.5"
-          style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
         >
           <option value="">All projects</option>
           {(projects.data ?? []).map((p) => (
@@ -87,44 +84,38 @@ export function AskPanel({ onOpenNote }: { onOpenNote: (path: string) => void })
               {p.name}
             </option>
           ))}
-        </Select>
+        </Dropdown>
       </div>
       <div className="mb-3 max-h-[46vh] overflow-auto" data-testid="ask-turns">
         {turns.length === 0 && (
-          <EmptyState>
-            Ask anything about your projects. Answers come from the notes, with the files they used.
+          <EmptyState title="Ask about your projects">
+            Answers come from the notes, with the files they used.
           </EmptyState>
         )}
         {turns.map((t) => (
           <div key={t.id} className="mb-3" data-testid="ask-turn">
             <div className="mb-1 font-medium">{t.question}</div>
-            {t.error && <ErrorBanner message={t.error} />}
+            {t.error && <div className="ui-line-sub ui-bad">{t.error}</div>}
             {!t.result && !t.error && (
-              <div style={{ color: "var(--muted)" }}>
+              <div className="ui-muted">
                 {t.streamed ? <Markdown>{t.streamed}</Markdown> : "Reading the notes..."}
               </div>
             )}
             {t.result && (
               <div data-testid="ask-answer">
-                {!t.result.ok && <ErrorBanner message={t.result.error ?? "The question failed"} />}
+                {!t.result.ok && (
+                  <div className="ui-line-sub ui-bad">
+                    {t.result.error ?? "The question failed"}
+                  </div>
+                )}
                 <Markdown>{t.result.text}</Markdown>
                 {t.result.citations.length > 0 && (
                   <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                    <span style={{ color: "var(--muted)" }}>Sources</span>
+                    <span className="ui-muted">Sources</span>
                     {t.result.citations.map((c) => (
-                      <button
-                        key={c}
-                        onClick={() => onOpenNote(c)}
-                        data-testid="citation"
-                        className="rounded-full border px-2 py-px"
-                        style={{
-                          borderColor: "var(--accent)",
-                          color: "var(--accent)",
-                          background: "transparent",
-                        }}
-                      >
+                      <LinkButton key={c} onClick={() => onOpenNote(c)} data-testid="citation">
                         {c}
-                      </button>
+                      </LinkButton>
                     ))}
                   </div>
                 )}
@@ -134,28 +125,26 @@ export function AskPanel({ onOpenNote }: { onOpenNote: (path: string) => void })
         ))}
       </div>
       <form
-        className="flex gap-2"
+        className="flex items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
           void send();
         }}
       >
-        <input
+        <Input
+          className="flex-1"
+          label="Question"
+          hideLabel
           value={question}
           onChange={(e) => setQuestion(e.target.value)}
           placeholder="What is the state of the Alpha game?"
-          aria-label="Question"
           data-testid="ask-input"
-          className="flex-1 rounded border px-2 py-1"
-          style={{ borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" }}
         />
         <Button variant="primary" type="submit" data-testid="ask-send">
-          <Send size={13} /> Ask
+          <Send /> Ask
         </Button>
       </form>
-      <div className="mt-2">
-        <Chip>One question runs one headless researcher session</Chip>
-      </div>
-    </Panel>
+      <p className="ui-muted mb-0 mt-2">One question runs one headless researcher session.</p>
+    </Card>
   );
 }

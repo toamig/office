@@ -1,9 +1,9 @@
 import { GitBranch } from "lucide-react";
 import { useState } from "react";
 import { PrsPanel } from "../components/PrsPanel";
-import { Chip, EmptyState } from "../components/ui";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
+import { EmptyState, Group, Page, SplitPane, StatusBadge, Tabs } from "../ui";
 import { BranchesTab } from "./git/BranchesTab";
 import { CommitTab } from "./git/CommitTab";
 import { DiffTab } from "./git/DiffTab";
@@ -24,123 +24,118 @@ export function Git() {
   const current = repos.find((p) => p.id === selected) ?? repos[0];
   const brain = health.data?.repos ?? [];
 
-  return (
-    <div className="flex h-full" data-testid="git">
-      <div className="w-72 shrink-0 overflow-auto border-r" style={{ borderColor: "var(--line)" }}>
+  const list = (
+    <div className="p-2">
+      <Group>Project repos</Group>
+      {repos.length === 0 && (
+        <EmptyState title="No git repos yet">
+          Your projects that are git repos show here.
+        </EmptyState>
+      )}
+      {repos.map((p) => (
         <div
-          className="px-3 py-2 text-[12px] font-semibold uppercase"
-          style={{ color: "var(--muted)" }}
+          key={p.id}
+          data-testid="git-repo"
+          className="ui-row"
+          role="button"
+          tabIndex={0}
+          data-clickable="true"
+          data-selected={current?.id === p.id ? "true" : undefined}
+          onClick={() => setSelected(p.id)}
+          onKeyDown={(e) => e.key === "Enter" && setSelected(p.id)}
         >
-          Project repos
-        </div>
-        {repos.length === 0 && <EmptyState>No git repos among your projects yet.</EmptyState>}
-        {repos.map((p) => (
-          <div
-            key={p.id}
-            data-testid="git-repo"
-            onClick={() => setSelected(p.id)}
-            className="border-b px-3 py-2"
-            style={{
-              borderColor: "var(--line)",
-              background: current?.id === p.id ? "var(--panel)" : "transparent",
-            }}
-          >
+          <div className="min-w-0 flex-1">
             <div className="font-medium">{p.name}</div>
-            <div
-              className="flex flex-wrap items-center gap-1.5 text-[12px]"
-              style={{ color: "var(--muted)" }}
-            >
-              {p.detached ? "detached" : p.branch}
-              {p.changed > 0 && <Chip tone="warn">{p.changed} changed</Chip>}
-              {p.ahead > 0 && <Chip>{p.ahead} ahead</Chip>}
-              {p.behind > 0 && <Chip>{p.behind} behind</Chip>}
+            <div className="ui-badges ui-line-sub">
+              <span>{p.detached ? "Detached HEAD" : p.branch}</span>
+              {p.changed > 0 && <StatusBadge status="unsaved" label={`${p.changed} changed`} />}
+              {p.ahead > 0 && <StatusBadge status="ahead" label={`${p.ahead} to push`} />}
+              {p.behind > 0 && <StatusBadge status="behind" label={`${p.behind} to pull`} />}
             </div>
           </div>
-        ))}
-        {brain.length > 0 && (
-          <>
-            <div
-              className="px-3 py-2 text-[12px] font-semibold uppercase"
-              style={{ color: "var(--muted)" }}
-            >
-              Brain repos
-            </div>
-            {brain.map((r) => (
-              <div
-                key={r.folder}
-                className="border-b px-3 py-1.5"
-                style={{ borderColor: "var(--line)" }}
-                data-testid="brain-repo"
-              >
-                <div className="flex flex-wrap items-center gap-1.5">
+        </div>
+      ))}
+      {brain.length > 0 && (
+        <>
+          <Group>Brain repos</Group>
+          {brain.map((r) => (
+            <div key={r.folder} className="ui-row" data-testid="brain-repo">
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
                   <span>{r.folder === "." ? "Hub" : r.folder}</span>
                   {r.branch && (
-                    <span
-                      className="flex items-center gap-1 text-[12px]"
-                      style={{ color: "var(--muted)" }}
-                    >
-                      <GitBranch size={12} />
+                    <span className="ui-line-sub flex items-center gap-1">
+                      <GitBranch size={14} />
                       {r.branch}
                     </span>
                   )}
-                  {r.uncommitted > 0 && <Chip tone="warn">{r.uncommitted} changed</Chip>}
-                  {r.ahead > 0 && <Chip>{r.ahead} ahead</Chip>}
-                  {r.behind > 0 && <Chip>{r.behind} behind</Chip>}
+                </div>
+                <div className="ui-badges ui-line-sub">
+                  {r.uncommitted > 0 && (
+                    <StatusBadge status="unsaved" label={`${r.uncommitted} changed`} />
+                  )}
+                  {r.ahead > 0 && <StatusBadge status="ahead" label={`${r.ahead} to push`} />}
+                  {r.behind > 0 && <StatusBadge status="behind" label={`${r.behind} to pull`} />}
                   {r.uncommitted === 0 && r.ahead === 0 && r.behind === 0 && (
-                    <span
-                      className="text-[12px]"
-                      style={{ color: r.attention ? "var(--warn)" : "var(--muted)" }}
-                    >
-                      {r.state}
-                    </span>
+                    <span className={r.attention ? "ui-warn" : "ui-muted"}>{r.state}</span>
                   )}
                 </div>
               </div>
-            ))}
-          </>
-        )}
-      </div>
-      <div className="min-w-0 flex-1 overflow-auto p-4">
-        {!current && <EmptyState>Pick a repo on the left.</EmptyState>}
-        {current && (
-          <>
-            <div className="mb-3 flex items-center gap-2">
-              <h1 className="m-0 text-lg font-semibold">{current.name}</h1>
-              <Chip>{current.detached ? "detached HEAD" : current.branch}</Chip>
             </div>
-            <div className="mb-3 flex gap-1 border-b" style={{ borderColor: "var(--line)" }}>
-              {(
-                [
-                  ["branches", "Branches"],
-                  ["worktrees", "Worktrees"],
-                  ["changes", "Changes"],
-                  ["commit", "Commit"],
-                  ["prs", "PRs and CI"],
-                ] as Array<[Tab, string]>
-              ).map(([id, label]) => (
-                <button
-                  key={id}
-                  onClick={() => setTab(id)}
-                  data-testid={`git-tab-${id}`}
-                  className="border-0 bg-transparent px-3 py-1.5"
-                  style={{
-                    color: "var(--text)",
-                    borderBottom: tab === id ? "2px solid var(--accent)" : "2px solid transparent",
-                    fontWeight: tab === id ? 600 : 400,
-                  }}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
-            {tab === "branches" && <BranchesTab key={current.id} projectId={current.id} />}
-            {tab === "worktrees" && <WorktreesTab key={current.id} projectId={current.id} />}
-            {tab === "changes" && <DiffTab key={current.id} projectId={current.id} />}
-            {tab === "commit" && <CommitTab key={current.id} projectId={current.id} />}
-            {tab === "prs" && <PrsPanel key={current.id} projectId={current.id} />}
-          </>
-        )}
-      </div>
+          ))}
+        </>
+      )}
     </div>
+  );
+
+  const detail = (
+    <div className="grid content-start gap-4 p-4">
+      {!current && (
+        <EmptyState title="Pick a repo">
+          Choose one on the left to see its branches and changes.
+        </EmptyState>
+      )}
+      {current && (
+        <>
+          <div className="flex items-center gap-3">
+            <h2 className="m-0 text-[length:var(--text-lg)]">{current.name}</h2>
+            <span className="ui-muted flex items-center gap-1">
+              <GitBranch size={14} />
+              {current.detached ? "Detached HEAD" : current.branch}
+            </span>
+          </div>
+          <Tabs
+            label="Git sections"
+            value={tab}
+            onChange={setTab}
+            items={[
+              { id: "branches", label: "Branches", testId: "git-tab-branches" },
+              { id: "worktrees", label: "Worktrees", testId: "git-tab-worktrees" },
+              { id: "changes", label: "Changes", testId: "git-tab-changes" },
+              { id: "commit", label: "Commit", testId: "git-tab-commit" },
+              { id: "prs", label: "Pull requests and CI", testId: "git-tab-prs" },
+            ]}
+          />
+          {tab === "branches" && <BranchesTab key={current.id} projectId={current.id} />}
+          {tab === "worktrees" && <WorktreesTab key={current.id} projectId={current.id} />}
+          {tab === "changes" && <DiffTab key={current.id} projectId={current.id} />}
+          {tab === "commit" && <CommitTab key={current.id} projectId={current.id} />}
+          {tab === "prs" && <PrsPanel key={current.id} projectId={current.id} />}
+        </>
+      )}
+    </div>
+  );
+
+  return (
+    <Page title="Git" testId="git" fill>
+      <SplitPane
+        id="git"
+        defaultSize={340}
+        min={260}
+        minSecond={480}
+        first={list}
+        second={detail}
+      />
+    </Page>
   );
 }

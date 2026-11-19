@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { FolderScan, RootSuggestion } from "@shared/models";
 import { useUnsaved } from "../../components/LeaveGuard";
-import { Button, Chip, ErrorBanner } from "../../components/ui";
+import { Button, StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { PathField } from "./PathField";
@@ -14,17 +14,19 @@ const same = (a: string, b: string): boolean =>
 function Found({ scan }: { scan: FolderScan }) {
   return (
     <div data-testid="projects-found">
-      <Chip
-        tone={scan.found.length === scan.total ? "good" : scan.found.length === 0 ? "bad" : "warn"}
-      >
-        Found {scan.found.length} of {scan.total} projects
-      </Chip>
+      <StatusBadge
+        status="info"
+        tone={
+          scan.found.length === scan.total
+            ? "success"
+            : scan.found.length === 0
+              ? "danger"
+              : "attention"
+        }
+        label={`Found ${scan.found.length} of ${scan.total} projects`}
+      />
       {scan.missing.length > 0 && (
-        <div
-          className="mt-1 text-[12.5px]"
-          style={{ color: "var(--muted)" }}
-          data-testid="projects-missing"
-        >
+        <div className="mt-1 text-[length:var(--text-sm)] ui-muted" data-testid="projects-missing">
           Not found here: {scan.missing.join(", ")}.
         </div>
       )}
@@ -44,7 +46,6 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
   const [scan, setScan] = useState<FolderScan | null>(null);
   const [suggestion, setSuggestion] = useState<RootSuggestion | null>(null);
   const [ask, setAsk] = useState<{ path: string; scan: FolderScan } | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [justSaved, setJustSaved] = useState(false);
   const busy = useRef(false);
 
@@ -67,7 +68,6 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
 
   const save = async (path: string): Promise<void> => {
     busy.current = true;
-    setError(null);
     try {
       await office.invoke("setup.setProjectsRoot", { path });
       setTyped(null);
@@ -76,7 +76,7 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
       setJustSaved(true);
       onDone?.();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not use that folder", "projects-root");
     } finally {
       busy.current = false;
     }
@@ -92,7 +92,7 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
       if (found.total > 0 && found.found.length === 0) setAsk({ path, scan: found });
       else await save(path);
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not use that folder", "projects-root");
     }
   };
 
@@ -102,16 +102,11 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
 
   return (
     <div data-testid="projects-step">
-      {error && (
-        <div className="mb-3" data-testid="wizard-error">
-          <ErrorBanner message={error} />
-        </div>
-      )}
       <p className="mb-3 mt-0">
         Where do your project folders live? Each project in your workspace is a folder under this
         one.
         {total > 0 && (
-          <span style={{ color: "var(--muted)" }} data-testid="projects-total">
+          <span className="ui-muted" data-testid="projects-total">
             {" "}
             Your workspace lists {total} projects (from its config in the brain).
           </span>
@@ -119,8 +114,7 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
       </p>
       {better && (
         <div
-          className="mb-3 flex items-center gap-3 rounded border px-3 py-2"
-          style={{ borderColor: "var(--line)" }}
+          className="ui-surface mb-3 flex items-center gap-3 p-3"
           data-testid="projects-suggestion"
         >
           <span className="flex-1">
@@ -145,11 +139,7 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
         pickTitle="Projects folder"
       />
       {ask && (
-        <div
-          className="mb-2 rounded border px-3 py-2"
-          style={{ borderColor: "var(--warn)" }}
-          data-testid="projects-none-found"
-        >
+        <div className="ui-ask" data-testid="projects-none-found">
           <div className="mb-2">
             None of your {ask.scan.total} projects are in <b>{ask.path}</b>. Use it anyway?
           </div>
@@ -175,7 +165,7 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
       )}
       {dirty && !ask && (
         <div className="mb-2 flex items-center gap-2" data-testid="projects-unsaved">
-          <Chip tone="warn">Not saved yet</Chip>
+          <StatusBadge status="unsaved" />
           <Button
             variant="primary"
             onClick={() => void commit(value)}
@@ -191,7 +181,7 @@ export function ProjectsStep({ onDone }: { onDone?: () => void }) {
       )}
       {!dirty && !ask && saved && scan && (
         <div className="mb-2 flex items-center gap-2" data-testid="projects-saved">
-          {justSaved && <Chip tone="good">Saved</Chip>}
+          {justSaved && <StatusBadge status="saved" />}
           <Found scan={scan} />
         </div>
       )}

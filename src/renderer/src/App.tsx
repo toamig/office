@@ -6,11 +6,10 @@ import { ShortcutsSheet } from "./components/ShortcutsSheet";
 import { ThemeApplier } from "./components/ThemeApplier";
 import { ViewBoundary } from "./components/ViewBoundary";
 import { TopBar } from "./components/TopBar";
-import { ErrorBanner } from "./components/ui";
 import { useQuery } from "./lib/hooks";
 import { prefetchStart } from "./lib/prefetch";
 import { LeaveGuard } from "./components/LeaveGuard";
-import { useSidebarCollapsed } from "./lib/sidebar";
+import { SIDEBAR_COLLAPSED, useSidebarCollapsed, useSidebarWidth } from "./lib/sidebar";
 import { useGlobalShortcuts } from "./lib/shortcuts";
 import { office } from "./lib/ipc";
 import { useUi, type ViewId } from "./stores/ui";
@@ -24,7 +23,7 @@ import { Inbox } from "./views/Inbox";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
-import { NotificationStack } from "./ui";
+import { Banner, NotificationStack } from "./ui";
 import { Welcome } from "./views/welcome/Welcome";
 
 /** The views that are drawn fresh each time; the Agents view is kept alive by App and never comes through here. */
@@ -67,7 +66,9 @@ function CurrentView({ configured }: { configured: boolean }) {
 export default function App() {
   const navigate = useUi((s) => s.navigate);
   const view = useUi((s) => s.view);
-  const [, toggleSidebar] = useSidebarCollapsed();
+  const [collapsed, toggleSidebar] = useSidebarCollapsed();
+  const { width: sidebarWidth } = useSidebarWidth();
+  const [resizing, setResizing] = useState<number | null>(null);
   useGlobalShortcuts(toggleSidebar);
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   // The Agents view is built the first time it is opened and then kept, hidden when the owner leaves it.
@@ -110,12 +111,21 @@ export default function App() {
   return (
     <div className="app">
       <TopBar />
-      <div className="app-body">
-        <Sidebar />
+      <div
+        className="app-body"
+        style={
+          {
+            "--sidebar-w": `${collapsed ? SIDEBAR_COLLAPSED : (resizing ?? sidebarWidth)}px`,
+          } as React.CSSProperties
+        }
+      >
+        <Sidebar width={resizing ?? sidebarWidth} onResizing={setResizing} />
         <main className="app-main">
           {workspace.data?.error && (
-            <div className="p-3" data-testid="workspace-error">
-              <ErrorBanner message={workspace.data.error} />
+            <div className="p-4 pb-0">
+              <Banner tone="danger" testId="workspace-error">
+                {workspace.data.error}
+              </Banner>
             </div>
           )}
           {agentsOpened && (

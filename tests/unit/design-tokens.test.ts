@@ -1,4 +1,4 @@
-import { existsSync, readdirSync, readFileSync, statSync, writeFileSync } from "node:fs";
+import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { PALETTES, type Palette, type ThemeName } from "../../src/shared/theme";
@@ -79,10 +79,9 @@ describe("the contrast of the text tokens", () => {
   }
 });
 
-// ---- the token audit for views ----
+// ---- the audit of views ----
 
 const renderer = resolve(__dirname, "../../src/renderer/src");
-const BASELINE = resolve(__dirname, "token-baseline.json");
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {
@@ -91,45 +90,55 @@ function files(dir: string): string[] {
   });
 }
 
-/** Font sizes and spacing that are a number instead of a token: `text-[13px]`, `fontSize: 13`, `p-[7px]`. */
-const NOT_A_TOKEN = [
-  /\btext-\[\d+(\.\d+)?px\]/g,
-  /\bfontSize:\s*\d+/g,
-  /\b(?:p|px|py|m|mx|my|gap)-\[\d+(\.\d+)?px\]/g,
-];
+const rel = (f: string): string => relative(renderer, f).replaceAll("\\", "/");
+/** Every view and shared component: all of the renderer's code except the design system itself and its Gallery. */
+const checked = files(renderer).filter(
+  (f) => /\.tsx$/.test(f) && !f.startsWith(join(renderer, "ui")) && !f.endsWith("Gallery.tsx"),
+);
 
-function violations(file: string): number {
-  const text = readFileSync(file, "utf8");
-  return NOT_A_TOKEN.reduce((n, re) => n + (text.match(re)?.length ?? 0), 0);
+/** The places where a file breaks a rule, as "file:line", so a failure names them. */
+function hits(re: RegExp, list = checked): string[] {
+  const found: string[] = [];
+  for (const f of list) {
+    readFileSync(f, "utf8")
+      .split("\n")
+      .forEach((line, i) => {
+        if (re.test(line)) found.push(`${rel(f)}:${i + 1}`);
+      });
+  }
+  return found;
 }
 
-describe("the token audit for views", () => {
-  const checked = files(renderer).filter(
-    (f) => /\.tsx$/.test(f) && !f.includes(`${join(renderer, "ui")}`),
-  );
+describe("the audit of views (plan DesignSystem, M10.3)", () => {
+  it("never lets a view use a font size or a spacing that is not a token", () => {
+    expect(
+      hits(
+        /\btext-\[\d+(\.\d+)?px\]|\bfontSize:\s*\d+|\b(?:p|px|py|m|mx|my|gap)-\[\d+(\.\d+)?px\]/,
+      ),
+    ).toEqual([]);
+  });
 
-  it("never lets a view or a shared component use a size or spacing that is not a token, beyond the baseline that M10.3 drives to zero", () => {
-    const now: Record<string, number> = {};
-    for (const f of checked) {
-      const n = violations(f);
-      if (n > 0) now[relative(renderer, f).replaceAll("\\", "/")] = n;
-    }
-    if (process.env["UPDATE_TOKEN_BASELINE"] === "1") {
-      writeFileSync(BASELINE, `${JSON.stringify(now, null, 2)}\n`);
-      return;
-    }
-    const base = existsSync(BASELINE)
-      ? (JSON.parse(readFileSync(BASELINE, "utf8")) as Record<string, number>)
-      : {};
-    const worse = Object.entries(now).filter(([file, n]) => n > (base[file] ?? 0));
-    expect(worse.map(([file, n]) => `${file}: ${n} (baseline ${base[file] ?? 0})`)).toEqual([]);
+  it("never styles an element with a colour, background, border or font of its own", () => {
+    expect(hits(/style=\{\{[^}]*\b(color|background|border\w*|font\w*)\b/)).toEqual([]);
+  });
+
+  it("has no capitals as decoration, and no meta strings joined with middle dots", () => {
+    expect(hits(/\buppercase\b|\btracking-/)).toEqual([]);
+    expect(hits(/\u00b7|&middot;/)).toEqual([]);
+  });
+
+  it("draws no inline error bar: an action result is a notification", () => {
+    // The facade in components/ui.tsx turns a message into a notification; a view must not draw its own bar.
+    expect(
+      hits(
+        /<ErrorBanner\b/,
+        checked.filter((f) => !f.endsWith("components/ui.tsx")),
+      ),
+    ).toEqual([]);
   });
 
   it("keeps the design system components themselves free of one-off sizes", () => {
     const own = files(join(renderer, "ui")).filter((f) => /\.tsx$/.test(f));
-    const found = own.filter((f) =>
-      /\bfontSize:\s*\d+|\btext-\[\d+(\.\d+)?px\]/.test(readFileSync(f, "utf8")),
-    );
-    expect(found.map((f) => relative(renderer, f))).toEqual([]);
+    expect(hits(/\bfontSize:\s*\d+|\btext-\[\d+(\.\d+)?px\]/, own)).toEqual([]);
   });
 });

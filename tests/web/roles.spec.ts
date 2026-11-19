@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, pick } from "./helpers";
+import { launch, pick, toasts } from "./helpers";
 
 test("editing a role round-trips through the workspace file", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
@@ -14,7 +14,7 @@ test("editing a role round-trips through the workspace file", async () => {
   await pick(win, "role-effort", "high");
   await win.getByTestId("role-instructions").fill("Build carefully.");
   await win.getByTestId("role-save").click();
-  await expect(win.getByText("Saved to the workspace config")).toBeVisible();
+  await expect(toasts(win).filter({ hasText: "Role saved" })).toBeVisible();
 
   const file = JSON.parse(readFileSync(join(world.hub, world.workspaceConfigPath), "utf8"));
   expect(file.roles.builder).toMatchObject({
@@ -41,6 +41,6 @@ test("editing a role round-trips through the workspace file", async () => {
   // The planner is used by the feature pipeline, so deleting it is refused with a clear reason.
   await win.getByTestId("role-row").filter({ hasText: "planner" }).click();
   await win.getByTestId("role-remove").click();
-  await expect(win.getByTestId("role-error")).toContainText("used by the");
+  await expect(toasts(win).filter({ hasText: "used by the" })).toBeVisible();
   await app.close();
 });

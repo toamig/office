@@ -37,14 +37,16 @@ body {
   flex-direction: column;
 }
 .app-body {
-  display: flex;
+  display: grid;
   min-height: 0;
   flex: 1;
+  grid-template-columns: var(--sidebar-w, 240px) minmax(0, 1fr);
 }
+/* The content is a size container: views lay themselves out by its width, not the window's. */
 .app-main {
   min-width: 0;
-  flex: 1;
   overflow: auto;
+  container: main / inline-size;
 }
 
 /* The top bar is the window's drag region; its controls opt out. */
@@ -109,14 +111,29 @@ body {
 }
 
 .sidebar {
+  position: relative;
   display: flex;
-  flex: none;
+  min-width: 0;
   flex-direction: column;
   gap: 2px;
   padding: 8px;
   background: var(--rail);
   border-right: 1px solid var(--line);
-  transition: width var(--ease);
+}
+.sidebar-resizer {
+  position: absolute;
+  top: 0;
+  right: -3px;
+  bottom: 0;
+  z-index: 5;
+  width: 6px;
+  cursor: col-resize;
+  touch-action: none;
+}
+.sidebar-resizer:hover,
+.sidebar-resizer:focus-visible {
+  background: color-mix(in srgb, var(--accent) 45%, transparent);
+  outline: none;
 }
 .sidebar-item {
   position: relative;

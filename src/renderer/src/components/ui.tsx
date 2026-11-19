@@ -1,28 +1,27 @@
-import type { ButtonHTMLAttributes, ReactNode } from "react";
+/**
+ * The old shared pieces, now drawn by the design system (src/renderer/src/ui). New code imports from "../ui"
+ * directly; these stay so that a view can be moved over one at a time.
+ */
+import { useEffect, type ComponentProps, type ReactNode } from "react";
+import { Banner, Button as UiButton, Card, notifyError } from "../ui";
 
 export function Button({
-  variant = "default",
-  className = "",
+  variant = "secondary",
   ...props
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: "default" | "primary" | "ghost" }) {
-  const base =
-    "inline-flex items-center gap-1.5 rounded border px-2.5 py-1 text-[13px] disabled:opacity-50";
-  const styles = {
-    default: "border-[var(--line)] bg-[var(--panel)] hover:bg-[var(--hover)]",
-    primary: "border-transparent bg-[var(--accent)] text-[var(--on-accent)] hover:opacity-90",
-    ghost: "border-transparent hover:bg-[var(--hover)]",
-  }[variant];
-  // An icon-only button gets its label as a tooltip too.
+}: Omit<ComponentProps<typeof UiButton>, "variant"> & {
+  variant?: "default" | "secondary" | "primary" | "ghost" | "danger";
+}) {
   const tip = props.title ?? props["aria-label"];
   return (
-    <button
-      className={`${base} ${styles} ${className}`}
+    <UiButton
+      variant={variant === "default" ? "secondary" : variant}
       {...props}
       {...(tip ? { title: tip } : {})}
     />
   );
 }
 
+/** A small tinted label. A status should use StatusBadge; this is for a plain label that has a tone. */
 export function Chip({
   children,
   tone = "neutral",
@@ -30,18 +29,10 @@ export function Chip({
   children: ReactNode;
   tone?: "neutral" | "good" | "warn" | "bad";
 }) {
-  const color = {
-    neutral: "var(--muted)",
-    good: "var(--good)",
-    warn: "var(--warn)",
-    bad: "var(--bad)",
-  }[tone];
+  const t = { neutral: "neutral", good: "success", warn: "attention", bad: "danger" }[tone];
   return (
-    <span
-      className="inline-flex items-center rounded-full border px-2 py-px text-[11.5px]"
-      style={{ color, borderColor: color }}
-    >
-      {children}
+    <span className="ui-badge" data-tone={t}>
+      <span className="truncate">{children}</span>
     </span>
   );
 }
@@ -56,40 +47,28 @@ export function Panel({
   children: ReactNode;
 }) {
   return (
-    <section
-      className="rounded border"
-      style={{ background: "var(--panel)", borderColor: "var(--line)" }}
-    >
-      {title && (
-        <header
-          className="flex items-center justify-between border-b px-3 py-2"
-          style={{ borderColor: "var(--line)" }}
-        >
-          <h2 className="m-0 text-[13px] font-semibold">{title}</h2>
-          {action}
-        </header>
-      )}
-      <div className="p-3">{children}</div>
-    </section>
+    <Card {...(title ? { title } : {})} {...(action ? { action } : {})}>
+      {children}
+    </Card>
   );
 }
 
 export function EmptyState({ children }: { children: ReactNode }) {
-  return (
-    <p className="m-0 py-4 text-center" style={{ color: "var(--muted)" }}>
-      {children}
-    </p>
-  );
+  return <p className="ui-muted m-0 py-4">{children}</p>;
 }
 
+/**
+ * An error from an action. It is shown as a notification, not as a bar in the page, so the layout never moves:
+ * this draws nothing and raises one notification when the message appears.
+ */
 export function ErrorBanner({ message }: { message: string }) {
-  return (
-    <div
-      role="alert"
-      className="rounded border px-3 py-2"
-      style={{ borderColor: "var(--bad)", color: "var(--bad)" }}
-    >
-      {message}
-    </div>
-  );
+  useEffect(() => {
+    if (message) notifyError(message, "That did not work", message);
+  }, [message]);
+  return null;
+}
+
+/** A lasting problem that stops the view from doing its job. */
+export function ProblemBanner({ children }: { children: ReactNode }) {
+  return <Banner tone="danger">{children}</Banner>;
 }

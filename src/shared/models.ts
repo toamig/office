@@ -887,6 +887,8 @@ export const AppSettings = z.object({
   density: z.enum(["compact", "comfortable"]),
   zoom: z.number(),
   sidebarCollapsed: z.boolean(),
+  sidebarWidth: z.number(),
+  panes: z.record(z.string(), z.number()),
   sessionMode: z.enum(["chat", "terminal"]),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
   editorCommand: z.string(),
@@ -903,6 +905,9 @@ export const AppSettingsPatch = z.object({
   density: z.enum(["compact", "comfortable"]).optional(),
   zoom: z.number().int().min(80).max(150).optional(),
   sidebarCollapsed: z.boolean().optional(),
+  sidebarWidth: z.number().int().min(200).max(320).optional(),
+  /** Divider positions to remember, by pane id; they are merged into the saved ones. */
+  panes: z.record(z.string(), z.number()).optional(),
   sessionMode: z.enum(["chat", "terminal"]).optional(),
   quietHours: z
     .object({

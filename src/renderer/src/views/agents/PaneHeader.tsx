@@ -1,7 +1,7 @@
 import { GitBranch, MessageSquare, Square } from "lucide-react";
 import type { SessionRow } from "@shared/models";
 import { office } from "../../lib/ipc";
-import { Select } from "../../components/Select";
+import { Dropdown as Select } from "../../ui";
 import { StatusChip } from "../../components/StatusChip";
 
 /**

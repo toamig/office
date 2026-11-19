@@ -1,8 +1,7 @@
 import { useState } from "react";
 import type { InventoryItem } from "@shared/models";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
 import { useQuery } from "../../lib/hooks";
-import { Select } from "../../components/Select";
+import { Button, Card, Dropdown, EmptyState, Group, Skeleton } from "../../ui";
 
 const kinds: Array<[InventoryItem["kind"], string]> = [
   ["model", "Models"],
@@ -10,8 +9,10 @@ const kinds: Array<[InventoryItem["kind"], string]> = [
   ["plugin", "Plugins"],
   ["mcp", "MCP servers"],
   ["hook", "Hooks"],
-  ["notify", "Notify"],
+  ["notify", "Notify command"],
 ];
+
+const SOURCE: Record<string, string> = { user: "Your settings", project: "This project" };
 
 /** A read-only list of what each agent tool has, and where it is defined (user or project). */
 export function InventoryPanel() {
@@ -19,63 +20,62 @@ export function InventoryPanel() {
   const [projectId, setProjectId] = useState("");
   const inventory = useQuery("setup.inventory", projectId ? { projectId } : {});
   return (
-    <Panel
+    <Card
       title="Inventory"
+      testId="panel-inventory"
       action={
-        <Select
+        <Dropdown
           value={projectId}
           onChange={(e) => setProjectId(e.target.value)}
           aria-label="Inventory project"
-          className="rounded border px-1 py-0.5"
-          style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
         >
-          <option value="">User level only</option>
+          <option value="">Your settings only</option>
           {(projects.data ?? []).map((p) => (
             <option key={p.id} value={p.id}>
-              + {p.name}
+              Also {p.name}
             </option>
           ))}
-        </Select>
+        </Dropdown>
       }
     >
-      {inventory.error && <ErrorBanner message={inventory.error} />}
-      {inventory.loading && <EmptyState>Reading tool settings...</EmptyState>}
+      {inventory.error && <p className="ui-bad">{inventory.error}</p>}
+      {inventory.loading && !inventory.data && <Skeleton width={24} />}
       <div data-testid="inventory">
         {inventory.data?.map((inv) => (
-          <div key={inv.provider} className="mb-4" data-testid="inventory-provider">
-            <h3 className="m-0 mb-1 text-[13px] font-semibold">{inv.label}</h3>
-            {inv.items.length === 0 && <EmptyState>Nothing found.</EmptyState>}
+          <section key={inv.provider} data-testid="inventory-provider">
+            <Group>{inv.label}</Group>
+            {inv.items.length === 0 && (
+              <EmptyState title="Nothing found">
+                This tool has no settings of these kinds.
+              </EmptyState>
+            )}
             {kinds.map(([kind, label]) => {
               const items = inv.items.filter((i) => i.kind === kind);
               if (items.length === 0) return null;
               return (
                 <div key={kind} className="mb-2">
-                  <div className="text-[12px] uppercase" style={{ color: "var(--muted)" }}>
+                  <div className="ui-line-sub">
                     {label} ({items.length})
                   </div>
                   {items.map((i) => (
                     <div
                       key={`${i.name}-${i.detail ?? ""}-${i.source}`}
-                      className="flex items-start gap-2 py-0.5"
+                      className="flex items-start gap-2 py-1"
                     >
-                      <Chip>{i.source}</Chip>
+                      <span className="ui-muted w-28 shrink-0">{SOURCE[i.source] ?? i.source}</span>
                       <span className="font-medium">{i.name}</span>
-                      {i.detail && (
-                        <span className="break-all" style={{ color: "var(--muted)" }}>
-                          {i.detail}
-                        </span>
-                      )}
+                      {i.detail && <span className="break-all ui-muted">{i.detail}</span>}
                     </div>
                   ))}
                 </div>
               );
             })}
-          </div>
+          </section>
         ))}
       </div>
       <Button variant="ghost" onClick={inventory.reload}>
         Refresh
       </Button>
-    </Panel>
+    </Card>
   );
 }

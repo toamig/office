@@ -6,14 +6,34 @@ export function Card({
   action,
   children,
   testId,
+  onOpen,
 }: {
   title?: string;
   action?: ReactNode;
   children: ReactNode;
   testId?: string;
+  /** Makes the whole card a button that opens what it shows. */
+  onOpen?: () => void;
 }) {
   return (
-    <section className="ui-card" data-testid={testId}>
+    <section
+      className="ui-card"
+      data-testid={testId}
+      data-clickable={onOpen ? "true" : undefined}
+      {...(onOpen
+        ? {
+            role: "button",
+            tabIndex: 0,
+            onClick: onOpen,
+            onKeyDown: (e: React.KeyboardEvent) => {
+              if (e.target === e.currentTarget && (e.key === "Enter" || e.key === " ")) {
+                e.preventDefault();
+                onOpen();
+              }
+            },
+          }
+        : {})}
+    >
       {title && (
         <header className="ui-card-head">
           <h2 className="m-0 text-[length:var(--text-md)]">{title}</h2>

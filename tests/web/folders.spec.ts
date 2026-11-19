@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { cpSync, mkdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch } from "./helpers";
+import { launch, syncAllReport } from "./helpers";
 
 test("the projects folder step says where the list comes from, suggests the folder, asks before an empty one, and reports what it found", async () => {
   const { app, world, base } = await launch({ world: "unconfigured", fakeTools: true });
@@ -94,15 +94,14 @@ test("change the projects folder in Setup, restart, and Sync all uses the new fo
   // After a restart the new folder is still the one, and Sync all names what is missing.
   const second = await launch({ base, fakeTools: true });
   const page = await second.app.firstWindow();
-  await page.getByTestId("sync-all").click();
-  const report = page.getByTestId("sync-report");
+  const report = await syncAllReport(page);
   await expect(report).toBeVisible();
   const projects = report.getByTestId("sync-group-projects");
   await expect(projects.getByTestId("sync-row").filter({ hasText: "Beta" })).toContainText(
-    "folder missing",
+    /folder missing/i,
   );
   await expect(projects.getByTestId("sync-row").filter({ hasText: "Alpha" })).not.toContainText(
-    "folder missing",
+    /folder missing/i,
   );
   // The brain's own repos are their own group, and the hub has a name.
   await expect(report.getByTestId("sync-group-brain-notes")).toContainText("Brain hub");
@@ -128,16 +127,16 @@ test("a project with a missing folder offers Change projects folder and Locate t
     "None of your project folders were found",
   );
   await expect(win.getByTestId("project-card")).toHaveCount(2);
-  await expect(win.getByTestId("project-card").first()).toContainText("folder missing");
+  await expect(win.getByTestId("project-card").first()).toContainText(/folder missing/i);
 
   // Locate this folder: the dialog's answer is scripted; the card finds its folder.
   await app.control("folder", { path: join(world.projectsRoot, "Alpha") });
   const alphaCard = win.getByTestId("project-card").filter({ hasText: "Alpha" });
   await alphaCard.getByTestId("locate-project").click();
-  await expect(alphaCard).not.toContainText("folder missing");
+  await expect(alphaCard).not.toContainText(/folder missing/i);
   await expect(win.getByTestId("all-folders-missing")).toHaveCount(0);
   await expect(win.getByTestId("project-card").filter({ hasText: "Beta" })).toContainText(
-    "folder missing",
+    /folder missing/i,
   );
 
   // Change projects folder goes to Setup.

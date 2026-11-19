@@ -1,9 +1,9 @@
 import { GitCommitHorizontal, Upload } from "lucide-react";
 import { useState } from "react";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../../components/ui";
+import { Button, Card, EmptyState, Textarea, notify, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { Select } from "../../components/Select";
+import { Dropdown as Select } from "../../ui";
 import { VirtualList } from "../../components/VirtualList";
 
 /** Stage the files you choose, write a message (no Co-Authored-By trailers), commit, and push. */
@@ -13,8 +13,6 @@ export function CommitTab({ projectId }: { projectId: string }) {
   const status = useQuery("git.status", { projectId, ...(dir ? { dir } : {}) }, ["project.status"]);
   const [skipped, setSkipped] = useState<string[]>([]);
   const [message, setMessage] = useState("");
-  const [note, setNote] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   const files = status.data?.files ?? [];
@@ -24,8 +22,6 @@ export function CommitTab({ projectId }: { projectId: string }) {
 
   const commit = async (push: boolean): Promise<void> => {
     setBusy(true);
-    setError(null);
-    setNote(null);
     try {
       const result = await office.invoke("commit.run", {
         projectId,
@@ -34,26 +30,42 @@ export function CommitTab({ projectId }: { projectId: string }) {
         message,
         push,
       });
-      setNote(
-        push
-          ? result.pushed
-            ? `Committed ${result.hash} and pushed.`
-            : `Committed ${result.hash}, but the push failed: ${result.pushError ?? "unknown error"}`
-          : `Committed ${result.hash}.`,
-      );
+      if (push && !result.pushed)
+        notify({
+          tone: "attention",
+          title: `Committed ${result.hash}, but the push failed`,
+          detail: result.pushError ?? "Unknown error",
+          subject: "commit",
+        });
+      else
+        notify({
+          tone: "success",
+          title: push ? `Committed ${result.hash} and pushed` : `Committed ${result.hash}`,
+          subject: "commit",
+        });
       setMessage("");
       setSkipped([]);
       status.reload();
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "The commit did not go through", "commit");
     } finally {
       setBusy(false);
     }
   };
   const push = async (): Promise<void> => {
-    setError(null);
-    const result = await office.invoke("git.push", { projectId, ...(dir ? { dir } : {}) });
-    setNote(result.pushed ? "Pushed." : `Push failed: ${result.error ?? "unknown error"}`);
+    try {
+      const result = await office.invoke("git.push", { projectId, ...(dir ? { dir } : {}) });
+      if (result.pushed) notify({ tone: "success", title: "Pushed", subject: "commit" });
+      else
+        notify({
+          tone: "danger",
+          title: "The push failed",
+          detail: result.error ?? "Unknown error",
+          subject: "commit",
+        });
+    } catch (err) {
+      notifyError(err, "The push did not go through", "commit");
+    }
     status.reload();
   };
 
@@ -64,8 +76,7 @@ export function CommitTab({ projectId }: { projectId: string }) {
         onChange={(e) => setDir(e.target.value)}
         aria-label="Commit in"
         data-testid="commit-dir"
-        className="w-fit rounded border px-1 py-0.5"
-        style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
+        className="w-fit"
       >
         <option value="">Project folder</option>
         {(worktrees.data ?? [])
@@ -76,28 +87,19 @@ export function CommitTab({ projectId }: { projectId: string }) {
             </option>
           ))}
       </Select>
-      {(error || status.error) && (
-        <div data-testid="commit-error">
-          <ErrorBanner message={error ?? status.error ?? ""} />
-        </div>
-      )}
-      {note && (
-        <div data-testid="commit-note">
-          <Chip tone={note.includes("failed") ? "warn" : "good"}>{note}</Chip>
-        </div>
-      )}
-      <Panel
+      {status.error && <p className="ui-bad">{status.error}</p>}
+      <Card
         title={`Changed files (${chosen.length} of ${files.length} chosen)`}
         action={
           (status.data?.ahead ?? 0) > 0 ? (
             <Button onClick={() => void push()} data-testid="push-only">
-              <Upload size={13} /> Push {status.data?.ahead} commit(s)
+              <Upload /> Push {status.data?.ahead} {status.data?.ahead === 1 ? "commit" : "commits"}
             </Button>
           ) : undefined
         }
       >
         {files.length === 0 && (
-          <EmptyState>Nothing to commit. The working tree is clean.</EmptyState>
+          <EmptyState title="Nothing to commit">The working tree is clean.</EmptyState>
         )}
         <VirtualList
           testId="commit-files"
@@ -111,7 +113,7 @@ export function CommitTab({ projectId }: { projectId: string }) {
                 checked={!skipped.includes(f.path)}
                 onChange={() => toggle(f.path)}
               />
-              <span className="font-mono text-[12px]" style={{ color: "var(--muted)" }}>
+              <span className="font-mono text-[length:var(--text-xs)] ui-muted">
                 {f.index}
                 {f.worktree}
               </span>
@@ -119,16 +121,15 @@ export function CommitTab({ projectId }: { projectId: string }) {
             </label>
           )}
         />
-      </Panel>
-      <textarea
+      </Card>
+      <Textarea
+        label="Commit message"
+        hideLabel
         value={message}
         onChange={(e) => setMessage(e.target.value)}
         rows={4}
         placeholder="Commit message. Commit messages never carry a Co-Authored-By trailer."
-        aria-label="Commit message"
         data-testid="commit-message"
-        className="rounded border px-2 py-1"
-        style={{ borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" }}
       />
       <div className="flex gap-2">
         <Button
@@ -137,7 +138,7 @@ export function CommitTab({ projectId }: { projectId: string }) {
           onClick={() => void commit(false)}
           data-testid="commit-only"
         >
-          <GitCommitHorizontal size={13} /> Commit
+          <GitCommitHorizontal /> Commit
         </Button>
         <Button
           disabled={busy || chosen.length === 0 || !message.trim()}

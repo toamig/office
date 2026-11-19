@@ -29,6 +29,10 @@ export const MachineSettings = z.object({
   /** Interface zoom in percent (80 to 150), set with Ctrl+= and Ctrl+-. */
   zoom: z.number().int().min(80).max(150).default(100),
   sidebarCollapsed: z.boolean().default(false),
+  /** The sidebar's width in pixels when it is open (200 to 320). */
+  sidebarWidth: z.number().int().min(200).max(320).default(240),
+  /** Where the owner put each split-pane divider, by pane id, in pixels of the first pane. */
+  panes: z.record(z.string(), z.number()).default({}),
   /** How a new agent session opens: as a chat or in a terminal. */
   sessionMode: z.enum(["chat", "terminal"]).default("chat"),
   modules: z.record(z.string(), z.boolean()).default({}),

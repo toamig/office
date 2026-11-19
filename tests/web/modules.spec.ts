@@ -18,13 +18,13 @@ test("the sample channel module is off until enabled with a warning, then receiv
 
   const row = win.getByTestId("module-row").filter({ hasText: "sample-channel" });
   await expect(row).toContainText("channel");
-  await expect(row).not.toContainText("running");
+  await expect(row).not.toContainText(/running/i);
   await row.getByTestId("module-enable").click();
   await expect(win.getByTestId("module-warning")).toContainText(
     "full access to your files and accounts",
   );
   await win.getByTestId("module-confirm").click();
-  await expect(row).toContainText("running");
+  await expect(row).toContainText(/running/i);
 
   // An urgent notification (an agent that needs the owner) reaches the module's channel.
   const session = await win.evaluate(() =>

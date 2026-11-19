@@ -1,8 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { createPortal } from "react-dom";
 import type { SessionRow, ToolStatus } from "@shared/models";
-import { Button } from "../../components/ui";
-import { useEscape } from "../../lib/escape";
+import { Button, Dialog } from "../../ui";
 import { office } from "../../lib/ipc";
 import { firstUrl } from "../../lib/output";
 import { TerminalView } from "../agents/TerminalView";
@@ -43,7 +41,6 @@ export function ToolRunDialog({ run, onClose }: { run: ToolRun; onClose: () => v
     void office.invoke("sessions.archive", { id: session.id }).catch(() => undefined);
     onClose();
   };
-  useEscape(close, true);
 
   // While the program runs, watch its output for the sign-in address.
   useEffect(() => {
@@ -99,51 +96,15 @@ export function ToolRunDialog({ run, onClose }: { run: ToolRun; onClose: () => v
             ? "A browser window opened to sign in. Finish there, then come back."
             : "Running the command. This can take a minute.";
 
-  return createPortal(
-    <div className="dialog-backdrop" data-testid="tool-dialog" data-phase={phase}>
-      <div className="dialog w-[640px] max-w-[92vw]" role="dialog" aria-label={session.title ?? ""}>
-        <header className="dialog-header">
-          <span className="font-semibold">{session.title ?? toolLabel}</span>
-        </header>
-        <div className="p-4">
-          <p className="m-0" data-testid="tool-dialog-lead">
-            {lead}
-          </p>
-          {kind === "login" && url && phase === "running" && (
-            <div className="mt-3">
-              <Button
-                onClick={() => window.open(url, "_blank", "noopener")}
-                data-testid="tool-dialog-open-url"
-              >
-                Open the sign-in page again
-              </Button>
-            </div>
-          )}
-          <div className="mt-3">
-            <Button
-              variant="ghost"
-              onClick={() => setDetails((v) => !v)}
-              aria-expanded={details}
-              data-testid="tool-dialog-details"
-            >
-              {details ? "Hide details" : "Details"}
-            </Button>
-            {details && (
-              <div className="mt-2" data-testid="tool-terminal">
-                <div className="mb-1 text-[12px]" style={{ color: "var(--muted)" }}>
-                  What the program printed. If it asks for a code, click here and type it.
-                </div>
-                <div className="rounded border" style={{ borderColor: "var(--line)", height: 240 }}>
-                  <TerminalView id={session.id} />
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-        <footer
-          className="flex justify-end gap-2 border-t px-4 py-2.5"
-          style={{ borderColor: "var(--line)" }}
-        >
+  return (
+    <Dialog
+      title={session.title ?? toolLabel}
+      testId="tool-dialog"
+      attrs={{ "data-phase": phase }}
+      wide
+      onClose={close}
+      footer={
+        <>
           {phase === "failed" && (
             <Button
               variant="primary"
@@ -159,9 +120,42 @@ export function ToolRunDialog({ run, onClose }: { run: ToolRun; onClose: () => v
           <Button onClick={close} data-testid="tool-dialog-close">
             {phase === "done" ? "Close" : phase === "running" ? "Cancel" : "Close"}
           </Button>
-        </footer>
+        </>
+      }
+    >
+      <p className="m-0" data-testid="tool-dialog-lead">
+        {lead}
+      </p>
+      {kind === "login" && url && phase === "running" && (
+        <div className="mt-3">
+          <Button
+            onClick={() => window.open(url, "_blank", "noopener")}
+            data-testid="tool-dialog-open-url"
+          >
+            Open the sign-in page again
+          </Button>
+        </div>
+      )}
+      <div className="mt-3">
+        <Button
+          variant="ghost"
+          onClick={() => setDetails((v) => !v)}
+          aria-expanded={details}
+          data-testid="tool-dialog-details"
+        >
+          {details ? "Hide details" : "Details"}
+        </Button>
+        {details && (
+          <div className="mt-2" data-testid="tool-terminal">
+            <div className="ui-helper mb-1">
+              What the program printed. If it asks for a code, click here and type it.
+            </div>
+            <div className="ui-surface" style={{ height: 240 }}>
+              <TerminalView id={session.id} />
+            </div>
+          </div>
+        )}
       </div>
-    </div>,
-    document.body,
+    </Dialog>
   );
 }

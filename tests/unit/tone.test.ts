@@ -1,3 +1,5 @@
+import { readdirSync, readFileSync, statSync } from "node:fs";
+import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { SessionStatus, SyncAction, TaskStatus } from "../../src/shared/models";
 import { iconOf, labelOf, STATUS, toneOf } from "../../src/shared/tone";
@@ -8,9 +10,48 @@ describe("toneOf", () => {
       ...SessionStatus.options,
       ...TaskStatus.options,
       ...SyncAction.options,
+      // Steps of the project wizard, stages and builders of a task, headless runs, and the update check.
       "pending",
+      "running",
+      "skipped",
+      "approved",
+      "kept",
+      "ok",
+      "waiting",
+      "installed",
+      "not-installed",
+      "logged-in",
+      "not-logged-in",
+      "missing",
+      "update-available",
+      "unsaved",
+      "saved",
+      "folder-missing",
+      "not-a-repo",
+      "ahead",
+      "behind",
+      "archived",
+      "passed",
+      "in-sync",
+      "info",
     ];
     for (const v of values) expect(STATUS[v], `${v} has no tone`).toBeDefined();
+  });
+
+  it("has every status a view names as a literal", () => {
+    const root = resolve(__dirname, "../../src/renderer/src");
+    const walk = (d: string): string[] =>
+      readdirSync(d).flatMap((n) => {
+        const p = join(d, n);
+        return statSync(p).isDirectory() ? walk(p) : [p];
+      });
+    const missing: string[] = [];
+    for (const file of walk(root).filter((p) => p.endsWith(".tsx"))) {
+      const text = readFileSync(file, "utf8");
+      for (const m of text.matchAll(/<StatusBadge[^>]*?\bstatus="([a-z-]+)"/gs))
+        if (!STATUS[m[1] as string]) missing.push(`${file}: ${m[1]}`);
+    }
+    expect(missing).toEqual([]);
   });
 
   it("makes good outcomes green, never grey", () => {

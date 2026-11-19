@@ -1,52 +1,56 @@
 import { X } from "lucide-react";
 import { useState } from "react";
 import { Markdown } from "../components/Markdown";
-import { Button, Chip, EmptyState, ErrorBanner, Panel } from "../components/ui";
-import { office } from "../lib/ipc";
 import { useQuery } from "../lib/hooks";
+import { office } from "../lib/ipc";
+import {
+  Banner,
+  Button,
+  Card,
+  Dropdown,
+  EmptyState,
+  Group,
+  IconButton,
+  Input,
+  Page,
+  ShortPath,
+  SplitPane,
+  StatusBadge,
+  notifyDone,
+  notifyError,
+} from "../ui";
 import { AskPanel } from "./brain/AskPanel";
-import { Select } from "../components/Select";
 
 function QuickNote() {
   const projects = useQuery("projects.list");
   const [project, setProject] = useState("");
   const [text, setText] = useState("");
-  const [message, setMessage] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const save = async (): Promise<void> => {
-    setError(null);
-    setMessage(null);
     try {
       const result = await office.invoke("vault.addNote", { projectId: project, text });
       setText("");
-      setMessage(
-        result.pushed ? "Noted and pushed." : "Noted. It will be pushed on the next sync.",
+      notifyDone(
+        result.pushed ? "Noted and pushed" : "Noted",
+        result.pushed ? undefined : "It will be pushed on the next sync.",
+        "quick-note",
       );
     } catch (err) {
-      setError((err as Error).message);
+      notifyError(err, "Could not save the note", "quick-note");
     }
   };
   return (
-    <Panel title="Quick note">
-      <p className="mt-0 text-[12.5px]" style={{ color: "var(--muted)" }}>
+    <Card title="Quick note" testId="panel-quick-note">
+      <p className="ui-muted mt-0">
         Jot a thought against a project. It is saved under &quot;Notes to file&quot; and committed;
         an agent files it properly later.
       </p>
-      {error && <ErrorBanner message={error} />}
-      {message && (
-        <div className="mb-2" data-testid="note-message">
-          <Chip tone="good">{message}</Chip>
-        </div>
-      )}
-      <div className="flex gap-2">
-        <Select
+      <div className="flex items-end gap-2">
+        <Dropdown
           value={project}
           onChange={(e) => setProject(e.target.value)}
           aria-label="Note project"
           data-testid="note-project"
-          className="rounded border px-1 py-0.5"
-          style={{ borderColor: "var(--line)", background: "var(--panel)", color: "var(--text)" }}
         >
           <option value="">Project...</option>
           {(projects.data ?? []).map((p) => (
@@ -54,15 +58,15 @@ function QuickNote() {
               {p.name}
             </option>
           ))}
-        </Select>
-        <input
+        </Dropdown>
+        <Input
+          className="flex-1"
+          label="Note text"
+          hideLabel
           value={text}
           onChange={(e) => setText(e.target.value)}
-          aria-label="Note text"
           data-testid="note-text"
           placeholder="What do you want to remember?"
-          className="flex-1 rounded border px-2 py-1"
-          style={{ borderColor: "var(--line)", background: "var(--bg)", color: "var(--text)" }}
         />
         <Button
           variant="primary"
@@ -73,7 +77,7 @@ function QuickNote() {
           Save
         </Button>
       </div>
-    </Panel>
+    </Card>
   );
 }
 
@@ -83,33 +87,37 @@ function BrainHealth() {
   const validate = health.data?.validate;
   const attention = (health.data?.repos ?? []).filter((r) => r.attention);
   return (
-    <Panel title="Brain health">
+    <Card title="Brain health" testId="panel-brain-health">
       {validate && !validate.ran && (
-        <EmptyState>The brain tools are not available in this workspace.</EmptyState>
+        <EmptyState title="Brain tools not available">
+          The brain tools are not available in this workspace.
+        </EmptyState>
       )}
       {validate?.ran && (
-        <div className="mb-2 flex items-center gap-2">
-          <Chip tone={validate.ok ? "good" : "bad"}>
-            {validate.ok ? "validate passes" : "validate fails"}
-          </Chip>
-          <span style={{ color: "var(--muted)" }}>{validate.summary}</span>
+        <div className="ui-line">
+          <StatusBadge
+            status={validate.ok ? "passed" : "failed"}
+            label={validate.ok ? "Checks pass" : "Checks fail"}
+          />
+          <span className="ui-muted ui-line-main">{validate.summary}</span>
         </div>
       )}
       {validate?.errors.map((e) => (
-        <div key={e} className="text-[12.5px]" style={{ color: "var(--bad)" }}>
+        <div key={e} className="ui-line-sub ui-bad">
           {e}
         </div>
       ))}
       {attention.map((r) => (
-        <div key={r.folder} className="py-0.5">
-          <Chip tone="warn">{r.folder}</Chip> {r.state}
+        <div key={r.folder} className="ui-line">
+          <StatusBadge status="behind" label={r.folder === "." ? "Hub" : r.folder} />
+          <span className="ui-line-main">{r.state}</span>
         </div>
       ))}
       {validate?.ran && attention.length === 0 && (
-        <Chip tone="good">every repo is committed and in step</Chip>
+        <StatusBadge status="in-sync" label="Every repo is committed and in step" />
       )}
-      <h3 className="mb-1 mt-3 text-[13px] font-semibold">Open content-audit entries</h3>
-      {audit.data?.length === 0 && <EmptyState>No open entries.</EmptyState>}
+      <Group>Open content-audit entries</Group>
+      {audit.data?.length === 0 && <p className="ui-muted m-0">No open entries.</p>}
       {audit.data?.map((a) => (
         <div key={a.repo} className="mb-1">
           <span className="font-medium">{a.repo}</span>
@@ -120,26 +128,34 @@ function BrainHealth() {
           </ul>
         </div>
       ))}
-    </Panel>
+    </Card>
   );
 }
 
 function NoteViewer({ path, onClose }: { path: string; onClose: () => void }) {
   const note = useQuery("vault.readFile", { path });
   return (
-    <Panel
-      title={path}
+    <Card
+      title="Note"
+      testId="panel-note"
       action={
-        <Button variant="ghost" aria-label="Close note" onClick={onClose}>
-          <X size={14} />
-        </Button>
+        <IconButton label="Close note" size="sm" onClick={onClose}>
+          <X />
+        </IconButton>
       }
     >
       <div data-testid="note-viewer">
-        {note.error && <ErrorBanner message={note.error} />}
-        {note.data && <Markdown>{note.data.markdown}</Markdown>}
+        <p className="mt-0">
+          <ShortPath path={path} keep={4} />
+        </p>
+        {note.error && <Banner tone="danger">{note.error}</Banner>}
+        {note.data && (
+          <div className="reading">
+            <Markdown>{note.data.markdown}</Markdown>
+          </div>
+        )}
       </div>
-    </Panel>
+    </Card>
   );
 }
 
@@ -147,15 +163,25 @@ function NoteViewer({ path, onClose }: { path: string; onClose: () => void }) {
 export function Brain() {
   const [open, setOpen] = useState<string | null>(null);
   return (
-    <div className="grid gap-4 p-4 lg:grid-cols-2" data-testid="brain">
-      <div className="grid content-start gap-4">
-        <AskPanel onOpenNote={setOpen} />
-        <QuickNote />
-      </div>
-      <div className="grid content-start gap-4">
-        {open && <NoteViewer key={open} path={open} onClose={() => setOpen(null)} />}
-        <BrainHealth />
-      </div>
-    </div>
+    <Page title="Brain" testId="brain" fill>
+      <SplitPane
+        id="brain"
+        defaultSize={620}
+        min={360}
+        minSecond={360}
+        first={
+          <div className="grid content-start gap-4 pr-4">
+            <AskPanel onOpenNote={setOpen} />
+            <QuickNote />
+          </div>
+        }
+        second={
+          <div className="grid content-start gap-4 pl-4">
+            {open && <NoteViewer key={open} path={open} onClose={() => setOpen(null)} />}
+            <BrainHealth />
+          </div>
+        }
+      />
+    </Page>
   );
 }

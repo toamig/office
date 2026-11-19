@@ -1,7 +1,7 @@
 import { Check } from "lucide-react";
 import { useState } from "react";
 import type { SetupState } from "@shared/models";
-import { Button } from "../../components/ui";
+import { Button } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import { AddProjects } from "../onboarding/AddProjects";
@@ -90,9 +90,7 @@ export function Welcome({ state }: { state: SetupState }) {
           <h1 className="m-0 text-xl font-semibold" data-testid="welcome-title">
             {copy.title}
           </h1>
-          <p className="mb-4 mt-1" style={{ color: "var(--muted)" }}>
-            {copy.lead}
-          </p>
+          <p className="mb-4 mt-1 ui-muted">{copy.lead}</p>
           <div className="welcome-step text-selectable" data-testid={`welcome-panel-${step}`}>
             {step === "workspace" && <WorkspaceStep />}
             {step === "projects" && <ProjectsStep />}

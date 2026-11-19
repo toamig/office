@@ -19,9 +19,9 @@ const EDIT_LIKE = new Set(["Edit", "MultiEdit", "Write", "NotebookEdit", "apply_
 const text = (v: unknown): string => (typeof v === "string" ? v : "");
 
 function StatusIcon({ status }: { status: Tool["status"] }) {
-  if (status === "done") return <Check size={13} style={{ color: "var(--good)" }} />;
-  if (status === "error") return <X size={13} style={{ color: "var(--bad)" }} />;
-  return <CircleDashed size={13} className="animate-spin" style={{ color: "var(--muted)" }} />;
+  if (status === "done") return <Check size={13} className="ui-good" />;
+  if (status === "error") return <X size={13} className="ui-bad" />;
+  return <CircleDashed size={13} className="animate-spin ui-muted" />;
 }
 
 /** A line-by-line diff of what an edit replaced, small enough to sit inside the conversation. */

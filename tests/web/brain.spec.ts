@@ -1,7 +1,7 @@
 import { expect, test } from "@playwright/test";
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
-import { launch, pick } from "./helpers";
+import { launch, pick, toasts } from "./helpers";
 
 test("a fake provider answer renders with clickable citations that open the note", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
@@ -34,7 +34,7 @@ test("a scoped question and a quick note both work", async () => {
   await pick(win, "note-project", { label: "Beta" });
   await win.getByTestId("note-text").fill("remember the sheep");
   await win.getByTestId("note-save").click();
-  await expect(win.getByTestId("note-message")).toContainText("Noted");
+  await expect(toasts(win).filter({ hasText: "Noted" })).toBeVisible();
   expect(readFileSync(join(world.hub, "Beta", "OpenItems.md"), "utf8")).toContain(
     "## Notes to file",
   );

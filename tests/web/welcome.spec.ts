@@ -45,7 +45,7 @@ test("an empty app-data folder opens the welcome flow, with no sidebar, and walk
 
   // Step 3: the tools. The fake tools are ready (Git, and a Claude Code that is logged in).
   await expect(win.getByTestId("tools-step")).toBeVisible();
-  await expect(claudeRow(win)).toContainText("logged in");
+  await expect(claudeRow(win)).toContainText(/logged in/i);
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();
   await win.getByTestId("welcome-continue").click();
 
@@ -86,7 +86,7 @@ test("a required step stays closed until it is met: tools missing, then not logg
 
   // The workspace and projects folder are set, so the flow opens on the tools step.
   await expect(win.getByTestId("welcome-step-tools")).toHaveAttribute("data-state", "current");
-  await expect(claudeRow(win)).toContainText("missing");
+  await expect(claudeRow(win)).toContainText(/missing/i);
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();
   await expect(win.getByTestId("welcome-reason")).toContainText("Install Claude Code or Codex");
 
@@ -96,7 +96,7 @@ test("a required step stays closed until it is met: tools missing, then not logg
   await expect(win.getByTestId("welcome-reason")).toContainText("Log in to Claude Code or Codex");
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();
   const claude = claudeRow(win);
-  await expect(claude).toContainText("not logged in");
+  await expect(claude).toContainText(/not logged in/i);
 
   // Log in opens a dialog of its own over the whole window, in plain words, with the raw output under Details.
   await claude.getByTestId("tool-login").click();
@@ -134,7 +134,7 @@ test("a required step stays closed until it is met: tools missing, then not logg
   await win.keyboard.press("Enter");
   await expect(dialog).toHaveAttribute("data-phase", "done");
   await expect(dialog).toHaveCount(0, { timeout: 10000 });
-  await expect(claude).toContainText("logged in");
+  await expect(claude).toContainText(/logged in/i);
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();
   await app.close();
 });

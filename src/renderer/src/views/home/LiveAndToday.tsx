@@ -1,8 +1,8 @@
 import type { AutomationView } from "@shared/models";
-import { Chip, EmptyState, Panel } from "../../components/ui";
+import { StatusChip } from "../../components/StatusChip";
 import { useQuery } from "../../lib/hooks";
 import { useUi } from "../../stores/ui";
-import { StatusChip } from "../../components/StatusChip";
+import { Card, EmptyState, LinkButton, StatusBadge } from "../../ui";
 
 /** Running agents and the ones that need you, plus how many have finished since the owner looked. */
 export function LiveAgentsPanel() {
@@ -14,33 +14,25 @@ export function LiveAgentsPanel() {
     (s) => !s.running && (s.status === "exited" || s.status === "failed"),
   );
   return (
-    <Panel title="Live agents">
+    <Card title="Live agents" testId="panel-live">
       {live.length === 0 && finished.length === 0 && (
-        <EmptyState>No agents running. Start one from a project page.</EmptyState>
+        <EmptyState title="No agents running">Start one from a project page.</EmptyState>
       )}
       {live.map((s) => (
-        <div key={s.id} className="flex items-center gap-2 py-0.5" data-testid="live-agent">
+        <div key={s.id} className="ui-line" data-testid="live-agent">
           <StatusChip status={s.status} />
-          <button
-            className="border-0 bg-transparent p-0 text-left underline"
-            style={{ color: "var(--text)" }}
-            onClick={() => navigate("agents")}
-          >
-            {s.title ?? s.provider}
-          </button>
+          <div className="ui-line-main">
+            <LinkButton onClick={() => navigate("agents")}>{s.title ?? s.provider}</LinkButton>
+          </div>
         </div>
       ))}
       {finished.length > 0 && (
-        <div
-          className="pt-1 text-[12px]"
-          style={{ color: "var(--muted)" }}
-          data-testid="finished-agents"
-        >
+        <div className="ui-line-sub pt-2" data-testid="finished-agents">
           {finished.length} finished {finished.length === 1 ? "session" : "sessions"} to wrap up in
           Agents.
         </div>
       )}
-    </Panel>
+    </Card>
   );
 }
 
@@ -65,21 +57,28 @@ export function TodayPanel() {
   const ranToday = mine.filter((a) => sameDay(a.lastFiredAt, now));
   const dueToday = mine.filter((a) => sameDay(a.nextRun, now));
   return (
-    <Panel title="Today">
+    <Card title="Today" testId="panel-today">
       {ranToday.length === 0 && dueToday.length === 0 && (
-        <EmptyState>No automations are due today.</EmptyState>
+        <EmptyState title="Nothing due today">No automations are scheduled for today.</EmptyState>
       )}
       {ranToday.map((a) => (
-        <div key={`ran-${a.id}`} className="py-0.5" data-testid="today-ran">
-          <Chip tone="good">ran</Chip> {clock(a.lastFiredAt as string)} {a.project}:{" "}
-          {a.prompt.slice(0, 60)}
+        <div key={`ran-${a.id}`} className="ui-line" data-testid="today-ran">
+          <StatusBadge status="done" label="Ran" />
+          <div className="ui-line-main">
+            {a.project}: {a.prompt.slice(0, 60)}
+            <div className="ui-line-sub num">{clock(a.lastFiredAt as string)}</div>
+          </div>
         </div>
       ))}
       {dueToday.map((a) => (
-        <div key={`due-${a.id}`} className="py-0.5" data-testid="today-due">
-          <Chip>due</Chip> {clock(a.nextRun as string)} {a.project}: {a.prompt.slice(0, 60)}
+        <div key={`due-${a.id}`} className="ui-line" data-testid="today-due">
+          <StatusBadge status="waiting" label="Due" tone="neutral" />
+          <div className="ui-line-main">
+            {a.project}: {a.prompt.slice(0, 60)}
+            <div className="ui-line-sub num">{clock(a.nextRun as string)}</div>
+          </div>
         </div>
       ))}
-    </Panel>
+    </Card>
   );
 }
