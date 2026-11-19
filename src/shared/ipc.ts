@@ -45,6 +45,11 @@ import {
   SetupState,
   FolderScan,
   RootSuggestion,
+  ScanCandidate,
+  OnboardingItem,
+  OnboardingReport,
+  BrainResult,
+  PointerPreview,
   WaitingEntry,
   WorkspaceView,
   VaultFile,
@@ -165,6 +170,35 @@ export const channels = {
     req: z.object({ id: z.string(), path: z.string().nullable() }),
     res: z.void(),
   },
+  /** Starts a new brain in a new or empty folder: the template, a git repo, and optionally a private GitHub repo. */
+  "setup.createBrain": {
+    req: z.object({ folder: z.string(), github: z.object({ name: z.string() }).nullable() }),
+    res: BrainResult,
+  },
+  /** The code repos under the projects folder that are not in the workspace yet. */
+  "onboarding.scan": {
+    req: z.void(),
+    res: z.object({
+      candidates: z.array(ScanCandidate),
+      unmatchedNotes: z.array(z.string()),
+      /** The notes repos of a brain hub, for a project's notes to go in a folder of one. */
+      hubRepos: z.array(z.string()),
+    }),
+  },
+  /** What adding these will do, in words, before it runs. */
+  "onboarding.plan": {
+    req: z.object({ items: z.array(OnboardingItem) }),
+    res: z.array(z.string()),
+  },
+  "onboarding.add": { req: z.object({ items: z.array(OnboardingItem) }), res: OnboardingReport },
+  /** Remove from Office: the workspace entry only; notes, code and pointer stay. */
+  "onboarding.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "pointer.preview": { req: z.object({ id: z.string() }), res: PointerPreview },
+  "pointer.apply": {
+    req: z.object({ ids: z.array(z.string()), push: z.boolean() }),
+    res: OnboardingReport,
+  },
+  "pointer.remove": { req: z.object({ ids: z.array(z.string()) }), res: OnboardingReport },
   "setup.setProjectsRoot": { req: z.object({ path: z.string() }), res: z.void() },
   /** The welcome flow is finished: open the app. */
   "setup.complete": { req: z.void(), res: z.void() },

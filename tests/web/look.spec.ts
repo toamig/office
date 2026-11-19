@@ -138,6 +138,7 @@ for (const only of ["light", "dark"] as const)
       await expect(win.getByTestId("welcome")).toBeVisible();
       await win.evaluate((t) => window.office.invoke("settings.set", { theme: t }), theme);
       await shoot(win, "welcome-1-workspace", theme);
+      await win.getByTestId("mode-folder").click();
       await win.getByTestId("setup-root").fill(world.hub);
       await win.getByTestId("setup-use-folder").click();
       await expect(win.getByTestId("setup-config")).toBeVisible();
@@ -150,6 +151,9 @@ for (const only of ["light", "dark"] as const)
       await win.getByTestId("welcome-continue").click();
       await expect(win.getByTestId("tool-row")).toHaveCount(5);
       await shoot(win, "welcome-3-tools", theme);
+      await win.getByTestId("welcome-continue").click();
+      await expect(win.getByTestId("add-projects")).toBeVisible();
+      await shoot(win, "welcome-3b-add-projects", theme);
       await win.getByTestId("welcome-continue").click();
       await expect(win.getByTestId("hooks-rows")).toBeVisible();
       await shoot(win, "welcome-4-notifications", theme);

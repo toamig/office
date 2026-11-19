@@ -84,7 +84,7 @@
       ]
     },
     "src/main/modules/explore": {
-      "web": ["tests/web/explore.spec.ts"]
+      "web": ["tests/web/explore.spec.ts", "tests/web/onboarding.spec.ts"]
     },
     "src/main/modules/git": {
       "web": [
@@ -229,10 +229,18 @@
       "web": ["tests/web/projects.spec.ts", "tests/web/board.spec.ts", "tests/web/git.spec.ts"]
     },
     "src/renderer/src/views/project": {
-      "web": ["tests/web/projects.spec.ts", "tests/web/tasks.spec.ts"]
+      "web": [
+        "tests/web/projects.spec.ts",
+        "tests/web/tasks.spec.ts",
+        "tests/web/onboarding.spec.ts"
+      ]
     },
     "src/renderer/src/views/Projects.tsx": {
-      "web": ["tests/web/projects.spec.ts", "tests/web/folders.spec.ts"]
+      "web": [
+        "tests/web/projects.spec.ts",
+        "tests/web/folders.spec.ts",
+        "tests/web/onboarding.spec.ts"
+      ]
     },
     "src/renderer/src/views/Setup.tsx": {
       "web": [
@@ -250,7 +258,8 @@
         "tests/web/preferences.spec.ts",
         "tests/web/hooks.spec.ts",
         "tests/web/modules.spec.ts",
-        "tests/web/folders.spec.ts"
+        "tests/web/folders.spec.ts",
+        "tests/web/onboarding.spec.ts"
       ]
     },
     "src/renderer/src/views/welcome": {
@@ -258,7 +267,8 @@
         "tests/web/welcome.spec.ts",
         "tests/web/setup.spec.ts",
         "tests/web/smoke.spec.ts",
-        "tests/web/folders.spec.ts"
+        "tests/web/folders.spec.ts",
+        "tests/web/onboarding.spec.ts"
       ]
     },
     "tests/unit": {
@@ -278,7 +288,11 @@
       "electron": []
     },
     "resources": {
-      "web": ["tests/web/hooks.spec.ts", "tests/web/permissions.spec.ts"],
+      "web": [
+        "tests/web/hooks.spec.ts",
+        "tests/web/permissions.spec.ts",
+        "tests/web/onboarding.spec.ts"
+      ],
       "electron": ["tests/e2e/packaged.spec.ts"]
     },
     "examples": {
@@ -311,6 +325,22 @@
     "src/renderer/src/env.d.ts": {
       "web": [],
       "electron": []
+    },
+    "src/main/modules/onboarding": {
+      "web": [
+        "tests/web/onboarding.spec.ts",
+        "tests/web/welcome.spec.ts",
+        "tests/web/projects.spec.ts",
+        "tests/web/folders.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/onboarding": {
+      "web": [
+        "tests/web/onboarding.spec.ts",
+        "tests/web/welcome.spec.ts",
+        "tests/web/projects.spec.ts",
+        "tests/web/folders.spec.ts"
+      ]
     }
   }
 }

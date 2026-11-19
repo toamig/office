@@ -42,6 +42,7 @@ import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
 import { HealthService } from "./modules/vault/health-service";
+import { OnboardingService } from "./modules/onboarding/service";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 import { detectTools } from "./modules/setup/detect";
 import { ToolsMonitor } from "./modules/setup/tools-monitor";
@@ -81,6 +82,8 @@ export interface AppContext {
   chat: ChatService;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
+  /** Starting a brain, adding projects, the agent pointer (M9). */
+  onboarding: OnboardingService;
   /** The brain's health, refreshed in the background; reads return the last result. */
   health: HealthService;
   /** The last look at the command-line tools, refreshed in the background. */
@@ -449,6 +452,18 @@ export async function createContext(
   const agents = createAgents(base, notes, relayScript);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
+  const onboarding = new OnboardingService({
+    workspace: () => store.state.workspace,
+    workspaceRoot: () => box.current.workspaceRoot,
+    projectsRoot: () => box.current.projectsRoot,
+    projectPaths: () => box.current.projectPaths,
+    workspaceFile: () => store.filePath,
+    reloadWorkspace: () => void store.reload(),
+    writer: notes.writer,
+    // The template ships beside the relay script (resources/ in development, the install's resources folder when packaged).
+    templateDir: () => join(dirname(relayScript), "..", "brain-template"),
+    notesRepo: (name, domain, stack) => agents.explore.notesRepo(name, domain, stack),
+  });
   const toolsMonitor = new ToolsMonitor(detectTools, () => bus.emit("setup.changed", {}));
   const setupState = (tools: ToolsMonitor["current"] = toolsMonitor.current): SetupState => {
     const s = box.current;
@@ -458,6 +473,7 @@ export async function createContext(
       workspaceError: store.state.error,
       tools,
       hooksInstalled: hooks.claude.installed || hooks.codex.installed,
+      projectCount: store.state.workspace?.projects.length ?? 0,
     });
   };
   // A machine that was set up before the welcome flow existed has nothing to be welcomed to.
@@ -486,6 +502,7 @@ export async function createContext(
     ops: notes.ops,
     warnings: notes.warnings,
     health: notes.health,
+    onboarding,
     toolsMonitor,
     setupState,
     ...createLifecycle(base, notes, agents, orch, toolsMonitor),

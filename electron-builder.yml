@@ -9,6 +9,8 @@ files:
 extraResources:
   - from: resources/relay
     to: relay
+  - from: resources/brain-template
+    to: brain-template
 asarUnpack:
   - node_modules/node-pty/**
   - node_modules/better-sqlite3/**

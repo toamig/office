@@ -50,6 +50,7 @@ describe("computeSetupState", () => {
       ["workspace", true],
       ["projects", true],
       ["tools", true],
+      ["add", false],
       ["notifications", false],
     ]);
   });
@@ -88,6 +89,7 @@ describe("computeSetupState", () => {
     expect(state.current).toBe("tools");
     expect(state.welcome).toBe(true);
     expect(state.steps[3]?.required).toBe(false);
+    expect(state.steps[4]?.required).toBe(false);
   });
 
   it("sends the app back to the workspace step when its folder is gone", () => {

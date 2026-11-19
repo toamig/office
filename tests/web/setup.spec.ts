@@ -53,6 +53,7 @@ test("the welcome flow clones a workspace repo from a git URL", async () => {
 test("a bad folder shows a clear error and keeps the welcome step open", async () => {
   const { app, base } = await launch({ world: "unconfigured" });
   const win = await app.firstWindow();
+  await win.getByTestId("mode-folder").click();
   await win.getByTestId("setup-root").fill(join(base, "nowhere"));
   await win.getByTestId("setup-use-folder").click();
   await expect(win.getByTestId("wizard-error")).toContainText("is not a folder");

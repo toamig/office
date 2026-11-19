@@ -19,12 +19,14 @@ test("an empty app-data folder opens the welcome flow, with no sidebar, and walk
   await expect(win.getByTestId("welcome-progress")).toContainText("Workspace");
   await expect(win.getByTestId("welcome-progress")).toContainText("Projects folder");
   await expect(win.getByTestId("welcome-progress")).toContainText("Tools");
+  await expect(win.getByTestId("welcome-progress")).toContainText("Your projects");
   await expect(win.getByTestId("welcome-progress")).toContainText("Agent notifications");
   await expect(win.getByTestId("welcome-step-workspace")).toHaveAttribute("data-state", "current");
 
   // Step 1: Continue stays off, with a one-line reason, until the workspace is chosen.
   await expect(win.getByTestId("welcome-continue")).toBeDisabled();
   await expect(win.getByTestId("welcome-reason")).toContainText("Choose or clone");
+  await win.getByTestId("mode-folder").click();
   await win.getByTestId("setup-root").fill(world.hub);
   await win.getByTestId("setup-use-folder").click();
   await expect(win.getByTestId("setup-config")).toHaveValue("Office/workspace.json");
@@ -47,7 +49,11 @@ test("an empty app-data folder opens the welcome flow, with no sidebar, and walk
   await expect(win.getByTestId("welcome-continue")).toBeEnabled();
   await win.getByTestId("welcome-continue").click();
 
-  // Step 4: notifications are optional. Skip reaches Home.
+  // Step 4: adding projects is optional, and Continue is on without it.
+  await expect(win.getByTestId("add-projects")).toBeVisible();
+  await win.getByTestId("welcome-continue").click();
+
+  // Step 5: notifications are optional. Skip reaches Home.
   await expect(win.getByTestId("hooks-rows")).toBeVisible();
   await expect(win.getByTestId("welcome-finish")).toHaveText("Skip");
   await win.getByTestId("welcome-finish").click();

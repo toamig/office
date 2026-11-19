@@ -7,6 +7,7 @@ test("the projects folder step says where the list comes from, suggests the fold
   const { app, world, base } = await launch({ world: "unconfigured", fakeTools: true });
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
+  await win.getByTestId("mode-folder").click();
   await win.getByTestId("setup-root").fill(world.hub);
   await win.getByTestId("setup-use-folder").click();
   await win.getByTestId("setup-use-workspace").click();

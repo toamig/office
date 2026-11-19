@@ -4,6 +4,7 @@ import type { SetupState } from "@shared/models";
 import { Button } from "../../components/ui";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { AddProjects } from "../onboarding/AddProjects";
 import { HooksPanel } from "../setup/HooksPanel";
 import { ProjectsStep } from "../setup/ProjectsStep";
 import { ToolsStep } from "../setup/ToolsStep";
@@ -23,6 +24,10 @@ const COPY: Record<StepId, { title: string; lead: string }> = {
   tools: {
     title: "Your tools",
     lead: "Git, and at least one agent tool you are logged in to.",
+  },
+  add: {
+    title: "Your projects",
+    lead: "Optional. Add the code repos Office should know about; you can do this later from Projects.",
   },
   notifications: {
     title: "Agent notifications",
@@ -92,6 +97,7 @@ export function Welcome({ state }: { state: SetupState }) {
             {step === "workspace" && <WorkspaceStep />}
             {step === "projects" && <ProjectsStep />}
             {step === "tools" && <ToolsStep />}
+            {step === "add" && <AddProjects />}
             {step === "notifications" && <HooksPanel title="" />}
           </div>
           <footer className="welcome-footer">

@@ -14,6 +14,8 @@ export interface SetupInputs {
   /** Null until the first look at the tools has finished. */
   tools: ToolStatus[] | null;
   hooksInstalled: boolean;
+  /** How many projects the workspace lists; the optional Add projects step is met once there is one. */
+  projectCount?: number;
   /** Folder and file checks are injected so the rule can be tested without a disk. */
   isDir?: (path: string) => boolean;
   fileExists?: (path: string) => boolean;
@@ -80,6 +82,13 @@ export function computeSetupState(input: SetupInputs): SetupState {
       reason: projectsReason,
     },
     { id: "tools", label: "Tools", required: true, met: !toolsProblem, reason: toolsProblem },
+    {
+      id: "add",
+      label: "Your projects",
+      required: false,
+      met: (input.projectCount ?? 0) > 0,
+      reason: null,
+    },
     {
       id: "notifications",
       label: "Agent notifications",

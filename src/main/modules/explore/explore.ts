@@ -5,7 +5,7 @@ import type { SessionRow, SpawnInput, SpawnReport, SpawnStep } from "../../../sh
 import type { Bus } from "../../core/bus";
 import { IpcFailure } from "../../core/ipc";
 import type { SessionService } from "../sessions/service";
-import { planSpawn, runSpawn, type SpawnDeps } from "./spawn";
+import { createNotesRepo, planSpawn, runSpawn, type SpawnDeps } from "./spawn";
 
 export const EXPLORE_ROLE = "explore";
 
@@ -55,6 +55,11 @@ export class ExploreService {
   /** The checklist, shown before anything runs. */
   plan(input: SpawnInput): SpawnStep[] {
     return planSpawn(this.spawnDeps(), input);
+  }
+
+  /** A notes repo for an existing project, registered in the brain hub (adding projects). */
+  notesRepo(name: string, domain: SpawnInput["domain"], stack: string): Promise<string> {
+    return createNotesRepo(this.spawnDeps(), name, domain, stack);
   }
 
   async spawn(input: SpawnInput): Promise<SpawnReport> {

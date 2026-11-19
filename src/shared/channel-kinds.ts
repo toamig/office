@@ -59,7 +59,16 @@ export const READ_CHANNELS: readonly ChannelName[] = [
  * Calls that change nothing a view shows (window and pane plumbing, layouts, a chat message whose reply comes
  * as events), so they do not make the screens ask again.
  */
-const QUIET_PREFIXES = ["app.", "preview.", "layout.", "chat.send", "setup.pickFolder"];
+const QUIET_PREFIXES = [
+  "onboarding.scan",
+  "onboarding.plan",
+  "pointer.preview",
+  "app.",
+  "preview.",
+  "layout.",
+  "chat.send",
+  "setup.pickFolder",
+];
 
 const READS = new Set<string>(READ_CHANNELS);
 

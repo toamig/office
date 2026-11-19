@@ -294,7 +294,7 @@ export type Inventory = z.infer<typeof Inventory>;
 
 /** One step of the welcome flow. */
 export const SetupStep = z.object({
-  id: z.enum(["workspace", "projects", "tools", "notifications"]),
+  id: z.enum(["workspace", "projects", "tools", "add", "notifications"]),
   label: z.string(),
   /** A required step has to be met before the app opens; the notification step is optional. */
   required: z.boolean(),
@@ -328,6 +328,64 @@ export const RootSuggestion = z.object({
   candidates: z.array(z.object({ path: z.string(), found: z.number(), total: z.number() })),
 });
 export type RootSuggestion = z.infer<typeof RootSuggestion>;
+
+/** A code repo found under the projects folder that is not in the workspace yet. */
+export const ScanCandidate = z.object({
+  path: z.string(),
+  name: z.string(),
+  remote: z.string().nullable(),
+  lastCommit: z.string().nullable(),
+  group: z.string(),
+  notes: z.string().nullable(),
+});
+export type ScanCandidate = z.infer<typeof ScanCandidate>;
+
+export const OnboardingItem = z.object({
+  path: z.string(),
+  name: z.string().min(1),
+  group: z.string().optional(),
+  notes: z.enum(["new", "link", "none"]),
+  linkFolder: z.string().optional(),
+  hub: z.enum(["repo", "folder"]).optional(),
+  hubFolder: z.string().optional(),
+  domain: z.enum(["ue5", "saas", "webgames", "mobile", "meta"]).default("saas"),
+});
+export type OnboardingItem = z.infer<typeof OnboardingItem>;
+
+export const OnboardingReport = z.object({
+  ok: z.boolean(),
+  steps: z.array(
+    z.object({
+      id: z.string(),
+      label: z.string(),
+      status: z.enum(["done", "failed", "pending"]),
+      result: z.string().optional(),
+    }),
+  ),
+  added: z.array(z.string()),
+});
+export type OnboardingReport = z.infer<typeof OnboardingReport>;
+
+export const BrainResult = z.object({
+  path: z.string(),
+  configPath: z.string(),
+  files: z.array(z.string()),
+  github: z.object({
+    requested: z.boolean(),
+    repo: z.string().optional(),
+    error: z.string().optional(),
+  }),
+});
+export type BrainResult = z.infer<typeof BrainResult>;
+
+export const PointerPreview = z.object({
+  project: z.string(),
+  file: z.string(),
+  text: z.string(),
+  creates: z.array(z.string()),
+  installed: z.boolean(),
+});
+export type PointerPreview = z.infer<typeof PointerPreview>;
 
 export const WorkspaceInspection = z.object({
   exists: z.boolean(),

@@ -133,6 +133,26 @@ function registerSetupHandlers(ctx: AppContext): void {
     void ctx.projects.refresh(req.id);
     ctx.bus.emit("workspace.changed", {});
   });
+  ctx.ipc.handle("setup.createBrain", (req) => ctx.onboarding.createBrain(req.folder, req.github));
+  ctx.ipc.handle("onboarding.scan", async () => ({
+    candidates: await ctx.onboarding.scan(),
+    unmatchedNotes: ctx.onboarding.unmatchedNotes(),
+    hubRepos: ctx.onboarding.hubRepos(),
+  }));
+  ctx.ipc.handle("onboarding.plan", (req) => ctx.onboarding.plan(req.items));
+  ctx.ipc.handle("onboarding.add", async (req) => {
+    const report = await ctx.onboarding.add(req.items);
+    ctx.bus.emit("workspace.changed", {});
+    void ctx.projects.refreshAll();
+    return report;
+  });
+  ctx.ipc.handle("onboarding.remove", async (req) => {
+    await ctx.onboarding.remove(req.id);
+    ctx.bus.emit("workspace.changed", {});
+  });
+  ctx.ipc.handle("pointer.preview", (req) => ctx.onboarding.pointerPreview(req.id));
+  ctx.ipc.handle("pointer.apply", (req) => ctx.onboarding.pointerApply(req.ids, req.push));
+  ctx.ipc.handle("pointer.remove", (req) => ctx.onboarding.pointerRemove(req.ids));
   ctx.ipc.handle("setup.setProjectsRoot", (req) => {
     const path = resolve(req.path);
     if (!isDirectory(path)) throw new IpcFailure("no-projects-root", `${path} is not a folder`);

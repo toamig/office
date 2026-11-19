@@ -1,5 +1,5 @@
 import { useState } from "react";
-import type { WorkspaceInspection } from "@shared/models";
+import type { BrainResult, WorkspaceInspection } from "@shared/models";
 import { useUnsaved } from "../../components/LeaveGuard";
 import { Button, Chip, ErrorBanner } from "../../components/ui";
 import { office } from "../../lib/ipc";
@@ -10,7 +10,11 @@ import { fieldClass, fieldStyle, PathField } from "./PathField";
  * list, roles and pipelines in this repo so they travel to any PC. Used by the welcome flow and by Setup.
  */
 export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
-  const [mode, setMode] = useState<"folder" | "clone">("folder");
+  const [mode, setMode] = useState<"new" | "folder" | "clone">("new");
+  const [brainFolder, setBrainFolder] = useState("");
+  const [github, setGithub] = useState(false);
+  const [repoName, setRepoName] = useState("brain");
+  const [created, setCreated] = useState<BrainResult | null>(null);
   const [root, setRoot] = useState("");
   const [url, setUrl] = useState("");
   const [dest, setDest] = useState("");
@@ -49,6 +53,23 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
       else setCreate(true);
     });
 
+  /** Starts a new brain in the folder, then makes it the workspace. */
+  const createBrain = (): Promise<void> =>
+    guard(async () => {
+      const made = await office.invoke("setup.createBrain", {
+        folder: brainFolder,
+        github: github ? { name: repoName.trim() || "brain" } : null,
+      });
+      await office.invoke("setup.apply", {
+        workspaceRoot: made.path,
+        workspaceConfigPath: made.configPath,
+        projectsRoot: "",
+        createIfMissing: false,
+      });
+      setCreated(made);
+      onDone?.();
+    });
+
   const clone = (): Promise<void> =>
     guard(async () => {
       const result = await office.invoke("setup.clone", { url, dest });
@@ -78,12 +99,26 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
         <>
           <p className="mb-3 mt-0">
             Office keeps your project list, roles and pipelines in a git repo you choose, so they
-            travel to any PC. Use a folder that is already here, or clone the repo.
+            travel to any PC. Start a new one, use a folder that is already here, or clone the repo.
           </p>
           <div className="mb-3 flex gap-4">
             <label>
-              <input type="radio" checked={mode === "folder"} onChange={() => setMode("folder")} />{" "}
-              Use a folder
+              <input
+                type="radio"
+                checked={mode === "new"}
+                onChange={() => setMode("new")}
+                data-testid="mode-new"
+              />{" "}
+              Start a new brain
+            </label>
+            <label>
+              <input
+                type="radio"
+                checked={mode === "folder"}
+                onChange={() => setMode("folder")}
+                data-testid="mode-folder"
+              />{" "}
+              Use a folder I have
             </label>
             <label>
               <input
@@ -95,6 +130,67 @@ export function WorkspaceStep({ onDone }: { onDone?: () => void }) {
               Clone from a git URL
             </label>
           </div>
+          {mode === "new" && !created && (
+            <>
+              <p className="mt-0" style={{ color: "var(--muted)" }}>
+                A new brain is one git repo in a folder: a README, the rules agents follow, a
+                Projects folder and your workspace config. Pick a new or empty folder for it.
+              </p>
+              <PathField
+                label="Folder for the brain"
+                value={brainFolder}
+                onChange={setBrainFolder}
+                testId="brain-folder"
+                pickTitle="A new or empty folder for the brain"
+              />
+              <label className="mb-2 flex items-center gap-2">
+                <input
+                  type="checkbox"
+                  checked={github}
+                  onChange={(e) => setGithub(e.target.checked)}
+                  data-testid="brain-github"
+                />{" "}
+                Also create a private GitHub repo for it and push
+              </label>
+              {github && (
+                <label className="mb-2 flex items-center gap-2">
+                  <span className="w-40">Repo name</span>
+                  <input
+                    className={fieldClass}
+                    style={fieldStyle}
+                    value={repoName}
+                    onChange={(e) => setRepoName(e.target.value)}
+                    aria-label="Repo name"
+                    data-testid="brain-repo-name"
+                  />
+                </label>
+              )}
+              <Button
+                variant="primary"
+                disabled={busy || !brainFolder.trim()}
+                onClick={() => void createBrain()}
+                data-testid="brain-create"
+              >
+                {busy ? "Creating..." : "Create the brain"}
+              </Button>
+            </>
+          )}
+          {mode === "new" && created && (
+            <div data-testid="brain-created">
+              <p className="mt-0">
+                <Chip tone="good">Created</Chip> {created.path}
+              </p>
+              <div className="text-[12.5px]" style={{ color: "var(--muted)" }}>
+                {created.files.join(", ")}
+              </div>
+              {created.github.repo && <p>Private GitHub repo: {created.github.repo}</p>}
+              {created.github.error && (
+                <ErrorBanner
+                  message={`The brain is made, but the GitHub repo was not: ${created.github.error}`}
+                />
+              )}
+            </div>
+          )}
           {mode === "folder" && (
             <>
               <PathField

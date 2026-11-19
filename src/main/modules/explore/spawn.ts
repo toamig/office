@@ -517,3 +517,41 @@ export async function runSpawn(deps: SpawnDeps, input: SpawnInput): Promise<Spaw
     ...(ctx.sessionId ? { sessionId: ctx.sessionId } : {}),
   };
 }
+
+/**
+ * A notes repo for a project that already has its code (adding projects, M9): the brain-repo and hub steps of the
+ * spawn checklist, on their own. Answers the notes folder in the hub.
+ */
+export async function createNotesRepo(
+  deps: SpawnDeps,
+  name: string,
+  domain: SpawnInput["domain"],
+  stack: string,
+): Promise<string> {
+  const slug = slugify(name);
+  const folder = folderName(name);
+  if (!slug)
+    throw new IpcFailure("bad-name", "Give the project a name with letters or digits in it");
+  const input: SpawnInput = {
+    name,
+    visibility: "private",
+    license: "none",
+    stack,
+    domain,
+    publicConfirmed: false,
+  };
+  const r: Resolved = {
+    input,
+    slug,
+    folder,
+    dir: "",
+    vaultFolder: folder,
+    hub: true,
+    vaultKind: "brain-hub",
+    description: stack ? `${name}: ${stack}.` : `${name}, a project.`,
+  };
+  const c: Ctx = { deps, r, owner: await githubOwner(), summary: "" };
+  await stepBrainRepo(c);
+  await stepHub(c);
+  return folder;
+}

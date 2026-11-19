@@ -4,7 +4,36 @@ import { useState } from "react";
 import { Button, Chip, EmptyState, ErrorBanner } from "../components/ui";
 import { office } from "../lib/ipc";
 import { timeAgo, useQuery } from "../lib/hooks";
+import { createPortal } from "react-dom";
+import { useEscape } from "../lib/escape";
 import { useUi } from "../stores/ui";
+import { AddProjects } from "./onboarding/AddProjects";
+
+/** The add-projects panel in a dialog of its own. */
+function AddProjectsDialog({ onClose }: { onClose: () => void }) {
+  useEscape(onClose, true);
+  return createPortal(
+    <div className="dialog-backdrop" data-testid="add-projects-dialog">
+      <div className="dialog w-[920px] max-w-[94vw]">
+        <header className="dialog-header">
+          <span className="font-semibold">Add projects</span>
+        </header>
+        <div className="overflow-auto p-4">
+          <AddProjects />
+        </div>
+        <footer
+          className="flex justify-end border-t px-4 py-2.5"
+          style={{ borderColor: "var(--line)" }}
+        >
+          <Button onClick={onClose} data-testid="add-projects-close">
+            Close
+          </Button>
+        </footer>
+      </div>
+    </div>,
+    document.body,
+  );
+}
 
 function Card({ p }: { p: ProjectSummary }) {
   const navigate = useUi((s) => s.navigate);
@@ -75,9 +104,16 @@ export function Projects() {
   const pinned = list.filter((p) => p.pinned);
   const archived = (projects.data ?? []).filter((p) => p.archived);
   const [showArchived, setShowArchived] = useState(false);
+  const [adding, setAdding] = useState(false);
   return (
     <div className="p-4" data-testid="projects">
-      <h1 className="m-0 mb-3 text-lg font-semibold">Projects</h1>
+      <div className="mb-3 flex items-center gap-3">
+        <h1 className="m-0 flex-1 text-lg font-semibold">Projects</h1>
+        <Button variant="primary" onClick={() => setAdding(true)} data-testid="add-projects-open">
+          Add projects
+        </Button>
+      </div>
+      {adding && <AddProjectsDialog onClose={() => setAdding(false)} />}
       {projects.error && <ErrorBanner message={projects.error} />}
       {list.length > 0 && list.every((p) => !p.exists) && (
         <div className="mb-3" data-testid="all-folders-missing">
