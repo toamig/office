@@ -32,5 +32,7 @@ export default defineConfig({
   renderer: {
     resolve: { alias: { "@shared": shared } },
     plugins: [react(), tailwindcss(), devCsp()],
+    /** The Gallery is for development and the web build; the packaged app never holds it. */
+    define: { "import.meta.env.VITE_GALLERY": '"0"' },
   },
 });

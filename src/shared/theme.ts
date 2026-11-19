@@ -8,59 +8,91 @@ export type ThemeName = "light" | "dark";
 export type ThemeSetting = "system" | "light" | "dark";
 
 export interface Palette {
-  /** The page behind everything. */
+  /** The page behind everything (Graphite in dark). */
   bg: string;
-  /** Panels, the top bar, terminals. */
+  /** Raised surfaces: panels, cards, the top bar, terminals (Slate in dark). */
   panel: string;
   /** The sidebar. */
   rail: string;
-  /** Hairlines. */
+  /** Menus, dialogs and popovers, a step above the panels. */
+  overlay: string;
+  /** Hairlines and dividers (Seam in dark). */
   line: string;
+  /** Primary text (Paper in dark). */
   text: string;
+  /** Secondary text. */
   muted: string;
-  /** Hover and selected rows. */
+  /** Only for disabled things and placeholders: below 4.5:1 by design. */
+  faint: string;
+  /** Row hover. */
   hover: string;
-  /** The default accent; the owner can pick another. */
+  /** Selected rows and the current item. */
+  selected: string;
+  /** The default accent (Iris); the owner can pick another. */
   accent: string;
   /** Text on an accent background. */
   onAccent: string;
-  good: string;
-  warn: string;
-  bad: string;
+  /** Status colours, kept apart from the accent: success, attention, danger and info/working. */
+  success: string;
+  attention: string;
+  danger: string;
+  info: string;
+  /** The status colours as text on their own soft tint (a badge), each at least 4.5:1 there. */
+  successFg: string;
+  attentionFg: string;
+  dangerFg: string;
+  infoFg: string;
   /** Selected text. */
   selection: string;
 }
 
+/** Warm greys with one cool accent: Iris is deliberately not the Claude app's clay orange (plan DesignSystem 1.1). */
 export const PALETTES: Record<ThemeName, Palette> = {
   light: {
-    bg: "#f7f7f6",
+    bg: "#f6f4f0",
     panel: "#ffffff",
-    rail: "#efefed",
-    line: "#e0e0dc",
-    text: "#1d1d1b",
-    muted: "#6a6a66",
-    hover: "#e9e9e6",
-    accent: "#3b6fd4",
+    rail: "#eeebe5",
+    overlay: "#ffffff",
+    line: "#ddd9d1",
+    text: "#1f1e1c",
+    muted: "#5e5b56",
+    faint: "#8c8983",
+    hover: "#ece9e3",
+    selected: "#e1e3f6",
+    accent: "#4a5bd6",
     onAccent: "#ffffff",
-    good: "#2a8a4f",
-    warn: "#b87a0c",
-    bad: "#c43d3d",
-    selection: "#cfe0ff",
+    success: "#1b7444",
+    attention: "#8f5e00",
+    danger: "#b3342d",
+    info: "#1d6a8e",
+    successFg: "#176a3c",
+    attentionFg: "#7d5200",
+    dangerFg: "#a52f29",
+    infoFg: "#1a6283",
+    selection: "#cfd5f7",
   },
   dark: {
-    bg: "#171716",
-    panel: "#1f1f1e",
-    rail: "#131312",
-    line: "#2d2d2b",
-    text: "#e9e9e6",
-    muted: "#9b9b96",
-    hover: "#2a2a28",
-    accent: "#5b8def",
-    onAccent: "#ffffff",
-    good: "#4cb36f",
-    warn: "#d9a13a",
-    bad: "#e06a6a",
-    selection: "#2f4a7a",
+    bg: "#1e1d1b",
+    panel: "#282725",
+    rail: "#232220",
+    overlay: "#2f2e2b",
+    line: "#3a3835",
+    text: "#ecebe6",
+    muted: "#b2b0ac",
+    faint: "#807e7a",
+    hover: "#32312e",
+    selected: "#3e4155",
+    accent: "#8e9bff",
+    onAccent: "#14131a",
+    success: "#5dbb82",
+    attention: "#e3b04b",
+    danger: "#e5675f",
+    info: "#6fb4d8",
+    successFg: "#66c58b",
+    attentionFg: "#e3b04b",
+    dangerFg: "#f2958f",
+    infoFg: "#6fb4d8",
+    selection: "#3e4472",
   },
 };
 
@@ -89,16 +121,29 @@ export function paletteVariables(theme: ThemeName, accent?: string): Record<stri
   return {
     "--bg": p.bg,
     "--panel": p.panel,
+    "--raised": p.panel,
     "--rail": p.rail,
+    "--overlay": p.overlay,
     "--line": p.line,
     "--text": p.text,
     "--muted": p.muted,
+    "--faint": p.faint,
     "--hover": p.hover,
+    "--selected": p.selected,
     "--accent": accent ?? p.accent,
     "--on-accent": p.onAccent,
-    "--good": p.good,
-    "--warn": p.warn,
-    "--bad": p.bad,
+    "--success": p.success,
+    "--attention": p.attention,
+    "--danger": p.danger,
+    "--info": p.info,
+    "--success-fg": p.successFg,
+    "--attention-fg": p.attentionFg,
+    "--danger-fg": p.dangerFg,
+    "--info-fg": p.infoFg,
+    // The older names, kept so views that still use them follow the new palette.
+    "--good": p.success,
+    "--warn": p.attention,
+    "--bad": p.danger,
     "--selection": p.selection,
   };
 }

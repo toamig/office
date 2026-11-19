@@ -1,0 +1,19 @@
+/** The design system's components. Views use only these (plan DesignSystem 1: components). */
+export { Button, IconButton, type ButtonVariant, type ControlSize } from "./Button";
+export { Input, PathField } from "./Field";
+export { Select as Dropdown } from "../components/Select";
+export { Segmented as SegmentedControl } from "../components/Segmented";
+export { Tabs, type TabItem } from "./Tabs";
+export { Dialog } from "./Dialog";
+export { Card, ListRow, Table, type Column } from "./Surface";
+export { StatusBadge, CountPill, Kbd } from "./Status";
+export { Skeleton, Spinner, EmptyState, Banner } from "./Feedback";
+export {
+  NotificationStack,
+  NotificationBell,
+  notify,
+  useNotes,
+  lifetimeOf,
+  type Note,
+  type NoteTone,
+} from "./Notifications";

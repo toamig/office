@@ -10,6 +10,8 @@ import tailwindcss from "@tailwindcss/vite";
 export default defineConfig({
   root: resolve(__dirname, "src/renderer"),
   plugins: [react(), tailwindcss()],
+  // The Gallery is part of the web build, for the look check; the packaged app leaves it out.
+  define: { "import.meta.env.VITE_GALLERY": JSON.stringify("1") },
   resolve: { alias: { "@shared": resolve(__dirname, "src/shared") } },
   build: {
     outDir: resolve(__dirname, "out-web/web"),

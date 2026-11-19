@@ -341,6 +341,18 @@
         "tests/web/projects.spec.ts",
         "tests/web/folders.spec.ts"
       ]
+    },
+    "src/renderer/src/ui": {
+      "web": [
+        "tests/web/gallery.spec.ts",
+        "tests/web/a11y.spec.ts",
+        "tests/web/look.spec.ts",
+        "tests/web/views.spec.ts",
+        "tests/web/polish.spec.ts"
+      ]
+    },
+    "src/renderer/src/views/Gallery.tsx": {
+      "web": ["tests/web/gallery.spec.ts"]
     }
   }
 }

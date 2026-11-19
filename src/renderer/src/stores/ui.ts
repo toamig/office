@@ -11,7 +11,8 @@ export type ViewId =
   | "brain"
   | "inbox"
   | "explore"
-  | "setup";
+  | "setup"
+  | "gallery";
 
 interface Place {
   view: ViewId;

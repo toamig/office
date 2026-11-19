@@ -12,4 +12,5 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   inbox: "Inbox",
   explore: "Explore",
   setup: "Setup",
+  gallery: "Gallery",
 };

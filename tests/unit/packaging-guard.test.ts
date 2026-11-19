@@ -14,7 +14,14 @@ import { parse } from "yaml";
 const ROOT = resolve(__dirname, "../..");
 
 /** What only the test host and the web bridge contain. */
-const MARKERS = ["OFFICE_HOST_READY", "installWebBridge", "__hostControl", "WebSocketServer"];
+const MARKERS = [
+  "OFFICE_HOST_READY",
+  "installWebBridge",
+  "__hostControl",
+  "WebSocketServer",
+  "gallery-open-dialog",
+  "VITE_GALLERY",
+];
 
 function files(dir: string): string[] {
   return readdirSync(dir).flatMap((name) => {

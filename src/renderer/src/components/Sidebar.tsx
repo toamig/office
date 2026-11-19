@@ -7,6 +7,7 @@ import {
   Home,
   Inbox as InboxIcon,
   KanbanSquare,
+  Palette,
   Settings,
 } from "lucide-react";
 import type { ComponentType } from "react";
@@ -66,6 +67,19 @@ export function Sidebar() {
           )}
         </button>
       ))}
+      {(import.meta.env.DEV || import.meta.env.VITE_GALLERY === "1") && (
+        <button
+          onClick={() => navigate("gallery")}
+          data-testid="rail-gallery"
+          data-active={view === "gallery"}
+          aria-label="Gallery"
+          title={collapsed ? "Gallery" : undefined}
+          className="sidebar-item mt-auto"
+        >
+          <Palette size={16} />
+          {!collapsed && <span className="sidebar-label">Gallery</span>}
+        </button>
+      )}
     </nav>
   );
 }

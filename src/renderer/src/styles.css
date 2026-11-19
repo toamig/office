@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "./ui/ui.css";
 
 /* Colours come from the shared palette (src/shared/theme.ts) as variables set on the root by ThemeApplier.
    Nothing in this file or in a component has a colour of its own. */
@@ -21,11 +22,12 @@ body {
   background: var(--bg);
   color: var(--text);
   font-family: var(--font-ui);
-  font-size: 13px;
+  font-size: var(--text-md);
+  line-height: var(--leading-text);
 }
 
 :root[data-density="compact"] body {
-  font-size: 12px;
+  font-size: var(--text-sm);
 }
 
 /* ---- the shell ---- */

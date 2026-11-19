@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { lazy, Suspense, useEffect, useState } from "react";
 import { QuickSwitcher } from "./components/QuickSwitcher";
 import { Sidebar } from "./components/Sidebar";
 import { SyncReportDialog } from "./components/SyncReportDialog";
@@ -24,9 +24,16 @@ import { Inbox } from "./views/Inbox";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
+import { NotificationStack } from "./ui";
 import { Welcome } from "./views/welcome/Welcome";
 
 /** The views that are drawn fresh each time; the Agents view is kept alive by App and never comes through here. */
+/** The Gallery exists in development and web builds only: in the packaged app this is null and its code is not in the bundle. */
+const Gallery =
+  import.meta.env.DEV || import.meta.env.VITE_GALLERY === "1"
+    ? lazy(() => import("./views/Gallery").then((m) => ({ default: m.Gallery })))
+    : null;
+
 function CurrentView({ configured }: { configured: boolean }) {
   const picked = useUi((s) => s.view);
   const view = configured ? picked : "setup";
@@ -48,6 +55,12 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "brain") return <Brain />;
   if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;
+  if (view === "gallery" && Gallery)
+    return (
+      <Suspense fallback={null}>
+        <Gallery />
+      </Suspense>
+    );
   return <Setup />;
 }
 
@@ -81,6 +94,7 @@ export default function App() {
     return (
       <>
         <Welcome state={setup.data} />
+        <NotificationStack />
         <ThemeApplier />
       </>
     );
@@ -122,6 +136,7 @@ export default function App() {
       <QuickSwitcher />
       <ShortcutsSheet />
       <LeaveGuard />
+      <NotificationStack />
       <ThemeApplier />
     </div>
   );
