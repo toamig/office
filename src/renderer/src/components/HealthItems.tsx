@@ -254,22 +254,7 @@ export function RepoItem({ repo }: { repo: HubRepoRow }) {
 /** One finding of the brain's check, as formatted text, with the one thing to do about it. */
 export function ProblemItem({ problem }: { problem: HealthProblem }) {
   const startFix = useStartFix();
-  const [busy, setBusy] = useState(false);
   const folder = problem.repo ?? ".";
-  const reindex = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      await office.invoke("health.reindex");
-      notifyDone("Routers regenerated", "Review and commit the changed files.", "health");
-    } catch (err) {
-      notifyError(err, "Could not regenerate the routers", "health", {
-        label: "Start a session to fix",
-        run: () => startFix(fixGoal(problem.message), problem.message, folder),
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
   return (
     <div className="ui-line" data-testid="health-problem" data-level={problem.level}>
       <StatusBadge
@@ -280,30 +265,21 @@ export function ProblemItem({ problem }: { problem: HealthProblem }) {
       <div className="ui-line-main">
         <NoteText>{problem.message}</NoteText>
       </div>
-      {problem.fix === "reindex" ? (
-        <Button
-          size="sm"
-          disabled={busy}
-          onClick={() => void reindex()}
-          data-testid="health-reindex"
-        >
-          Reindex
-        </Button>
-      ) : (
-        <Button
-          size="sm"
-          onClick={() =>
-            startFix(
-              fixGoal(problem.message),
-              `The brain's check reports${problem.file ? ` in ${problem.file}` : ""}:\n\n${problem.message}`,
-              folder,
-            )
-          }
-          data-testid="health-session"
-        >
-          Start a session to fix
-        </Button>
-      )}
+      <Button
+        size="sm"
+        onClick={() =>
+          startFix(
+            fixGoal(problem.message),
+            `The brain's check reports${problem.file ? ` in ${problem.file}` : ""}:
+
+${problem.message}`,
+            folder,
+          )
+        }
+        data-testid="health-session"
+      >
+        Start a session to fix
+      </Button>
     </div>
   );
 }

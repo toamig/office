@@ -88,6 +88,7 @@
     },
     "src/main/modules/git": {
       "web": [
+        "tests/web/graph.spec.ts",
         "tests/web/git.spec.ts",
         "tests/web/m3-flow.spec.ts",
         "tests/web/projects.spec.ts",
@@ -237,6 +238,7 @@
     },
     "src/renderer/src/views/Git.tsx": {
       "web": [
+        "tests/web/graph.spec.ts",
         "tests/web/git.spec.ts",
         "tests/web/m3-flow.spec.ts",
         "tests/web/inspector.spec.ts",
@@ -245,6 +247,7 @@
     },
     "src/renderer/src/views/git": {
       "web": [
+        "tests/web/graph.spec.ts",
         "tests/web/git.spec.ts",
         "tests/web/m3-flow.spec.ts",
         "tests/web/speed.spec.ts",

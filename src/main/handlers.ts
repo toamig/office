@@ -23,6 +23,8 @@ import {
   removeWorktree,
 } from "./modules/git/worktrees";
 import { commitFiles, pushCurrent } from "./modules/git/commit";
+import { readGraph } from "./modules/git/graph";
+import { git } from "./modules/git/run";
 import { getDiff } from "./modules/git/diff";
 import { readStatus } from "./modules/git/status";
 import { sendReviewToAgent } from "./modules/sessions/review";
@@ -358,6 +360,14 @@ function registerGitHandlers(ctx: AppContext): void {
 /** Branches and worktrees. */
 function registerBranchHandlers(ctx: AppContext): void {
   const { repoOf, changed } = gitHelpers(ctx);
+  ctx.ipc.handle("git.graph", async (req) => {
+    const repo = repoOf(req.projectId);
+    const remotes = (await git(repo, ["remote"])).stdout
+      .split("\n")
+      .map((r) => r.trim())
+      .filter(Boolean);
+    return readGraph(repo, req.limit ?? 300, remotes);
+  });
   ctx.ipc.handle("branches.list", (req) => listBranches(repoOf(req.projectId)));
   ctx.ipc.handle("branches.switch", async (req) => {
     const result = await switchBranch(repoOf(req.projectId), req.name, {
@@ -602,5 +612,4 @@ function registerVaultHandlers(ctx: AppContext): void {
   ctx.ipc.handle("health.discard", (req) => ctx.healthActions.discard(req.folder));
   ctx.ipc.handle("health.pull", (req) => ctx.healthActions.pull(req.folder));
   ctx.ipc.handle("health.push", (req) => ctx.healthActions.push(req.folder));
-  ctx.ipc.handle("health.reindex", async () => ({ output: await ctx.healthActions.reindex() }));
 }

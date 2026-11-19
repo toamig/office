@@ -23,14 +23,18 @@ export function OverflowMenu({
   label = "More actions",
   trigger,
   testId = "page-more",
+  floating = false,
 }: {
   items: MoreItem[];
   label?: string;
   /** A word for the button, instead of the three dots. */
   trigger?: string;
   testId?: string;
+  /** For a menu inside a scrolling list: it is placed on the screen, so the list never clips it. */
+  floating?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
@@ -79,7 +83,18 @@ export function OverflowMenu({
         <Button
           aria-haspopup="menu"
           aria-expanded={open}
-          onClick={() => setOpen(!open)}
+          onClick={(e) => {
+            if (floating && !open) {
+              const r = e.currentTarget.getBoundingClientRect();
+              const height = items.length * 40 + 16;
+              const below = r.bottom + 4 + height <= window.innerHeight;
+              setSpot({
+                top: below ? r.bottom + 4 : Math.max(8, r.top - height - 4),
+                left: r.left,
+              });
+            }
+            setOpen(!open);
+          }}
           data-testid={testId}
         >
           {trigger} <ChevronDown />
@@ -96,7 +111,14 @@ export function OverflowMenu({
         </IconButton>
       )}
       {open && (
-        <div className="ui-popover ui-menu" role="menu" data-testid={`${testId}-menu`}>
+        <div
+          className="ui-popover ui-menu"
+          role="menu"
+          data-testid={`${testId}-menu`}
+          {...(floating && spot
+            ? { style: { position: "fixed", top: spot.top, left: spot.left, right: "auto" } }
+            : {})}
+        >
           {calm.map(row)}
           {danger.length > 0 && calm.length > 0 && (
             <div className="ui-menu-rule" role="separator" />

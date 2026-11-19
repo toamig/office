@@ -4,7 +4,7 @@ import { join } from "node:path";
 import { sh } from "../fixtures/repos/make";
 import { launch } from "./helpers";
 
-// M12.4 (Simplify 2.5): every health item has one action: a fix Office makes itself, or a session to fix it.
+// M12.4 (Simplify 2.5): every health item has one action: a fix Office makes itself (commit, discard, pull, push, sync), or a session to fix it.
 
 /** The fake hub tool prints this instead of its own status, so the hub can look uncommitted without it being a file of the brain. */
 const HUB_STATUS = `${".".padEnd(26)} 2026-11-18  1 uncommitted\nAhead/behind counts use the last fetch; \`sync\` refreshes them.\n`;
@@ -61,26 +61,6 @@ test("an uncommitted brain file is reviewed with its diff and committed, or disc
   await app.close();
 });
 
-test("a stale router is fixed with Reindex, which says what it did", async () => {
-  const { app, world } = await launch({ world: true, fakeTools: true });
-  if (!world) throw new Error("no world");
-  const win = await app.firstWindow();
-  steer(world.hub, "STALE_ROUTER", "1");
-  await recheck(win);
-  await win.getByTestId("rail-brain").click();
-  const problem = win.getByTestId("health-problem");
-  await expect(problem).toContainText("router table is out of date", { timeout: 30000 });
-  // Checks are said in words; the tool's own output is behind Show details.
-  await expect(win.getByTestId("health-summary")).toContainText("Checks pass. 1 warning");
-  await expect(win.getByTestId("brain")).not.toContainText("0 external links");
-  await win.getByTestId("health-details").click();
-  await expect(win.getByTestId("health-output")).toContainText("hub: 6 files");
-  await problem.getByTestId("health-reindex").click();
-  await expect(win.getByTestId("health-problem")).toHaveCount(0, { timeout: 30000 });
-  await expect(win.getByTestId("health-summary")).toContainText("Checks pass.");
-  await app.close();
-});
-
 test("a problem with no fix starts a session with the problem as its brief and its goal filled in", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
   if (!world) throw new Error("no world");
@@ -93,6 +73,10 @@ test("a problem with no fix starts a session with the problem as its brief and i
   // The wiki syntax is shown as words, not brackets.
   await expect(error).not.toContainText("[[");
   await expect(win.getByTestId("health-summary")).toContainText("Checks fail. 1 error, 1 warning");
+  // The tool's own words are behind Show details, not on screen.
+  await expect(win.getByTestId("brain")).not.toContainText("0 external links");
+  await win.getByTestId("health-details").click();
+  await expect(win.getByTestId("health-output")).toContainText("hub: 6 files");
 
   await error.getByTestId("health-session").click();
   await expect(win.getByTestId("start-agent-dialog")).toBeVisible();

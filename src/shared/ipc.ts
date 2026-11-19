@@ -15,6 +15,7 @@ import {
   TaskView,
   CaptureResult,
   DiffResult,
+  GraphView,
   GithubOverview,
   RepoStatus,
   HealthView,
@@ -316,6 +317,10 @@ export const channels = {
   "explore.list": { req: z.void(), res: z.array(SessionRow) },
   "explore.plan": { req: SpawnInput, res: z.array(SpawnStep) },
   "explore.spawn": { req: SpawnInput, res: SpawnReport },
+  "git.graph": {
+    req: z.object({ projectId: z.string(), limit: z.number().int().min(20).max(5000).optional() }),
+    res: GraphView,
+  },
   "branches.list": { req: z.object({ projectId: z.string() }), res: BranchList },
   "branches.switch": {
     req: z.object({
@@ -501,8 +506,6 @@ export const channels = {
   "health.discard": { req: z.object({ folder: z.string() }), res: z.void() },
   "health.pull": { req: z.object({ folder: z.string() }), res: z.void() },
   "health.push": { req: z.object({ folder: z.string() }), res: z.void() },
-  /** Regenerates the routers' tables from the notes' frontmatter. */
-  "health.reindex": { req: z.void(), res: z.object({ output: z.string() }) },
   "projects.refresh": { req: z.object({ id: z.string().optional() }), res: z.void() },
 } as const;
 

@@ -164,7 +164,7 @@ export const HubRepoRow = z.object({
 });
 export type HubRepoRow = z.infer<typeof HubRepoRow>;
 
-/** One finding of the brain's check, in the words the tool used, with where it is and whether Office can fix it. */
+/** One finding of the brain's check, in the words the tool used, and where it is. */
 export const HealthProblem = z.object({
   level: z.enum(["error", "warning"]),
   message: z.string(),
@@ -172,8 +172,6 @@ export const HealthProblem = z.object({
   file: z.string().nullable(),
   /** The repo folder it is in ("Polyglyph"), or null for the hub itself. */
   repo: z.string().nullable(),
-  /** The fix Office can make itself: regenerate the routers. Otherwise a session is started to fix it. */
-  fix: z.enum(["reindex"]).nullable(),
 });
 export type HealthProblem = z.infer<typeof HealthProblem>;
 
@@ -765,6 +763,51 @@ export const BranchList = z.object({
   remote: z.array(BranchInfo),
 });
 export type BranchList = z.infer<typeof BranchList>;
+
+/** A name on a commit of the graph: a branch, a remote branch, a tag, or HEAD when it is detached. */
+export const GraphLabel = z.object({
+  kind: z.enum(["branch", "remote", "tag", "head"]),
+  name: z.string(),
+  /** The checked-out branch (or the detached HEAD). */
+  current: z.boolean(),
+});
+export type GraphLabel = z.infer<typeof GraphLabel>;
+
+/** A segment of a lane, with the colour index of the branch it belongs to. */
+const GraphSegment = z.object({ lane: z.number(), color: z.number() });
+
+/** One commit of the graph and the lines around it: which lanes arrive, pass by and leave. */
+export const GraphRow = z.object({
+  hash: z.string(),
+  short: z.string(),
+  subject: z.string(),
+  author: z.string(),
+  /** Unix seconds. */
+  at: z.number(),
+  parents: z.array(z.string()),
+  /** The lane of the commit's dot, and the colour index of its branch. */
+  col: z.number(),
+  color: z.number(),
+  /** Lanes that end at this commit from above (more than one is a fork: branches that started here). */
+  fromAbove: z.array(GraphSegment),
+  /** Lanes that pass by this row without touching the commit. */
+  through: z.array(GraphSegment),
+  /** Where each parent's line goes below the commit (more than one is a merge). */
+  toBelow: z.array(z.object({ to: z.number(), color: z.number() })),
+  labels: z.array(GraphLabel),
+});
+export type GraphRow = z.infer<typeof GraphRow>;
+
+export const GraphView = z.object({
+  rows: z.array(GraphRow),
+  /** The most lanes any row has: the width of the drawing. */
+  width: z.number(),
+  hasMore: z.boolean(),
+  /** The commit HEAD is on (when it is among those shown) and its branch (null when detached). */
+  head: z.object({ hash: z.string().nullable(), branch: z.string().nullable() }),
+  detached: z.boolean(),
+});
+export type GraphView = z.infer<typeof GraphView>;
 
 export const BranchCompare = z.object({
   a: z.string(),

@@ -184,17 +184,17 @@ describe("health parsing", () => {
       errors: ["bad one"],
       warnings: 1,
       summary: "hub: 3 files, 1 errors, 1 warnings, 0 external links",
-      // Errors first, each with where it is and whether Office can fix it itself.
+      // Errors first, each with the note and repo it names.
       problems: [
-        { level: "error", message: "bad one", file: null, repo: null, fix: null },
-        { level: "warning", message: "x", file: null, repo: null, fix: null },
+        { level: "error", message: "bad one", file: null, repo: null },
+        { level: "warning", message: "x", file: null, repo: null },
       ],
       output: "warn  x\nERROR bad one\n\nhub: 3 files, 1 errors, 1 warnings, 0 external links",
     });
-    // A message that names a note says which repo holds it, and a stale router has a fix.
+    // A message that names a note says which repo holds it; the real tool's warnings are seen as they are.
     expect(
       parseValidate(
-        "warn  Polyglyph/Pricing.md: notes disagree\nwarn  Alpha/_index.md: router is out of date\n",
+        "warn  Polyglyph/Pricing.md: notes disagree\nwarn  tag 'x' is used once; consider merging it away\n",
         0,
       ).problems,
     ).toEqual([
@@ -203,14 +203,12 @@ describe("health parsing", () => {
         message: "Polyglyph/Pricing.md: notes disagree",
         file: "Polyglyph/Pricing.md",
         repo: "Polyglyph",
-        fix: null,
       },
       {
         level: "warning",
-        message: "Alpha/_index.md: router is out of date",
-        file: "Alpha/_index.md",
-        repo: "Alpha",
-        fix: "reindex",
+        message: "tag 'x' is used once; consider merging it away",
+        file: null,
+        repo: null,
       },
     ]);
     expect(describeValidate(parseValidate("warn  a\nwarn  b\n", 0))).toBe(

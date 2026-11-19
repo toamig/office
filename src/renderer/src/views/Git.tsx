@@ -20,18 +20,16 @@ import {
   type WorkbenchPreset,
 } from "../ui";
 import { InspectorSlot } from "../components/Inspector";
-import { BranchesTab } from "./git/BranchesTab";
+import { GraphTab } from "./git/GraphTab";
 import { GitInspector } from "./git/GitInspector";
 import { CommitTab } from "./git/CommitTab";
 import { DiffTab } from "./git/DiffTab";
-import { WorktreesTab } from "./git/WorktreesTab";
 
-const TABS = ["branches", "worktrees", "changes", "commit", "prs"] as const;
+const TABS = ["graph", "changes", "commit", "prs"] as const;
 type Tab = (typeof TABS)[number];
 
 const TITLES: Record<Tab, string> = {
-  branches: "Branches",
-  worktrees: "Worktrees",
+  graph: "Graph",
   changes: "Changes",
   commit: "Commit",
   prs: "Pull requests and CI",
@@ -40,11 +38,10 @@ const TITLES: Record<Tab, string> = {
 /** One panel of the Git desk: the part of a repo it shows, drawn for the repo in its params. */
 const GitPanel: PanelComponent = ({ params }) => {
   const projectId = String(params["projectId"] ?? "");
-  const kind = String(params["kind"] ?? "branches") as Tab;
+  const kind = String(params["kind"] ?? "graph") as Tab;
   return (
     <div className="dock-panel" data-testid={`git-panel-${kind}`}>
-      {kind === "branches" && <BranchesTab key={projectId} projectId={projectId} />}
-      {kind === "worktrees" && <WorktreesTab key={projectId} projectId={projectId} />}
+      {kind === "graph" && <GraphTab key={projectId} projectId={projectId} />}
       {kind === "changes" && <DiffTab key={projectId} projectId={projectId} />}
       {kind === "commit" && <CommitTab key={projectId} projectId={projectId} />}
       {kind === "prs" && <PrsPanel key={projectId} projectId={projectId} />}
@@ -66,11 +63,11 @@ const GIT_PRESETS: WorkbenchPreset[] = [
   },
   {
     id: "review",
-    label: "Review: Changes, Pull requests and Branches",
+    label: "Review: Changes, Pull requests and the graph",
     apply: (api) => {
       tabsTogether(api);
       splitBeside(api, "prs", "changes");
-      splitBeside(api, "branches", "prs", "below");
+      splitBeside(api, "graph", "prs", "below");
     },
   },
 ];
@@ -81,7 +78,7 @@ export function Git() {
   const projects = useQuery("projects.list", undefined, ["project.status"]);
   const health = useQuery("vault.health", undefined, ["vault.health"]);
   const [selected, setSelected] = useState(params["project"] ?? "");
-  const [tab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "branches");
+  const [tab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "graph");
 
   const repos = (projects.data ?? []).filter((p) => !p.archived && p.isRepo);
   const current = repos.find((p) => p.id === selected) ?? repos[0];

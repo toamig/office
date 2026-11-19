@@ -1,14 +1,13 @@
 import { existsSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import type { DiffResult } from "../../../shared/models";
-import { run } from "../../core/exec";
 import { IpcFailure } from "../../core/ipc";
 import { getDiff } from "../git/diff";
 import { git, gitOk } from "../git/run";
 
 /**
  * The fixes Office makes itself for the brain's health (Simplify 2.5): commit or discard the uncommitted files of a
- * hub repo, pull one that is behind, push one that is ahead, and regenerate the routers. A folder is only ever one
+ * hub repo, pull one that is behind, and push one that is ahead. A folder is only ever one
  * of the hub's own repos: the hub itself ("." or "") or a folder inside it that is a git repo.
  */
 export interface HealthActionDeps {
@@ -68,21 +67,5 @@ export class HealthActions {
     const dir = repoDir(this.deps.root(), folder);
     await gitOk(dir, ["push", "-q"]);
     this.deps.changed();
-  }
-
-  /** Regenerates the generated tables of the routers from the notes' frontmatter. */
-  async reindex(): Promise<string> {
-    const root = this.deps.root();
-    const tool = join(root, "Common", "tools", "brain.mjs");
-    if (!existsSync(tool))
-      throw new IpcFailure("no-tool", "The brain tools are not available here");
-    const result = await run("node", [tool, "reindex"], { cwd: root, timeoutMs: 120_000 });
-    if (result.code !== 0)
-      throw new IpcFailure(
-        "reindex-failed",
-        result.stderr.trim() || result.stdout.trim() || "reindex failed",
-      );
-    this.deps.changed();
-    return result.stdout.trim();
   }
 }

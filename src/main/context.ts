@@ -90,7 +90,7 @@ export interface AppContext {
   onboarding: OnboardingService;
   /** The brain's health, refreshed in the background; reads return the last result. */
   health: HealthService;
-  /** The fixes the brain's health offers: commit, discard, pull, push and reindex. */
+  /** The fixes the brain's health offers: commit, discard, pull and push. */
   healthActions: HealthActions;
   /** The last look at the command-line tools, refreshed in the background. */
   toolsMonitor: ToolsMonitor;

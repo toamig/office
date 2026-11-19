@@ -49,15 +49,12 @@ export function parseValidate(stdout: string, code: number): HealthView["validat
   };
 }
 
-/** Messages that the routers (the generated tables of each `_index.md`) being out of date explains. */
-const STALE_ROUTER = /reindex|out of date|stale|generated (block|table)|router/i;
-
-/** One finding: the note it names ("Repo/Note.md: ..."), the repo that holds it, and a fix when Office has one. */
+/** One finding: the note it names ("Repo/Note.md: ...") and the repo that holds it. */
 export function problemOf(level: HealthProblem["level"], message: string): HealthProblem {
   const named = /^([\w./-]+\.md)(?::\d+)?:\s/.exec(message);
   const file = named?.[1] ?? null;
   const repo = file && file.includes("/") ? (file.split("/")[0] ?? null) : null;
-  return { level, message, file, repo, fix: STALE_ROUTER.test(message) ? "reindex" : null };
+  return { level, message, file, repo };
 }
 
 const PAD = 26;

@@ -12,6 +12,8 @@ test("branches: create, a dirty switch is refused with a stash offer, and the st
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
 
+  // The branch and worktree lists are filters beside the graph; making and cleaning them is under Branch tools.
+  await win.getByTestId("graph-tools").click();
   await win.getByTestId("new-branch-name").fill("feature-x");
   await win.getByTestId("create-branch").click();
   await expect(win.getByTestId("branch-row").filter({ hasText: "feature-x" })).toContainText(
@@ -43,7 +45,7 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
   const win = await app.firstWindow();
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
-  await win.getByTestId("git-tab-worktrees").click();
+  await win.getByTestId("graph-tools").click();
 
   await win.getByTestId("new-worktree-name").fill("task one");
   await win.getByTestId("create-worktree").click();
@@ -76,7 +78,7 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
   await expect(win.getByTestId("session-status").first()).toContainText(/ended/i);
   await win.getByTestId("rail-git").click();
   await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
-  await win.getByTestId("git-tab-worktrees").click();
+  await win.getByTestId("graph-tools").click();
   await win
     .getByTestId("worktree-row")
     .filter({ hasText: "office/task-one" })
