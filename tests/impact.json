@@ -99,7 +99,7 @@
       "web": ["tests/web/git.spec.ts", "tests/web/m3-flow.spec.ts"]
     },
     "src/main/modules/notes": {
-      "web": ["tests/web/projects.spec.ts", "tests/web/brain.spec.ts"]
+      "web": ["tests/web/projects.spec.ts", "tests/web/brain.spec.ts", "tests/web/notes.spec.ts"]
     },
     "src/main/modules/pending": {
       "web": [
@@ -171,6 +171,7 @@
     "src/main/modules/vault": {
       "web": [
         "tests/web/brain.spec.ts",
+        "tests/web/health.spec.ts",
         "tests/web/board.spec.ts",
         "tests/web/home.spec.ts",
         "tests/web/capture.spec.ts",
@@ -220,7 +221,7 @@
       ]
     },
     "src/renderer/src/views/Brain.tsx": {
-      "web": ["tests/web/brain.spec.ts"]
+      "web": ["tests/web/brain.spec.ts", "tests/web/health.spec.ts"]
     },
     "src/renderer/src/views/brain": {
       "web": ["tests/web/brain.spec.ts"]
@@ -270,6 +271,7 @@
     },
     "src/renderer/src/views/ProjectPage.tsx": {
       "web": [
+        "tests/web/notes.spec.ts",
         "tests/web/projects.spec.ts",
         "tests/web/board.spec.ts",
         "tests/web/git.spec.ts",
@@ -279,6 +281,7 @@
     },
     "src/renderer/src/views/project": {
       "web": [
+        "tests/web/notes.spec.ts",
         "tests/web/projects.spec.ts",
         "tests/web/tasks.spec.ts",
         "tests/web/onboarding.spec.ts",

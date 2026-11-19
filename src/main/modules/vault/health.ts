@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
 import { join } from "node:path";
-import type { HealthView, HubRepoRow } from "../../../shared/models";
+import type { HealthProblem, HealthView, HubRepoRow } from "../../../shared/models";
 import { run } from "../../core/exec";
 import { git } from "../git/run";
 
@@ -8,7 +8,15 @@ import { git } from "../git/run";
 export async function runValidate(root: string): Promise<HealthView["validate"]> {
   const tool = join(root, "Common", "tools", "brain.mjs");
   if (!existsSync(tool)) {
-    return { ran: false, ok: true, errors: [], warnings: 0, summary: null };
+    return {
+      ran: false,
+      ok: true,
+      errors: [],
+      warnings: 0,
+      summary: null,
+      problems: [],
+      output: "",
+    };
   }
   const result = await run("node", [tool, "validate"], { cwd: root, timeoutMs: 120_000 });
   return parseValidate(result.stdout, result.code);
@@ -17,14 +25,39 @@ export async function runValidate(root: string): Promise<HealthView["validate"]>
 /** `ERROR ...` lines are errors, `warn ...` lines are warnings, the last `hub:` line is the summary. */
 export function parseValidate(stdout: string, code: number): HealthView["validate"] {
   const errors: string[] = [];
+  const problems: HealthProblem[] = [];
   let warnings = 0;
   let summary: string | null = null;
   for (const line of stdout.split(/\r?\n/)) {
-    if (line.startsWith("ERROR ")) errors.push(line.slice(6).trim());
-    else if (line.startsWith("warn ")) warnings++;
-    else if (/^\S+: \d+ files, \d+ errors/.test(line)) summary = line.trim();
+    if (line.startsWith("ERROR ")) {
+      errors.push(line.slice(6).trim());
+      problems.push(problemOf("error", line.slice(6).trim()));
+    } else if (line.startsWith("warn ")) {
+      warnings++;
+      problems.push(problemOf("warning", line.slice(5).trim()));
+    } else if (/^\S+: \d+ files, \d+ errors/.test(line)) summary = line.trim();
   }
-  return { ran: true, ok: code === 0 && errors.length === 0, errors, warnings, summary };
+  problems.sort((a, b) => (a.level === b.level ? 0 : a.level === "error" ? -1 : 1));
+  return {
+    ran: true,
+    ok: code === 0 && errors.length === 0,
+    errors,
+    warnings,
+    summary,
+    problems,
+    output: stdout.trim(),
+  };
+}
+
+/** Messages that the routers (the generated tables of each `_index.md`) being out of date explains. */
+const STALE_ROUTER = /reindex|out of date|stale|generated (block|table)|router/i;
+
+/** One finding: the note it names ("Repo/Note.md: ..."), the repo that holds it, and a fix when Office has one. */
+export function problemOf(level: HealthProblem["level"], message: string): HealthProblem {
+  const named = /^([\w./-]+\.md)(?::\d+)?:\s/.exec(message);
+  const file = named?.[1] ?? null;
+  const repo = file && file.includes("/") ? (file.split("/")[0] ?? null) : null;
+  return { level, message, file, repo, fix: STALE_ROUTER.test(message) ? "reindex" : null };
 }
 
 const PAD = 26;

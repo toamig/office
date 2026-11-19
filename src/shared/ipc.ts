@@ -27,6 +27,7 @@ import {
   PreviewBounds,
   PreviewState,
   NotificationRules,
+  NoteEntry,
   ProjectNote,
   ProviderStatus,
   PtyHistory,
@@ -152,6 +153,9 @@ export const channels = {
   /** The path of the project's .uproject file, or null when it is not an Unreal project. */
   "projects.unrealFile": { req: z.object({ id: z.string() }), res: z.string().nullable() },
   "projects.openUnreal": { req: z.object({ id: z.string() }), res: z.void() },
+  "notes.list": { req: z.object({ projectId: z.string() }), res: z.array(NoteEntry) },
+  /** Opens a note's file in the owner's editor. */
+  "notes.openFile": { req: z.object({ projectId: z.string(), name: z.string() }), res: z.void() },
   "notes.read": { req: z.object({ projectId: z.string(), name: z.string() }), res: ProjectNote },
   "search.items": { req: z.void(), res: z.array(SearchItem) },
   /** The last look at the tools (a background job does the looking). */
@@ -487,6 +491,18 @@ export const channels = {
     res: z.void(),
   },
   "vault.health": { req: z.void(), res: HealthView },
+  /** What is uncommitted in one of the brain's repos ("." is the hub), with each file's changes. */
+  "health.changes": { req: z.object({ folder: z.string() }), res: DiffResult },
+  "health.commit": {
+    req: z.object({ folder: z.string(), message: z.string() }),
+    res: z.object({ hash: z.string() }),
+  },
+  /** Throws the uncommitted changes of a brain repo away; the screen asks first. */
+  "health.discard": { req: z.object({ folder: z.string() }), res: z.void() },
+  "health.pull": { req: z.object({ folder: z.string() }), res: z.void() },
+  "health.push": { req: z.object({ folder: z.string() }), res: z.void() },
+  /** Regenerates the routers' tables from the notes' frontmatter. */
+  "health.reindex": { req: z.void(), res: z.object({ output: z.string() }) },
   "projects.refresh": { req: z.object({ id: z.string().optional() }), res: z.void() },
 } as const;
 

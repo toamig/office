@@ -25,6 +25,8 @@ export interface RunOptions {
   runDir?: string;
   /** Extra environment for the child process. */
   env?: Record<string, string>;
+  /** Only these tools exist for a headless run, and anything else is refused without asking. */
+  tools?: string;
 }
 
 /** Normalised events from a headless run. */

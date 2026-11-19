@@ -19,6 +19,8 @@ import {
   notifyDone,
   notifyError,
 } from "../ui";
+import { describeValidate } from "@shared/health";
+import { AuditItem, ProblemItem, RepoItem, ShowDetails } from "../components/HealthItems";
 import { AskPanel } from "./brain/AskPanel";
 
 function QuickNote() {
@@ -86,6 +88,7 @@ function BrainHealth() {
   const audit = useQuery("vault.audit", undefined, ["vault.changed"]);
   const validate = health.data?.validate;
   const attention = (health.data?.repos ?? []).filter((r) => r.attention);
+  const problems = validate?.problems ?? [];
   return (
     <Card title="Brain health" testId="panel-brain-health">
       {validate && !validate.ran && (
@@ -94,26 +97,24 @@ function BrainHealth() {
         </EmptyState>
       )}
       {validate?.ran && (
-        <div className="ui-line">
-          <StatusBadge
-            status={validate.ok ? "passed" : "failed"}
-            label={validate.ok ? "Checks pass" : "Checks fail"}
-          />
-          <span className="ui-muted ui-line-main">{validate.summary}</span>
-        </div>
+        <>
+          <div className="ui-line" data-testid="health-summary">
+            <StatusBadge
+              status={validate.ok ? "passed" : "failed"}
+              label={validate.ok ? "Checks pass" : "Checks fail"}
+            />
+            <span className="ui-muted ui-line-main">{describeValidate(validate)}</span>
+          </div>
+          <ShowDetails output={validate.output} />
+        </>
       )}
-      {validate?.errors.map((e) => (
-        <div key={e} className="ui-line-sub ui-bad">
-          {e}
-        </div>
+      {problems.map((p) => (
+        <ProblemItem key={`${p.level}-${p.message}`} problem={p} />
       ))}
       {attention.map((r) => (
-        <div key={r.folder} className="ui-line">
-          <StatusBadge status="behind" label={r.folder === "." ? "Hub" : r.folder} />
-          <span className="ui-line-main">{r.state}</span>
-        </div>
+        <RepoItem key={r.folder} repo={r} />
       ))}
-      {validate?.ran && attention.length === 0 && (
+      {validate?.ran && attention.length === 0 && problems.length === 0 && (
         <StatusBadge status="in-sync" label="Every repo is committed and in step" />
       )}
       <Group>Open content-audit entries</Group>
@@ -121,11 +122,9 @@ function BrainHealth() {
       {audit.data?.map((a) => (
         <div key={a.repo} className="mb-1">
           <span className="font-medium">{a.repo}</span>
-          <ul className="m-0 pl-5">
-            {a.entries.map((e) => (
-              <li key={e}>{e}</li>
-            ))}
-          </ul>
+          {a.entries.map((e) => (
+            <AuditItem key={e} repo={a.repo} entry={e} />
+          ))}
         </div>
       ))}
     </Card>

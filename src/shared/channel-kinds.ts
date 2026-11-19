@@ -55,6 +55,8 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "tasks.get",
   "pending.list",
   "vault.health",
+  "health.changes",
+  "notes.list",
 ];
 
 /**

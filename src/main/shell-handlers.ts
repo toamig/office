@@ -2,6 +2,7 @@ import type { AppContext } from "./context";
 import { detectDevServer } from "./core/dev-server";
 import { run } from "./core/exec";
 import { IpcFailure } from "./core/ipc";
+import { notePath } from "./modules/notes/notes";
 import { findUproject } from "./modules/projects/unreal";
 import type { ShellPlatform } from "./shell-platform";
 import type { RunSummary } from "../shared/models";
@@ -53,6 +54,21 @@ export function registerShellHandlers(ctx: AppContext, platform: ShellPlatform):
         )
         .all(req.id) as RunSummary[],
   );
+  ctx.ipc.handle("notes.openFile", async (req) => {
+    const file = notePath(
+      ctx.store.state.workspace,
+      ctx.settings().workspaceRoot,
+      req.projectId,
+      req.name,
+    );
+    if (!file) throw new IpcFailure("no-note", "That note is not in the brain");
+    const result = await run(ctx.settings().editorCommand, [file], { timeoutMs: 15_000 });
+    if (result.code !== 0)
+      throw new IpcFailure(
+        "editor-failed",
+        `Could not start "${ctx.settings().editorCommand}": ${result.stderr.trim() || `exit ${result.code}`}`,
+      );
+  });
   ctx.ipc.handle("projects.openEditor", async (req) => {
     const result = await run(ctx.settings().editorCommand, [folderOf(req.id)], {
       timeoutMs: 15_000,

@@ -13,7 +13,11 @@ if (command === "validate") {
     console.log("\nhub: 6 files, 1 errors, 1 warnings, 0 external links");
     process.exit(1);
   }
-  console.log("\nhub: 6 files, 0 errors, 0 warnings, 0 external links");
+  // A stale router is a warning Office can fix itself by reindexing; it clears once a reindex has run.
+  if (existsSync(join(root, "STALE_ROUTER")) && !existsSync(join(root, ".git", "REINDEXED"))) {
+    console.log("warn  Alpha/_index.md: router table is out of date, run reindex");
+    console.log("\nhub: 6 files, 0 errors, 1 warnings, 0 external links");
+  } else console.log("\nhub: 6 files, 0 errors, 0 warnings, 0 external links");
 } else if (command === "reindex") {
   let wrote = 0;
   for (const entry of readdirSync(root, { withFileTypes: true })) {
@@ -31,6 +35,8 @@ if (command === "validate") {
       wrote++;
     }
   }
+  // Remembered inside .git, so it is never a file of the brain.
+  if (existsSync(join(root, ".git"))) writeFileSync(join(root, ".git", "REINDEXED"), "1");
   console.log(`\n${wrote} router(s) rewritten`);
 } else {
   console.log("fixture: only validate and reindex are implemented");

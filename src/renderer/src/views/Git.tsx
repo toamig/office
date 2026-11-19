@@ -2,14 +2,18 @@ import { GitBranch } from "lucide-react";
 import { useState } from "react";
 import { PrsPanel } from "../components/PrsPanel";
 import { useQuery } from "../lib/hooks";
+import { office } from "../lib/ipc";
+import { RepoItem } from "../components/HealthItems";
 import { useUi } from "../stores/ui";
 import {
+  Button,
   EmptyState,
   Group,
   Page,
   SplitPane,
   StatusBadge,
   Workbench,
+  notifyError,
   splitBeside,
   tabsTogether,
   type PanelComponent,
@@ -117,31 +121,35 @@ export function Git() {
       {brain.length > 0 && (
         <>
           <Group>Brain repos</Group>
-          {brain.map((r) => (
-            <div key={r.folder} className="ui-row" data-testid="brain-repo">
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <span>{r.folder === "." ? "Hub" : r.folder}</span>
-                  {r.branch && (
-                    <span className="ui-line-sub flex items-center gap-1">
-                      <GitBranch size={14} />
-                      {r.branch}
-                    </span>
-                  )}
-                </div>
-                <div className="ui-badges ui-line-sub">
-                  {r.uncommitted > 0 && (
-                    <StatusBadge status="unsaved" label={`${r.uncommitted} changed`} />
-                  )}
-                  {r.ahead > 0 && <StatusBadge status="ahead" label={`${r.ahead} to push`} />}
-                  {r.behind > 0 && <StatusBadge status="behind" label={`${r.behind} to pull`} />}
-                  {r.uncommitted === 0 && r.ahead === 0 && r.behind === 0 && (
-                    <span className={r.attention ? "ui-warn" : "ui-muted"}>{r.state}</span>
-                  )}
+          {brain.map((r) =>
+            r.attention ? (
+              <RepoItem key={r.folder} repo={r} />
+            ) : (
+              <div key={r.folder} className="ui-row" data-testid="brain-repo">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span>{r.folder === "." ? "Hub" : r.folder}</span>
+                    {r.branch && (
+                      <span className="ui-line-sub flex items-center gap-1">
+                        <GitBranch size={14} />
+                        {r.branch}
+                      </span>
+                    )}
+                  </div>
+                  <div className="ui-badges ui-line-sub">
+                    {r.uncommitted > 0 && (
+                      <StatusBadge status="unsaved" label={`${r.uncommitted} changed`} />
+                    )}
+                    {r.ahead > 0 && <StatusBadge status="ahead" label={`${r.ahead} to push`} />}
+                    {r.behind > 0 && <StatusBadge status="behind" label={`${r.behind} to pull`} />}
+                    {r.uncommitted === 0 && r.ahead === 0 && r.behind === 0 && (
+                      <span className={r.attention ? "ui-warn" : "ui-muted"}>{r.state}</span>
+                    )}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            ),
+          )}
         </>
       )}
     </div>
@@ -162,6 +170,32 @@ export function Git() {
               <GitBranch size={14} />
               {current.detached ? "Detached HEAD" : current.branch}
             </span>
+            {(current.ahead > 0 || current.behind > 0) && (
+              <>
+                <StatusBadge
+                  status="behind"
+                  label={[
+                    current.ahead > 0 ? `${current.ahead} to push` : "",
+                    current.behind > 0 ? `${current.behind} to pull` : "",
+                  ]
+                    .filter(Boolean)
+                    .join(", ")}
+                />
+                <Button
+                  size="sm"
+                  onClick={() =>
+                    void office
+                      .invoke("git.syncProject", { id: current.id })
+                      .catch((err: unknown) =>
+                        notifyError(err, `Could not sync ${current.name}`, `sync-${current.id}`),
+                      )
+                  }
+                  data-testid="git-sync-repo"
+                >
+                  Sync
+                </Button>
+              </>
+            )}
           </div>
           <div className="min-h-0 flex-1">
             <Workbench

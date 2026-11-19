@@ -44,16 +44,27 @@ test("a scoped question and a quick note both work", async () => {
   await app.close();
 });
 
-test("Home writes a morning brief on demand and lists only projects with news", async () => {
+test("Home shows the brief as a few plain lines, each leading to its place, with the facts under Show details", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
   await expect(win.getByTestId("brief")).toContainText("No brief yet");
   await win.getByTestId("brief-run").click();
-  const items = win.getByTestId("brief-item");
-  await expect(items.first()).toContainText("Fake brief for");
-  await expect(win.getByTestId("brief")).not.toContainText("No brief yet");
+  const lines = win.getByTestId("brief-line");
+  await expect(lines.first()).toContainText("changed", { timeout: 30000 });
+  // Three to five lines, no markdown syntax, nothing of the facts until asked.
+  expect(await lines.count()).toBeGreaterThanOrEqual(3);
+  expect(await lines.count()).toBeLessThanOrEqual(5);
+  await expect(win.getByTestId("brief")).not.toContainText(/[*#`]/);
+  await expect(win.getByTestId("brief-item")).toHaveCount(0);
+  await win.getByTestId("brief-details").click();
+  await expect(win.getByTestId("brief-item").first()).toContainText("initial");
+  await win.getByTestId("brief-details").click();
+  await expect(win.getByTestId("brief-item")).toHaveCount(0);
+  // A line leads to its place: the first one is about a project.
+  await lines.first().getByRole("button").click();
+  await expect(win.getByTestId("project-page")).toBeVisible();
   // A brief is a result, not something that waits on the owner: it is not in the Needs you list.
   await win.getByTestId("rail-inbox").click();
-  await expect(win.getByTestId("pending-item").filter({ hasText: "morning brief" })).toHaveCount(0);
+  await expect(win.getByTestId("pending-item").filter({ hasText: "brief" })).toHaveCount(0);
   await app.close();
 });

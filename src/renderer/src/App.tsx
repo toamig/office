@@ -44,10 +44,11 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "project") {
     return (
       <ProjectPage
-        key={`${params["id"]}-${params["tab"] ?? ""}-${params["note"] ?? ""}`}
+        key={`${params["id"]}-${params["tab"] ?? ""}-${params["note"] ?? ""}-${params["section"] ?? ""}`}
         id={params["id"] ?? ""}
         {...(params["tab"] ? { tab: params["tab"] } : {})}
         {...(params["note"] ? { note: params["note"] } : {})}
+        {...(params["section"] ? { section: params["section"] } : {})}
       />
     );
   }

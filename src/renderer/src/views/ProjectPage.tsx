@@ -2,7 +2,6 @@ import { Play } from "lucide-react";
 import { useState } from "react";
 import type { ProjectSummary } from "@shared/models";
 import { labelOf } from "@shared/tone";
-import { Markdown } from "../components/Markdown";
 import { PrsPanel } from "../components/PrsPanel";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
@@ -29,6 +28,7 @@ import {
 import { InspectorSlot } from "../components/Inspector";
 import { BranchesTab } from "./git/BranchesTab";
 import { PreviewTab } from "./PreviewTab";
+import { Notes } from "./project/Notes";
 import { ProjectInspector } from "./project/ProjectInspector";
 import { useProjectManage } from "./project/Manage";
 import { RecentRuns } from "./project/RecentRuns";
@@ -50,12 +50,15 @@ const ProjectPanel: PanelComponent = ({ params }) => {
   const id = String(params["id"] ?? "");
   const kind = String(params["kind"] ?? "overview") as Tab;
   const note = typeof params["note"] === "string" ? params["note"] : undefined;
+  const section = typeof params["section"] === "string" ? params["section"] : undefined;
   return (
     <div className="dock-panel" data-flush={kind === "preview" ? "true" : undefined}>
       {kind === "overview" && <Overview id={id} />}
       {kind === "todos" && <Todos id={id} />}
       {kind === "agents" && <ProjectAgents id={id} />}
-      {kind === "notes" && <Notes id={id} {...(note ? { initial: note } : {})} />}
+      {kind === "notes" && (
+        <Notes id={id} {...(note ? { initial: note } : {})} {...(section ? { section } : {})} />
+      )}
       {kind === "preview" && <PreviewTab projectId={id} />}
       {kind === "git" && <BranchesTab key={id} projectId={id} />}
     </div>
@@ -287,43 +290,18 @@ function ProjectAgents({ id }: { id: string }) {
   );
 }
 
-function Notes({ id, initial }: { id: string; initial?: string }) {
-  const [name, setName] = useState(initial ?? "Overview");
-  const note = useQuery("notes.read", { projectId: id, name }, ["vault.changed"]);
-  const names = Array.from(new Set(["Overview", "OpenItems", ...(initial ? [initial] : [])]));
-  return (
-    <Card
-      title="Notes"
-      testId="panel-notes"
-      action={
-        <div className="flex gap-1">
-          {names.map((n) => (
-            <Button
-              key={n}
-              size="sm"
-              variant={n === name ? "primary" : "secondary"}
-              onClick={() => setName(n)}
-            >
-              {n}
-            </Button>
-          ))}
-        </div>
-      }
-    >
-      {note.data && !note.data.exists && (
-        <EmptyState title={`No ${name} note`}>This project has no {name} note yet.</EmptyState>
-      )}
-      {note.data?.exists && (
-        <div className="reading">
-          <Markdown>{note.data.markdown}</Markdown>
-        </div>
-      )}
-    </Card>
-  );
-}
-
 /** A project's page: git state, todos, agents and notes. */
-export function ProjectPage({ id, tab, note }: { id: string; tab?: string; note?: string }) {
+export function ProjectPage({
+  id,
+  tab,
+  note,
+  section,
+}: {
+  id: string;
+  tab?: string;
+  note?: string;
+  section?: string;
+}) {
   const navigate = useUi((s) => s.navigate);
   const projects = useQuery("projects.list", undefined, ["project.status", "workspace.changed"]);
   const project = projects.data?.find((p) => p.id === id);
@@ -341,17 +319,26 @@ export function ProjectPage({ id, tab, note }: { id: string; tab?: string; note?
       </Page>
     );
   }
-  return <ProjectBody project={project} {...(tab ? { tab } : {})} {...(note ? { note } : {})} />;
+  return (
+    <ProjectBody
+      project={project}
+      {...(tab ? { tab } : {})}
+      {...(note ? { note } : {})}
+      {...(section ? { section } : {})}
+    />
+  );
 }
 
 function ProjectBody({
   project,
   tab: initialTab,
   note,
+  section,
 }: {
   project: ProjectSummary;
   tab?: string;
   note?: string;
+  section?: string;
 }) {
   const id = project.id;
   const navigate = useUi((s) => s.navigate);
@@ -454,7 +441,13 @@ function ProjectBody({
                 id: kind,
                 component: "project",
                 title: TITLES[kind],
-                params: { kind, id, testId: `tab-${kind}`, ...(note ? { note } : {}) },
+                params: {
+                  kind,
+                  id,
+                  testId: `tab-${kind}`,
+                  ...(note ? { note } : {}),
+                  ...(section ? { section } : {}),
+                },
               }),
           }))}
           initial={(api) => {
@@ -463,7 +456,13 @@ function ProjectBody({
                 id: kind,
                 component: "project",
                 title: TITLES[kind],
-                params: { kind, id, testId: `tab-${kind}`, ...(note ? { note } : {}) },
+                params: {
+                  kind,
+                  id,
+                  testId: `tab-${kind}`,
+                  ...(note ? { note } : {}),
+                  ...(section ? { section } : {}),
+                },
               });
             api.getPanel(tab)?.api.setActive();
           }}

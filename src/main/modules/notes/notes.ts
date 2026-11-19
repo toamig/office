@@ -1,9 +1,23 @@
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
-import type { ProjectNote, SearchItem } from "../../../shared/models";
+import type { NoteEntry, ProjectNote, SearchItem } from "../../../shared/models";
+import { isRareNote } from "../../../shared/notes";
 import type { Workspace } from "../../../shared/types";
 
 const NAME_RE = /^[A-Za-z0-9._-]+$/;
+
+/** The value of one frontmatter key (`summary`, `type`), without quotes; null when absent. */
+export function frontmatterValue(markdown: string, key: string): string | null {
+  const lines = markdown.split("\n");
+  if (lines[0]?.trim() !== "---") return null;
+  for (let i = 1; i < lines.length; i++) {
+    const line = lines[i] ?? "";
+    if (line.trim() === "---") return null;
+    const m = new RegExp(`^${key}:\\s*(.*)$`).exec(line);
+    if (m) return (m[1] ?? "").trim().replace(/^["']|["']$/g, "") || null;
+  }
+  return null;
+}
 
 /** Removes a leading YAML frontmatter block. */
 export function stripFrontmatter(markdown: string): string {
@@ -33,17 +47,60 @@ export function readNote(
   name: string,
 ): ProjectNote {
   const clean = name.replace(/\.md$/i, "");
-  const missing: ProjectNote = { projectId, name: clean, exists: false, markdown: "" };
+  const missing: ProjectNote = {
+    projectId,
+    name: clean,
+    exists: false,
+    markdown: "",
+    summary: null,
+    source: "",
+  };
   const dir = vaultDir(ws, root, projectId);
   if (!dir || !NAME_RE.test(clean)) return missing;
   const file = join(dir, `${clean}.md`);
   if (!existsSync(file)) return missing;
+  const text = readFileSync(file, "utf8");
+  const folder = ws?.projects.find((p) => p.id === projectId)?.vault ?? "";
   return {
     projectId,
     name: clean,
     exists: true,
-    markdown: stripFrontmatter(readFileSync(file, "utf8")),
+    markdown: stripFrontmatter(text),
+    summary: frontmatterValue(text, "summary"),
+    source: `${folder}/${clean}.md`,
   };
+}
+
+/** Every note of a project with its own summary, for the list; audits and implementation notes are marked rare. */
+export function noteEntries(ws: Workspace | null, root: string, projectId: string): NoteEntry[] {
+  const dir = vaultDir(ws, root, projectId);
+  return listNotes(ws, root, projectId).map((name) => {
+    let text = "";
+    try {
+      text = readFileSync(join(dir ?? "", `${name}.md`), "utf8");
+    } catch {
+      /* an unreadable note is listed without a summary */
+    }
+    return {
+      name,
+      summary: frontmatterValue(text, "summary"),
+      rare: isRareNote(name, frontmatterValue(text, "type")),
+    };
+  });
+}
+
+/** The absolute path of a note's file, or null when it is not there. */
+export function notePath(
+  ws: Workspace | null,
+  root: string,
+  projectId: string,
+  name: string,
+): string | null {
+  const clean = name.replace(/\.md$/i, "");
+  const dir = vaultDir(ws, root, projectId);
+  if (!dir || !NAME_RE.test(clean)) return null;
+  const file = join(dir, `${clean}.md`);
+  return existsSync(file) ? file : null;
 }
 
 /** Top-level markdown notes in a project's vault folder, for the quick switcher. */

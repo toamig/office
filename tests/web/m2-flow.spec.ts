@@ -71,9 +71,9 @@ test("a day in the workbench: two agents, a needs-you, capture, ask the brain an
   await win.getByTestId("citation").first().click();
   await expect(win.getByTestId("note-viewer")).toBeVisible();
 
-  // The morning brief lists the projects with news.
+  // The brief is a few plain lines about what changed.
   await win.getByTestId("rail-home").click();
   await win.getByTestId("brief-run").click();
-  await expect(win.getByTestId("brief-item").first()).toContainText("Fake brief for");
+  await expect(win.getByTestId("brief-line").first()).toContainText("changed", { timeout: 30000 });
   await app.close();
 });

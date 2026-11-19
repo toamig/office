@@ -82,7 +82,15 @@ export function claudeHeadlessArgs(
   o: RunOptions & { prompt: string; resumeId?: string },
   roleFlags: string[],
 ): string[] {
-  const args = ["-p", o.prompt, "--output-format", "stream-json", "--verbose", ...roleFlags];
+  const args = [
+    "-p",
+    o.prompt,
+    "--output-format",
+    "stream-json",
+    "--verbose",
+    ...roleFlags,
+    ...(o.tools ? ["--tools", o.tools] : []),
+  ];
   if (o.resumeId) args.push("--resume", o.resumeId);
   args.push(...permissionFlags(o));
   return args;
@@ -163,7 +171,7 @@ export class ClaudeCodeProvider implements Provider {
     // refused without asking (plan 6.3). A stage that asks the owner, and a read-only run, keep their own mode.
     const args = claudeHeadlessArgs(
       o,
-      this.roleFlags(o, o.permission?.kind === "allowlist" ? "dontAsk" : undefined),
+      this.roleFlags(o, o.permission?.kind === "allowlist" || o.tools ? "dontAsk" : undefined),
     );
     const spec = this.command(args, o.env);
     const stream = spawnStream(spec.cmd, spec.args, {

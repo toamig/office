@@ -8,6 +8,8 @@ const OK: HealthView["validate"] = {
   errors: [],
   warnings: 0,
   summary: "hub: ok",
+  problems: [],
+  output: "",
 };
 
 function setup(kind: string | undefined = "brain-hub") {

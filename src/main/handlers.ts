@@ -38,7 +38,7 @@ import {
   setLayout,
 } from "./modules/sessions/layouts";
 import { userHome } from "./core/paths";
-import { readNote } from "./modules/notes/notes";
+import { noteEntries, readNote } from "./modules/notes/notes";
 import { buildSearchItems } from "./modules/search/items";
 import { readInventories } from "./modules/setup/inventory";
 import {
@@ -86,6 +86,9 @@ function registerProjectHandlers(ctx: AppContext): void {
   });
   ctx.ipc.handle("git.syncAll", () => ctx.sync());
   ctx.ipc.handle("git.syncProject", (req) => ctx.syncProject(req.id));
+  ctx.ipc.handle("notes.list", (req) =>
+    noteEntries(ctx.store.state.workspace, ctx.settings().workspaceRoot, req.projectId),
+  );
   ctx.ipc.handle("notes.read", (req) =>
     readNote(ctx.store.state.workspace, ctx.settings().workspaceRoot, req.projectId, req.name),
   );
@@ -592,4 +595,12 @@ function registerVaultHandlers(ctx: AppContext): void {
   ctx.ipc.handle("vault.addNote", (req) => ctx.ops.addNote(req.projectId, req.text));
   // The last result of the background check, with its time: opening a screen never runs the checks.
   ctx.ipc.handle("vault.health", () => ctx.health.view());
+  ctx.ipc.handle("health.changes", (req) => ctx.healthActions.changes(req.folder));
+  ctx.ipc.handle("health.commit", async (req) => ({
+    hash: await ctx.healthActions.commit(req.folder, req.message),
+  }));
+  ctx.ipc.handle("health.discard", (req) => ctx.healthActions.discard(req.folder));
+  ctx.ipc.handle("health.pull", (req) => ctx.healthActions.pull(req.folder));
+  ctx.ipc.handle("health.push", (req) => ctx.healthActions.push(req.folder));
+  ctx.ipc.handle("health.reindex", async () => ({ output: await ctx.healthActions.reindex() }));
 }

@@ -42,6 +42,7 @@ import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
+import { HealthActions } from "./modules/vault/health-actions";
 import { HealthService } from "./modules/vault/health-service";
 import { OnboardingService } from "./modules/onboarding/service";
 import { readHubStatus, runValidate } from "./modules/vault/health";
@@ -89,6 +90,8 @@ export interface AppContext {
   onboarding: OnboardingService;
   /** The brain's health, refreshed in the background; reads return the last result. */
   health: HealthService;
+  /** The fixes the brain's health offers: commit, discard, pull, push and reindex. */
+  healthActions: HealthActions;
   /** The last look at the command-line tools, refreshed in the background. */
   toolsMonitor: ToolsMonitor;
   /** Where the welcome flow stands. */
@@ -121,6 +124,7 @@ interface Notes {
   vault: VaultService;
   warnings: AppContext["warnings"];
   health: HealthService;
+  healthActions: HealthActions;
   writer: VaultWriter;
   ops: VaultOps;
   projects: ProjectService;
@@ -176,7 +180,11 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     repos: readHubStatus,
     onChange: () => bus.emit("vault.health", {}),
   });
-  return { vault, warnings, health, writer, ops, projects };
+  const healthActions = new HealthActions({
+    root: () => box.current.workspaceRoot,
+    changed: () => void health.refresh(),
+  });
+  return { vault, warnings, health, healthActions, writer, ops, projects };
 }
 
 /** The absolute folder of a project, or undefined when it is unknown. */
@@ -511,6 +519,8 @@ export async function createContext(
     },
   });
   agents.github.onChange = () => pending.changed();
+  // The brief says what waits on the owner, from the same list as the bell.
+  agents.brief.needsYou = () => pending.list().map((i) => i.title);
   return {
     settings: () => box.current,
     patchSettings: (patch) => (box.current = updateSettings(patch)),
@@ -533,6 +543,7 @@ export async function createContext(
     ops: notes.ops,
     warnings: notes.warnings,
     health: notes.health,
+    healthActions: notes.healthActions,
     onboarding,
     toolsMonitor,
     setupState,

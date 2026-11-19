@@ -126,8 +126,16 @@ function respond(text) {
     return "Alpha is a fixture game, and its notes say so.\n\nSources: Alpha/Overview.md, Alpha/OpenItems.md";
   }
   if (/morning brief/i.test(text)) {
-    const names = [...text.matchAll(/^### (.+)$/gm)].map((m) => m[1]);
-    return names.map((n) => `## ${n}\n\nFake brief for ${n}: things changed.`).join("\n\n");
+    // The short brief: three plain lines from the facts in the prompt.
+    const names = [...text.matchAll(/^### (.+)$/gm)]
+      .map((m) => m[1])
+      .filter((n) => !/^Needs the owner/.test(n));
+    const needs = /### Needs the owner now/.test(text);
+    return [
+      `- ${names.length > 0 ? `${names[0]} changed: new commits and notes.` : "Nothing changed in your projects."}`,
+      `- ${needs ? "Some things need you: open Needs you." : "Nothing needs you."}`,
+      `- Worth doing next: ${names.length > 0 ? `review ${names[0]}.` : "pick the next idea."}`,
+    ].join("\n");
   }
   if (/SUMMARY_OF_EXPLORATION/.test(text)) {
     return "## Positioning and vision\n\nA fake exploration summary.\n\n## Open items\n- Name the game\n- Draw the sheep";

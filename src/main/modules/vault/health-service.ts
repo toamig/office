@@ -18,6 +18,8 @@ const NOT_RUN: HealthView["validate"] = {
   errors: [],
   warnings: 0,
   summary: null,
+  problems: [],
+  output: "",
 };
 
 /**

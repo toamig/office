@@ -164,6 +164,32 @@ describe("headless runs against the fake CLIs", () => {
     expect(await modeOf("ask")).toBe("acceptEdits");
   });
 
+  it("runs the brief with only the read tools, nothing allowed to run, on the cheapest model", async () => {
+    const p = new ClaudeCodeProvider({ id: "fake", bin: "fake-claude" });
+    const seen = vi.spyOn(p as never, "command" as never) as unknown as {
+      mock: { calls: Array<[string[]]> };
+    };
+    await p.headless({
+      cwd: tmpdir(),
+      officeSessionId: "s-brief",
+      prompt: "morning brief facts",
+      permission: { kind: "readonly" },
+      tools: "Read,Grep,Glob",
+      role: role({ model: "haiku", readOnly: true }),
+    }).done;
+    const args = seen.mock.calls[0]?.[0] ?? [];
+    expect(args.slice(args.indexOf("--model"), args.indexOf("--model") + 2)).toEqual([
+      "--model",
+      "haiku",
+    ]);
+    expect(args.slice(args.indexOf("--tools"), args.indexOf("--tools") + 2)).toEqual([
+      "--tools",
+      "Read,Grep,Glob",
+    ]);
+    expect(args[args.indexOf("--permission-mode") + 1]).toBe("dontAsk");
+    expect(args).not.toContain("Bash");
+  });
+
   it("reports a failed claude run", async () => {
     const p = new ClaudeCodeProvider({ id: "fake", bin: "fake-claude" });
     const done = await p.headless({ cwd: tmpdir(), officeSessionId: "s2", prompt: "FAIL_RUN" })

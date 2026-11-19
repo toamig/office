@@ -1,3 +1,4 @@
+import { describeValidate } from "../../src/shared/health";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -183,7 +184,39 @@ describe("health parsing", () => {
       errors: ["bad one"],
       warnings: 1,
       summary: "hub: 3 files, 1 errors, 1 warnings, 0 external links",
+      // Errors first, each with where it is and whether Office can fix it itself.
+      problems: [
+        { level: "error", message: "bad one", file: null, repo: null, fix: null },
+        { level: "warning", message: "x", file: null, repo: null, fix: null },
+      ],
+      output: "warn  x\nERROR bad one\n\nhub: 3 files, 1 errors, 1 warnings, 0 external links",
     });
+    // A message that names a note says which repo holds it, and a stale router has a fix.
+    expect(
+      parseValidate(
+        "warn  Polyglyph/Pricing.md: notes disagree\nwarn  Alpha/_index.md: router is out of date\n",
+        0,
+      ).problems,
+    ).toEqual([
+      {
+        level: "warning",
+        message: "Polyglyph/Pricing.md: notes disagree",
+        file: "Polyglyph/Pricing.md",
+        repo: "Polyglyph",
+        fix: null,
+      },
+      {
+        level: "warning",
+        message: "Alpha/_index.md: router is out of date",
+        file: "Alpha/_index.md",
+        repo: "Alpha",
+        fix: "reindex",
+      },
+    ]);
+    expect(describeValidate(parseValidate("warn  a\nwarn  b\n", 0))).toBe(
+      "Checks pass. 2 warnings",
+    );
+    expect(describeValidate(parseValidate("ERROR e\n", 1))).toBe("Checks fail. 1 error");
     const pad = (f: string, rest: string): string => `${f.padEnd(26)} ${rest}`;
     const rows = parseHubStatus(
       [

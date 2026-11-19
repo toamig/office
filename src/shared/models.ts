@@ -164,6 +164,19 @@ export const HubRepoRow = z.object({
 });
 export type HubRepoRow = z.infer<typeof HubRepoRow>;
 
+/** One finding of the brain's check, in the words the tool used, with where it is and whether Office can fix it. */
+export const HealthProblem = z.object({
+  level: z.enum(["error", "warning"]),
+  message: z.string(),
+  /** The note it is about ("Polyglyph/Pricing.md"), when the message names one. */
+  file: z.string().nullable(),
+  /** The repo folder it is in ("Polyglyph"), or null for the hub itself. */
+  repo: z.string().nullable(),
+  /** The fix Office can make itself: regenerate the routers. Otherwise a session is started to fix it. */
+  fix: z.enum(["reindex"]).nullable(),
+});
+export type HealthProblem = z.infer<typeof HealthProblem>;
+
 export const HealthView = z.object({
   validate: z.object({
     ran: z.boolean(),
@@ -171,6 +184,10 @@ export const HealthView = z.object({
     errors: z.array(z.string()),
     warnings: z.number(),
     summary: z.string().nullable(),
+    /** Every finding, errors first. */
+    problems: z.array(HealthProblem),
+    /** The tool's own words, for Show details. */
+    output: z.string(),
   }),
   repos: z.array(HubRepoRow),
   warnings: z.array(z.object({ at: z.string(), message: z.string() })),
@@ -286,8 +303,21 @@ export const ProjectNote = z.object({
   exists: z.boolean(),
   /** Markdown body with the frontmatter removed. */
   markdown: z.string(),
+  /** The note's own one-line summary, from its frontmatter. */
+  summary: z.string().nullable(),
+  /** Where the note lives in the brain, for the Source line ("Alpha/Overview.md"). */
+  source: z.string(),
 });
 export type ProjectNote = z.infer<typeof ProjectNote>;
+
+/** A note of a project, for the list beside the document. */
+export const NoteEntry = z.object({
+  name: z.string(),
+  summary: z.string().nullable(),
+  /** Audits and implementation notes: behind Show more. */
+  rare: z.boolean(),
+});
+export type NoteEntry = z.infer<typeof NoteEntry>;
 
 export const SearchItem = z.object({
   kind: z.enum(["project", "note", "branch", "worktree", "session"]),
@@ -659,9 +689,16 @@ export const BriefItem = z.object({
 });
 export type BriefItem = z.infer<typeof BriefItem>;
 
+/** One plain line of the brief, with the place it points to. */
+export const BriefLine = z.object({ text: z.string(), link: NotificationLink });
+export type BriefLine = z.infer<typeof BriefLine>;
+
 export const BriefView = z.object({
   /** Local date (YYYY-MM-DD) of the newest brief, or null when none was written yet. */
   date: z.string().nullable(),
+  /** Three to five plain lines: what changed, what needs you, what is worth doing next. */
+  lines: z.array(BriefLine),
+  /** The facts the lines were written from, grouped by project (Show details). */
   items: z.array(BriefItem),
 });
 export type BriefView = z.infer<typeof BriefView>;

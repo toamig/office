@@ -11,8 +11,14 @@ import { loadWorkspaceFile } from "../../src/main/core/workspace";
 import {
   BriefService,
   briefDue,
+  BRIEF_MAX_CHARS,
+  BRIEF_MAX_LINES,
+  BRIEF_MODEL,
+  BRIEF_TOOLS,
   buildBriefPrompt,
-  splitBrief,
+  linkForLine,
+  parseBriefLines,
+  plainBrief,
   startOfYesterday,
 } from "../../src/main/modules/brief/brief";
 import { ProviderRegistry } from "../../src/main/modules/providers/registry";
@@ -81,32 +87,69 @@ describe("brief helpers", () => {
     expect(startOfYesterday(new Date(2026, 10, 19, 15, 30))).toEqual(new Date(2026, 10, 18, 0, 0));
   });
 
-  it("builds a prompt with one section per active project and splits the answer back", () => {
-    const prompt = buildBriefPrompt([
-      {
-        project: { id: "a", name: "Alpha", path: "a", pinned: false, archived: false },
-        commits: ["fix bug"],
-        notes: [],
-        sessions: ["Worker finished"],
-        runs: [],
-      },
-    ]);
+  it("builds a prompt with the facts per project and the format of three to five plain lines", () => {
+    const prompt = buildBriefPrompt(
+      [
+        {
+          project: { id: "a", name: "Alpha", path: "a", pinned: false, archived: false },
+          commits: ["fix bug"],
+          notes: [],
+          sessions: ["Worker finished"],
+          runs: [],
+        },
+      ],
+      ["Approve plan of Feature"],
+    );
+    expect(prompt).toContain("three to five plain lines");
+    expect(prompt).toContain(`at most ${BRIEF_MAX_CHARS} characters`);
     expect(prompt).toContain("### Alpha");
     expect(prompt).toContain("- commit: fix bug");
     expect(prompt).toContain("- session: Worker finished");
-    const parts = splitBrief(
-      "Intro\n## Alpha\n\nLine one.\n\n## Unknown\n\nignored\n## Beta\nLine two",
-      ["Alpha", "Beta"],
-    );
-    expect([...parts.entries()]).toEqual([
-      ["Alpha", "Line one."],
-      ["Beta", "Line two"],
+    expect(prompt).toContain("### Needs the owner now\n- Approve plan of Feature");
+    // The run reads nothing itself: every fact is here.
+    expect(prompt).toContain("do not read anything else");
+    expect(BRIEF_TOOLS).toBe("Read,Grep,Glob");
+    expect(BRIEF_MODEL).toBe("haiku");
+  });
+
+  it("keeps at most five lines, each short, without bullets or markdown", () => {
+    const answer = [
+      "## A heading that is not a line",
+      "- **Alpha** changed: `3` commits landed.",
+      "* Second line",
+      "3. Third line",
+      "- Fourth line",
+      "- Fifth line",
+      "- Sixth line is dropped",
+      "",
+      `- ${"x".repeat(300)}`,
+    ].join("\n");
+    const lines = parseBriefLines(answer);
+    expect(lines).toHaveLength(BRIEF_MAX_LINES);
+    expect(lines[0]).toBe("Alpha changed: 3 commits landed.");
+    expect(lines.slice(1, 5)).toEqual(["Second line", "Third line", "Fourth line", "Fifth line"]);
+    expect(parseBriefLines(`- ${"x".repeat(300)}`)[0]).toHaveLength(BRIEF_MAX_CHARS);
+    expect(parseBriefLines("")).toEqual([]);
+  });
+
+  it("points each line at the place it is about, and falls back to plain lines from the facts", () => {
+    const projects = [{ id: "alpha", name: "Alpha" }];
+    expect(linkForLine("Alpha changed: new commits.", projects)).toEqual({
+      view: "project",
+      params: { id: "alpha" },
+    });
+    expect(linkForLine("Two things need you.", projects)).toEqual({ view: "inbox" });
+    expect(linkForLine("Worth a look at the weather.", projects)).toEqual({ view: "home" });
+    expect(plainBrief([], [])).toEqual([
+      "Nothing changed since you last looked.",
+      "Nothing needs you.",
     ]);
+    expect(plainBrief([], ["a", "b"])[1]).toBe("2 things need you.");
   });
 });
 
 describe("BriefService with the fake agent", () => {
-  it("lists only projects with activity and stores one brief per project", async () => {
+  it("collects only projects with activity, writes the lines, and keeps the facts for Show details", async () => {
     const { world, service, notifier } = setup();
     backdate(world.code["beta"]?.work as string);
     backdate(join(world.hub, "Beta"));
@@ -115,18 +158,41 @@ describe("BriefService with the fake agent", () => {
     expect(activities[0]?.commits).toEqual(["alpha: initial"]);
     expect(activities[0]?.notes).toEqual(["Alpha: initial"]);
 
+    service.needsYou = () => ["Approve plan of Feature"];
     const result = await service.run();
     expect(result).toEqual({ date: "2026-11-19", count: 1 });
     const latest = service.latest();
     expect(latest.date).toBe("2026-11-19");
+    // Three to five plain lines, each leading somewhere.
+    expect(latest.lines.length).toBeGreaterThanOrEqual(3);
+    expect(latest.lines.length).toBeLessThanOrEqual(BRIEF_MAX_LINES);
+    expect(latest.lines[0]).toEqual({
+      text: "Alpha changed: new commits and notes.",
+      link: { view: "project", params: { id: "alpha" } },
+    });
+    expect(latest.lines[1]?.link).toEqual({ view: "inbox" });
+    // The facts behind the lines, per project.
     expect(latest.items).toEqual([
       {
         projectId: "alpha",
         projectName: "Alpha",
-        markdown: "Fake brief for Alpha: things changed.",
+        markdown: "- alpha: initial\n- brain: Alpha: initial",
       },
     ]);
-    expect(notifier.list().map((n) => n.kind)).toEqual(["brief.ready"]);
+    // A brief is a result, not an alert.
+    expect(notifier.list()).toEqual([]);
+  });
+
+  it("says so in one line when nothing changed and nothing needs the owner, without asking a model", async () => {
+    const { world, service } = setup();
+    backdate(world.code["alpha"]?.work as string);
+    backdate(world.code["beta"]?.work as string);
+    backdate(join(world.hub, "Alpha"));
+    backdate(join(world.hub, "Beta"));
+    await service.run();
+    expect(service.latest().lines.map((l) => l.text)).toEqual([
+      "Nothing changed since you last looked, and nothing needs you.",
+    ]);
   });
 
   it("runs once a day at or after the brief time, and not before", async () => {
@@ -146,7 +212,10 @@ describe("BriefService with the fake agent", () => {
     for (const id of ["alpha", "beta"]) backdate(world.code[id]?.work as string);
     for (const f of ["Alpha", "Beta"]) backdate(join(world.hub, f));
     expect(await service.runIfDue()).toBe(true);
-    expect(service.latest()).toEqual({ date: null, items: [] });
+    expect(service.latest()).toMatchObject({
+      lines: [{ text: "Nothing changed since you last looked, and nothing needs you." }],
+      items: [],
+    });
     expect(await service.runIfDue()).toBe(false);
   });
 });

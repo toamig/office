@@ -20,6 +20,8 @@ export interface RunRequest {
   cwd: string;
   prompt: string;
   resumeId?: string;
+  /** Only these tools exist for the run, and nothing else may run ("Read,Grep,Glob"). */
+  tools?: string;
   projectId?: string;
   taskId?: string;
   /** Called for each normalised event while the run is going (the Ask panel streams from this). */
@@ -96,6 +98,7 @@ export class RunService {
       runDir: dir,
       ...(req.role ? { role: req.role } : {}),
       ...(req.resumeId ? { resumeId: req.resumeId } : {}),
+      ...(req.tools ? { tools: req.tools } : {}),
     });
     this.active.set(id, run);
 

@@ -497,6 +497,8 @@ export function Agents({ active: visible }: { active: boolean }) {
           {...(filter ? { projectId: filter } : {})}
           {...(linked["cwd"] ? { cwd: linked["cwd"] } : {})}
           {...(linked["role"] ? { roleId: linked["role"] } : {})}
+          {...(linked["goal"] ? { goal: linked["goal"] } : {})}
+          {...(linked["prompt"] ? { prompt: linked["prompt"] } : {})}
           onClose={() => setStarting(false)}
           onStarted={(session) => {
             setStarting(false);

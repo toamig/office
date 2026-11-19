@@ -12,6 +12,8 @@ export function StartAgentDialog({
   projectId,
   cwd,
   roleId: initialRole,
+  goal: initialGoal,
+  prompt: initialPrompt,
   onClose,
   onStarted,
 }: {
@@ -19,6 +21,10 @@ export function StartAgentDialog({
   cwd?: string;
   /** A role to start as, from a link (for example Start a session as this role). */
   roleId?: string;
+  /** What the session is for, when a fix starts it. */
+  goal?: string;
+  /** The first prompt, when a fix starts it (the problem as the brief). */
+  prompt?: string;
   onClose: () => void;
   onStarted: (session: SessionRow) => void;
 }) {
@@ -33,9 +39,9 @@ export function StartAgentDialog({
   const [roleId, setRoleId] = useState(initialRole ?? "builder");
   const [providerId, setProviderId] = useState("claude-code");
   const [model, setModel] = useState("");
-  const [prompt, setPrompt] = useState("");
+  const [prompt, setPrompt] = useState(initialPrompt ?? "");
   /** What the session is for: one line, which becomes its name. */
-  const [goal, setGoal] = useState("");
+  const [goal, setGoal] = useState(initialGoal ?? "");
   const [busy, setBusy] = useState(false);
   // Chat or terminal: the machine's last choice, remembered when it is changed here.
   const settings = useQuery("settings.get");
@@ -82,7 +88,10 @@ export function StartAgentDialog({
           <Button
             variant="primary"
             disabled={
-              busy || !goal.trim() || !project || (folder === NEW_WORKTREE && !newWorktree.trim())
+              busy ||
+              !goal.trim() ||
+              (!project && !folder) ||
+              (folder === NEW_WORKTREE && !newWorktree.trim())
             }
             onClick={() => void start()}
             data-testid="agent-start"
@@ -144,6 +153,7 @@ export function StartAgentDialog({
             data-testid="agent-folder"
           >
             <option value="">Project folder</option>
+            {cwd && <option value={cwd}>{cwd}</option>}
             {(worktrees.data ?? [])
               .filter((w) => w.kind !== "main")
               .map((w) => (
