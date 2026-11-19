@@ -273,6 +273,8 @@ function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.resume", (req) => ctx.sessions.resume(req.id));
   ctx.ipc.handle("sessions.archive", (req) => ctx.sessions.archive(req.id));
   ctx.ipc.handle("sessions.rename", (req) => ctx.sessions.rename(req.id, req.title));
+  ctx.ipc.handle("sessions.get", (req) => ctx.sessions.get(req.id));
+  ctx.ipc.handle("sessions.pin", (req) => ctx.sessions.pin(req.id, req.pinned));
   ctx.ipc.handle("sessions.keep", (req) => ctx.sessions.keep(req.id));
   ctx.ipc.handle("layout.get", (req) => getLayout(ctx.db, req.key));
   ctx.ipc.handle("layout.set", (req) => setLayout(ctx.db, req.key, req.layout));
@@ -319,7 +321,11 @@ function registerBrainHandlers(ctx: AppContext): void {
   ctx.ipc.handle("vault.audit", () => readAudit(ctx.settings().workspaceRoot));
   ctx.ipc.handle("brief.latest", () => ctx.brief.latest());
   ctx.ipc.handle("brief.run", () => ctx.brief.run());
-  ctx.ipc.handle("explore.start", (req) => ctx.explore.start(req.providerId, req.title));
+  ctx.ipc.handle("explore.start", (req) =>
+    ctx.explore.start(req.providerId, req.incognito === true),
+  );
+  ctx.ipc.handle("explore.close", (req) => ctx.explore.close(req.id));
+  ctx.ipc.handle("explore.keep", (req) => ctx.explore.keep(req.id));
   ctx.ipc.handle("explore.list", () => ctx.explore.list());
   ctx.ipc.handle("explore.plan", (req) => ctx.explore.plan(req));
   ctx.ipc.handle("explore.spawn", (req) => ctx.explore.spawn(req));

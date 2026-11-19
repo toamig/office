@@ -38,6 +38,8 @@ export interface SpawnDeps {
   runs: RunService;
   /** Provider used for the exploration summary and the first session. */
   providerOf: (sessionId?: string) => string;
+  /** What a Chat said, as text, so its conclusions can be summarised; null for a session that is not a chat. */
+  transcriptOf?: (sessionId: string) => string | null;
   onProgress?: (steps: SpawnStep[]) => void;
 }
 
@@ -403,13 +405,22 @@ async function stepNotes(c: Ctx): Promise<string> {
   if (!r.input.exploreSessionId) return "template notes only";
   const session = deps.sessions.get(r.input.exploreSessionId);
   const providerId = deps.providerOf(session.id);
+  // A chat is summarised from what it said (it has no terminal conversation to resume, and an incognito one that
+  // was kept has none saved by the program); an old exploration resumes its own conversation.
+  const transcript = deps.transcriptOf?.(session.id) ?? null;
   const handle = deps.runs.start({
     kind: "explore-summary",
     providerId,
     role: { provider: providerId, instructions: "", readOnly: true, allowedCommands: [] },
     cwd: session.cwd,
-    prompt: SUMMARY_PROMPT,
-    resumeId: session.providerSessionId ?? session.id,
+    prompt: transcript
+      ? `${SUMMARY_PROMPT}
+
+The conversation to summarise:
+
+${transcript}`
+      : SUMMARY_PROMPT,
+    ...(transcript ? {} : { resumeId: session.providerSessionId ?? session.id }),
   });
   const done = await handle.result;
   if (!done.ok) throw new Error(`the summary run failed: ${done.error ?? "unknown error"}`);

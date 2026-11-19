@@ -10,7 +10,7 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   board: "Board",
   brain: "Brain",
   inbox: "Needs you",
-  explore: "Explore",
+  explore: "Chat",
   setup: "Setup",
   gallery: "Gallery",
 };

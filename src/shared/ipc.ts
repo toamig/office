@@ -256,6 +256,9 @@ export const channels = {
   "sessions.kill": { req: z.object({ id: z.string() }), res: z.void() },
   "sessions.resume": { req: z.object({ id: z.string() }), res: SessionRow },
   "sessions.archive": { req: z.object({ id: z.string() }), res: z.void() },
+  /** One session by id, an incognito chat included (the list never has those). */
+  "sessions.get": { req: z.object({ id: z.string() }), res: SessionRow },
+  "sessions.pin": { req: z.object({ id: z.string(), pinned: z.boolean() }), res: z.void() },
   "sessions.keep": { req: z.object({ id: z.string() }), res: z.void() },
   "sessions.rename": { req: z.object({ id: z.string(), title: z.string() }), res: z.void() },
   "layout.get": { req: z.object({ key: z.string() }), res: Layout.nullable() },
@@ -299,9 +302,13 @@ export const channels = {
   "brief.latest": { req: z.void(), res: BriefView },
   "brief.run": { req: z.void(), res: z.object({ date: z.string(), count: z.number() }) },
   "explore.start": {
-    req: z.object({ providerId: z.string().optional(), title: z.string().optional() }),
+    req: z.object({ providerId: z.string().optional(), incognito: z.boolean().optional() }),
     res: SessionRow,
   },
+  /** Ends a chat: an incognito one is erased, a saved one is archived. */
+  "explore.close": { req: z.object({ id: z.string() }), res: z.void() },
+  /** Turns incognito off for a chat, making it a saved one. */
+  "explore.keep": { req: z.object({ id: z.string() }), res: SessionRow },
   "explore.list": { req: z.void(), res: z.array(SessionRow) },
   "explore.plan": { req: SpawnInput, res: z.array(SpawnStep) },
   "explore.spawn": { req: SpawnInput, res: SpawnReport },

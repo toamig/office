@@ -1,9 +1,10 @@
 import { GitBranch, Square } from "lucide-react";
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatState, SessionRow } from "@shared/models";
 import { PermissionRequests } from "../../components/PermissionRequests";
 import { Button, OverflowMenu, StatusBadge, notifyError } from "../../ui";
+import { isChatSession } from "@shared/roles";
 import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
 import { Composer } from "./Composer";
@@ -71,7 +72,18 @@ function useConversation(id: string): { conversation: Conversation; ready: boole
  * composer. The program underneath is still the real CLI; Open in terminal moves the same conversation into
  * an embedded terminal.
  */
-export function ChatView({ session, onChanged }: { session: SessionRow; onChanged: () => void }) {
+export function ChatView({
+  session,
+  onChanged,
+  headerActions,
+}: {
+  session: SessionRow;
+  onChanged: () => void;
+  /** Buttons for the end of the header, from the view that owns the chat (Chat adds Close). */
+  headerActions?: ReactNode;
+}) {
+  // A Chat is a plain conversation: no wrap up, no terminal, no permission modes (it cannot ask for anything).
+  const plain = isChatSession(session);
   const { conversation, ready } = useConversation(session.id);
   const [state, setState] = useState<ChatState | null>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -155,10 +167,12 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
             />
           </span>
         )}
-        <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">
-          Wrap up
-        </Button>
-        {narrow ? (
+        {!plain && (
+          <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">
+            Wrap up
+          </Button>
+        )}
+        {narrow && !plain ? (
           <OverflowMenu
             label="Model, permissions and more"
             items={[
@@ -232,47 +246,55 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
                     </option>
                   ))}
                 </Select>
-                <Select
-                  className="chat-select"
-                  aria-label="Permission mode"
-                  data-testid="chat-permission-mode"
-                  value={options.permissionMode ?? "manual"}
-                  onChange={(e) => {
-                    setState({ ...state, options: { ...options, permissionMode: e.target.value } });
-                    void run(() =>
-                      office.invoke("chat.setOptions", {
-                        id: session.id,
-                        options: { permissionMode: e.target.value },
-                      }),
-                    );
-                  }}
-                >
-                  {state.permissionModes.map((m) => (
-                    <option key={m} value={m}>
-                      {PERMISSION_LABELS[m] ?? m}
-                    </option>
-                  ))}
-                </Select>
+                {!plain && (
+                  <Select
+                    className="chat-select"
+                    aria-label="Permission mode"
+                    data-testid="chat-permission-mode"
+                    value={options.permissionMode ?? "manual"}
+                    onChange={(e) => {
+                      setState({
+                        ...state,
+                        options: { ...options, permissionMode: e.target.value },
+                      });
+                      void run(() =>
+                        office.invoke("chat.setOptions", {
+                          id: session.id,
+                          options: { permissionMode: e.target.value },
+                        }),
+                      );
+                    }}
+                  >
+                    {state.permissionModes.map((m) => (
+                      <option key={m} value={m}>
+                        {PERMISSION_LABELS[m] ?? m}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </>
             )}
-            <OverflowMenu
-              label="More about this session"
-              testId="chat-more"
-              items={[
-                {
-                  label: "Open in terminal",
-                  hint: TERMINAL_HINT,
-                  testId: "open-in-terminal",
-                  onSelect: () =>
-                    void run(async () => {
-                      await office.invoke("chat.toTerminal", { id: session.id });
-                      onChanged();
-                    }),
-                },
-              ]}
-            />
+            {!plain && (
+              <OverflowMenu
+                label="More about this session"
+                testId="chat-more"
+                items={[
+                  {
+                    label: "Open in terminal",
+                    hint: TERMINAL_HINT,
+                    testId: "open-in-terminal",
+                    onSelect: () =>
+                      void run(async () => {
+                        await office.invoke("chat.toTerminal", { id: session.id });
+                        onChanged();
+                      }),
+                  },
+                ]}
+              />
+            )}
           </>
         )}
+        {headerActions}
       </header>
       <div
         className="chat-scroll"
@@ -286,7 +308,9 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
         <div className="chat-column">
           {ready && items.length === 0 && (
             <div className="chat-empty" data-testid="chat-empty">
-              Ask the agent anything about this project.
+              {plain
+                ? "Ask anything. It can read your notes and search the web, and it changes nothing."
+                : "Ask the agent anything about this project."}
             </div>
           )}
           {items.map((item, i) => (

@@ -488,7 +488,8 @@ button,
 }
 .chat-column {
   width: 100%;
-  max-width: 780px;
+  /* The one place the reading measure sets the width: the hint and the composer share one column. */
+  max-width: calc(var(--measure, 72ch) + 36px);
   margin: 0 auto;
   padding: 0 18px;
   box-sizing: border-box;

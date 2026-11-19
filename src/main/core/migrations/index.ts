@@ -7,6 +7,7 @@ import { migration006 } from "./006_session_mode";
 import { migration007 } from "./007_conversation_started";
 import { migration008 } from "./008_pending_items";
 import { migration009 } from "./009_session_kept";
+import { migration010 } from "./010_chat_kinds";
 
 export interface Migration {
   id: number;
@@ -25,4 +26,5 @@ export const migrations: Migration[] = [
   migration007,
   migration008,
   migration009,
+  migration010,
 ];

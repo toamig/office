@@ -571,6 +571,10 @@ export const SessionRow = z.object({
   conversationStarted: z.boolean(),
   /** Finished and unused for longer than the idle time, so Office asks whether it is still needed. */
   idle: z.boolean(),
+  /** A chat that keeps nothing once closed: it is never listed, and exists only while it is open. */
+  incognito: z.boolean(),
+  /** A chat that is not archived for being idle. */
+  pinned: z.boolean(),
 });
 export type SessionRow = z.infer<typeof SessionRow>;
 

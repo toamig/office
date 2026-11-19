@@ -253,6 +253,9 @@ function harness() {
     configure: (id, extra) => chat.configure(id, extra),
     stop: (id) => chat.stop(id),
     running: (id) => chat.running(id),
+    keep: (id) => chat.keep(id),
+    forget: (id) => chat.forget(id),
+    history: (id) => chat.history(id),
   };
   const relay = new RelayServer("tok", {
     onClaude: () => true,
@@ -572,5 +575,74 @@ describe("a Codex chat with the fake CLI", () => {
     const text = JSON.stringify(h.chat.history(row.id));
     expect(text).toContain("FAKE CODEX: first question");
     expect(text).toContain("FAKE CODEX: second question");
+  });
+});
+
+describe("Chat sessions: saved, incognito, named and archived", () => {
+  const start = (h: ReturnType<typeof harness>, incognito: boolean, title = "New chat") =>
+    h.sessions.start(
+      { providerId: "fake", cwd: h.cwd, title, mode: "chat" },
+      { roleLabel: "chat", restricted: true, incognito },
+    );
+
+  it("a saved chat is named by its first message and writes its log to the app's data", async () => {
+    const h = harness();
+    const row = start(h, false);
+    h.chat.send(row.id, "   Which   sheep\nare best? ");
+    await until(() => kinds(h, row.id).includes("result"));
+    expect(h.sessions.get(row.id).title).toBe("Which sheep are best?");
+    expect(existsSync(join(h.dir, "chats", row.id, "chat.jsonl"))).toBe(true);
+    // A long first message is shortened, not used whole.
+    const second = start(h, false);
+    h.chat.send(second.id, "x".repeat(200));
+    expect(h.sessions.get(second.id).title).toHaveLength(60);
+  });
+
+  it("an incognito chat keeps its words in memory only, is never listed, and is erased on discard", async () => {
+    const h = harness();
+    const row = start(h, true, "Incognito chat");
+    h.chat.send(row.id, "a private question");
+    await until(() => kinds(h, row.id).includes("result"));
+    // Said, but written nowhere in the app's data, and not turned into a title.
+    expect(kinds(h, row.id)).toContain("user");
+    expect(existsSync(join(h.dir, "chats", row.id))).toBe(false);
+    expect(h.sessions.get(row.id).title).toBe("Incognito chat");
+    expect(h.sessions.list({ chats: true }).map((s) => s.id)).not.toContain(row.id);
+    // Gone for good once discarded.
+    h.chat.forget(row.id);
+    h.sessions.discardIncognito(row.id);
+    expect(h.sessions.find(row.id)).toBeUndefined();
+    expect(h.chat.history(row.id)).toEqual([]);
+  });
+
+  it("an incognito chat left behind by a killed run is cleared at the next start", () => {
+    const h = harness();
+    const row = start(h, true, "Incognito chat");
+    expect(h.sessions.takeLeftoverIncognito()).toEqual([h.cwd]);
+    expect(h.sessions.find(row.id)).toBeUndefined();
+  });
+
+  it("keeping an incognito chat writes what was said to its log; saved chats archive when idle unless pinned", async () => {
+    const h = harness();
+    const row = start(h, true, "Incognito chat");
+    h.chat.send(row.id, "keep this one");
+    await until(() => kinds(h, row.id).includes("result"));
+    h.chat.keep(row.id);
+    h.sessions.keepIncognito(row.id);
+    const saved = readFileSync(join(h.dir, "chats", row.id, "chat.jsonl"), "utf8");
+    expect(saved).toContain("keep this one");
+    expect(h.sessions.list({ chats: true }).map((s) => s.id)).toContain(row.id);
+    // Chats are in Chat's list, not in the work sessions list.
+    expect(h.sessions.list().map((s) => s.id)).not.toContain(row.id);
+
+    // Idle for longer than the idle time: archived, unless pinned.
+    const other = start(h, false);
+    h.sessions.pin(other.id, true);
+    h.db
+      .prepare("UPDATE sessions SET updated_at = ?, status = 'idle' WHERE id IN (?, ?)")
+      .run("2020-01-01T00:00:00Z", row.id, other.id);
+    expect(h.sessions.archiveIdleChats(2)).toBe(1);
+    expect(h.sessions.get(row.id).archivedAt).not.toBeNull();
+    expect(h.sessions.get(other.id).archivedAt).toBeNull();
   });
 });

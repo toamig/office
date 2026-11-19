@@ -181,34 +181,38 @@ describe("make this a project", () => {
     await h.store.close();
   });
 
-  it("an exploration is never looked up as a workspace role: it reopens and answers without an explore role", async () => {
+  it("a chat is never looked up as a workspace role: a session with a label reopens without a role of that name", async () => {
     const h = harness();
     await h.store.open(h.world.hub, h.world.workspaceConfigPath);
     expect(h.store.state.workspace?.roles["explore"]).toBeUndefined();
-    const exploration = h.explore.start("fake", "Fresh ideas");
-    expect(exploration.role).toBe("explore");
-    expect(h.sessions.roleOfSession(exploration)).toBeUndefined();
-    for (let i = 0; i < 100 && !h.sessions.history(exploration.id).data.includes("ready"); i++) {
+    expect(h.store.state.workspace?.roles["chat"]).toBeUndefined();
+    const chat = h.explore.start("fake");
+    expect(chat).toMatchObject({ role: "chat", mode: "chat", title: "New chat", incognito: false });
+    expect(h.sessions.roleOfSession(chat)).toBeUndefined();
+    // An older exploration was a terminal labelled "explore": ending it and reopening it is a resume, which used
+    // to look "explore" up as a role and fail.
+    const old = h.sessions.start(
+      { providerId: "fake", cwd: h.world.projectsRoot, title: "Old idea", mode: "terminal" },
+      { roleLabel: "explore" },
+    );
+    for (let i = 0; i < 100 && !h.sessions.history(old.id).data.includes("ready"); i++) {
       await new Promise((r) => setTimeout(r, 50));
     }
-    // Ending it and sending in again is a resume, which used to look "explore" up as a role and fail.
-    h.sessions.kill(exploration.id);
-    for (let i = 0; i < 100 && h.sessions.get(exploration.id).running; i++) {
+    h.sessions.kill(old.id);
+    for (let i = 0; i < 100 && h.sessions.get(old.id).running; i++) {
       await new Promise((r) => setTimeout(r, 50));
     }
-    expect(() => h.sessions.resume(exploration.id)).not.toThrow();
-    h.sessions.kill(exploration.id);
-    // A real role that is missing is still an error; only labels are exempt.
+    expect(() => h.sessions.resume(old.id)).not.toThrow();
+    h.sessions.kill(old.id);
+    // Both kinds are in Chat's list; a real role that is missing is still an error; only labels are exempt.
+    expect(h.explore.list().map((s) => s.id)).toEqual(expect.arrayContaining([chat.id, old.id]));
     expect(() => h.sessions.resolveRole("explore")).toThrow(/no role called/);
   });
 
   it("runs every step: repo, brain repo, hub registration, notes, workspace and session", async () => {
     const h = harness();
     await h.store.open(h.world.hub, h.world.workspaceConfigPath);
-    const exploration = h.explore.start("fake", "Sheep ideas");
-    for (let i = 0; i < 100 && !h.sessions.history(exploration.id).data.includes("ready"); i++) {
-      await new Promise((r) => setTimeout(r, 50));
-    }
+    const exploration = h.explore.start("fake");
 
     const report = await h.explore.spawn(input({ exploreSessionId: exploration.id }));
     expect(report.steps.map((s) => [s.id, s.status])).toEqual([

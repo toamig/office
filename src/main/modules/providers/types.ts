@@ -83,6 +83,10 @@ export interface ChatCommandOptions {
   runDir: string;
   /** Extra folders the program may read (Explore adds the brain). */
   addDirs?: string[];
+  /** Chat: only read and web tools, and Allowed commands only, so nothing can run or be edited. */
+  restricted?: boolean;
+  /** Nothing is kept by the program once the chat ends (`--no-session-persistence`). */
+  incognito?: boolean;
 }
 
 /** What every agent tool answers, so adding a vendor is one module (plan 7.1). */

@@ -60,6 +60,8 @@ interface DbSession {
   mode: string;
   conversation_started: number;
   kept_at: string | null;
+  incognito: number;
+  pinned: number;
 }
 
 interface Runtime extends LiveState {
@@ -78,7 +80,7 @@ const normalize = (p: string): string => p.replace(/\\/g, "/").replace(/\/+$/, "
 
 /** Starts, tracks and ends interactive agent sessions and plain terminals. */
 /** What a session's `role` column holds when it is a label for the kind of session and not a workspace role. */
-export const SESSION_LABELS: ReadonlySet<string> = new Set(["explore"]);
+export const SESSION_LABELS: ReadonlySet<string> = new Set(["explore", "chat"]);
 
 export class SessionService {
   readonly pty: PtyManager;
@@ -90,9 +92,17 @@ export class SessionService {
   chat: {
     send: (id: string, text: string) => void;
     /** Folders the chat's program may read besides its own (Explore reads the brain). */
-    configure: (id: string, extra: { addDirs?: string[] }) => void;
+    configure: (
+      id: string,
+      extra: { addDirs?: string[]; restricted?: boolean; incognito?: boolean },
+    ) => void;
     stop: (id: string) => void;
     running: (id: string) => boolean;
+    /** Turns incognito off for a chat, writing what was said so far to its log. */
+    keep: (id: string) => void;
+    /** Forgets everything about an incognito chat. */
+    forget: (id: string) => void;
+    history: (id: string) => Array<{ event: { t: string; text?: string } }>;
   } | null = null;
 
   constructor(private readonly deps: SessionServiceDeps) {
@@ -144,12 +154,16 @@ export class SessionService {
       mode: r.mode === "chat" ? "chat" : "terminal",
       conversationStarted: r.conversation_started === 1,
       idle: this.isIdle(r),
+      incognito: r.incognito === 1,
+      pinned: r.pinned === 1,
     };
   }
 
   /** A finished session nobody has touched for the idle time (Keep counts as touching it). */
   private isIdle(r: DbSession): boolean {
-    if (r.archived_at || r.provider === "terminal") return false;
+    // A chat has its own idle rule (it archives itself); only work sessions are asked about.
+    if (r.archived_at || r.provider === "terminal" || SESSION_LABELS.has(r.role ?? ""))
+      return false;
     if (r.status !== "idle" && r.status !== "exited" && r.status !== "failed") return false;
     const last =
       [r.updated_at, r.kept_at ?? "", r.last_output_at ?? ""].sort().at(-1) ?? r.updated_at;
@@ -170,9 +184,15 @@ export class SessionService {
     return found;
   }
 
-  list(opts: { projectId?: string; includeArchived?: boolean } = {}): SessionRow[] {
+  list(
+    opts: { projectId?: string; includeArchived?: boolean; chats?: boolean } = {},
+  ): SessionRow[] {
     const where: string[] = [];
     const args: string[] = [];
+    // An incognito chat is never listed anywhere.
+    where.push("incognito = 0");
+    // Chats have their own view; the work sessions list is for agents working on projects.
+    if (!opts.chats) where.push("(role IS NULL OR role NOT IN ('chat', 'explore'))");
     if (!opts.includeArchived) where.push("archived_at IS NULL");
     if (opts.projectId) {
       where.push("project_id = ?");
@@ -203,7 +223,16 @@ export class SessionService {
     return role;
   }
 
-  start(input: StartSession, extra: { addDirs?: string[]; roleLabel?: string } = {}): SessionRow {
+  start(
+    input: StartSession,
+    extra: {
+      addDirs?: string[];
+      roleLabel?: string;
+      /** A chat that reads the brain and the web only (Chat). */
+      restricted?: boolean;
+      incognito?: boolean;
+    } = {},
+  ): SessionRow {
     let role: Role | undefined;
     if (input.roleId) role = this.resolveRole(input.roleId, input.projectId);
     const providerId = role?.provider ?? input.providerId ?? "claude-code";
@@ -238,11 +267,17 @@ export class SessionService {
         projectId: input.projectId ?? null,
         roleId: extra.roleLabel ?? input.roleId ?? null,
         title,
+        incognito: extra.incognito === true,
       });
       void readStatus(cwd).then((status) => {
         if (status.ok) this.setBranch(id, status.status.branch);
       });
-      if (extra.addDirs) this.chat?.configure(id, { addDirs: extra.addDirs });
+      if (extra.addDirs || extra.restricted || extra.incognito)
+        this.chat?.configure(id, {
+          ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
+          ...(extra.restricted ? { restricted: true } : {}),
+          ...(extra.incognito ? { incognito: true } : {}),
+        });
       // The first prompt is the first message of the conversation.
       if (input.prompt) this.chat?.send(id, input.prompt);
       return chat;
@@ -273,12 +308,13 @@ export class SessionService {
     projectId: string | null;
     roleId: string | null;
     title: string;
+    incognito?: boolean;
   }): SessionRow {
     const now = nowIso();
     this.deps.db
       .prepare(
         `INSERT INTO sessions (id, provider, provider_session_id, project_id, cwd, branch, role, title, status,
-           interactive, created_at, updated_at, mode) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'idle', 1, ?, ?, 'chat')`,
+           interactive, created_at, updated_at, mode, incognito) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'idle', 1, ?, ?, 'chat', ?)`,
       )
       .run(
         o.id,
@@ -290,6 +326,7 @@ export class SessionService {
         o.title,
         now,
         now,
+        o.incognito ? 1 : 0,
       );
     this.deps.bus.emit("session.status", { id: o.id, status: "idle" }, o.projectId ?? undefined);
     return this.get(o.id);
@@ -495,6 +532,54 @@ export class SessionService {
     this.emitStatus(id);
   }
 
+  /** Pins or unpins a chat: a pinned chat is not archived for being idle. */
+  pin(id: string, pinned: boolean): void {
+    this.deps.db.prepare("UPDATE sessions SET pinned = ? WHERE id = ?").run(pinned ? 1 : 0, id);
+    this.emitStatus(id);
+  }
+
+  /** Moves a session's working folder (a kept incognito chat moves out of the temporary one). */
+  setCwd(id: string, cwd: string): void {
+    this.deps.db.prepare("UPDATE sessions SET cwd = ? WHERE id = ?").run(cwd, id);
+  }
+
+  /** Turns incognito off for a chat: from now on it is an ordinary saved chat. */
+  keepIncognito(id: string): void {
+    this.deps.db.prepare("UPDATE sessions SET incognito = 0 WHERE id = ?").run(id);
+    this.emitStatus(id);
+  }
+
+  /** Closes an incognito chat for good: its row goes, and the caller removes its folder. */
+  discardIncognito(id: string): void {
+    this.kill(id);
+    this.deps.db.prepare("DELETE FROM sessions WHERE id = ? AND incognito = 1").run(id);
+    this.deps.bus.emit("session.status", { id, status: "exited" });
+  }
+
+  /** Archives saved chats that nobody has used for `days` days, unless they are pinned. */
+  archiveIdleChats(days: number): number {
+    const cutoff = new Date(
+      (this.deps.now ? this.deps.now() : new Date()).getTime() - days * 86_400_000,
+    ).toISOString();
+    const rows = this.deps.db
+      .prepare(
+        `SELECT id FROM sessions WHERE archived_at IS NULL AND incognito = 0 AND pinned = 0
+         AND role IN ('chat', 'explore') AND updated_at < ? AND status IN ('idle','exited','failed')`,
+      )
+      .all(cutoff) as Array<{ id: string }>;
+    for (const row of rows) this.archive(row.id);
+    return rows.length;
+  }
+
+  /** The cwd of every incognito chat left behind by a run that did not end cleanly, removed from the database. */
+  takeLeftoverIncognito(): string[] {
+    const rows = this.deps.db
+      .prepare("SELECT cwd FROM sessions WHERE incognito = 1")
+      .all() as Array<{ cwd: string }>;
+    this.deps.db.prepare("DELETE FROM sessions WHERE incognito = 1").run();
+    return rows.map((r) => r.cwd);
+  }
+
   markCaptured(id: string): void {
     this.deps.db.prepare("UPDATE sessions SET captured_at = ? WHERE id = ?").run(nowIso(), id);
     this.emitStatus(id);
@@ -582,7 +667,13 @@ export class SessionService {
   }
 
   private notifyFor(session: SessionRow, status: SessionStatus, detail?: string): void {
-    if (session.provider === "terminal") return;
+    // A chat is a conversation, not work that needs the owner: it never raises an alert, and an incognito one never leaves a trace.
+    if (
+      session.provider === "terminal" ||
+      session.incognito ||
+      SESSION_LABELS.has(session.role ?? "")
+    )
+      return;
     const label = session.title ?? session.provider;
     const link = { view: "agents", params: { session: session.id } };
     const projectId = session.projectId;

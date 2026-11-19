@@ -253,6 +253,9 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     configure: (id, extra) => chat.configure(id, extra),
     stop: (id) => chat.stop(id),
     running: (id) => chat.running(id),
+    keep: (id) => chat.keep(id),
+    forget: (id) => chat.forget(id),
+    history: (id) => chat.history(id),
   };
   permissionHook.listeners.push((runId, waiting) => chat.permissionWaiting(runId, waiting));
   providers.setTerminalOpener((spec, title) => {
@@ -371,7 +374,7 @@ function createLifecycle(
 ): Pick<AppContext, "sync" | "syncProject" | "start" | "stop"> {
   const { box, bus, store, notifier } = base;
   const { vault, projects, health } = notes;
-  const { github, brief, sessions, relay } = agents;
+  const { github, brief, sessions, relay, explore } = agents;
   const { scheduler, modules } = orch;
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => {
@@ -414,6 +417,8 @@ function createLifecycle(
   const start = async (): Promise<void> => {
     await stop();
     await modules.loadEnabled();
+    // An incognito chat does not outlive the run that opened it, even when that run was killed.
+    explore.clearLeftovers();
     const port = await relay.start(box.current.relay.port);
     if (port !== box.current.relay.port)
       box.current = updateSettings({ relay: { ...box.current.relay, port } });
@@ -433,6 +438,8 @@ function createLifecycle(
     sessions.startTimer();
     const archive = (): void => {
       sessions.autoArchive(store.state.workspace?.archiveAfterDays ?? 7);
+      // Saved chats that nobody has used for the idle time archive themselves, unless pinned.
+      sessions.archiveIdleChats(box.current.sessionIdleDays);
     };
     archive();
     archiveTimer = setInterval(archive, 3_600_000);

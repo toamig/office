@@ -34,7 +34,7 @@ export function terminalKeyAction(e: KeyLike, hasSelection: boolean): TerminalKe
   if (e.shiftKey) {
     if (key === "c") return "copy";
     if (key === "v") return "paste";
-    if (key === "f" || key === "a" || key === "b" || key === "t") return "app";
+    if (key === "f" || key === "a" || key === "b" || key === "t" || key === "n") return "app";
     if (key === "+" || key === "_") return "app"; // zoom
     return "program";
   }
@@ -64,6 +64,7 @@ export type AppShortcut =
   | { kind: "new-agent" }
   | { kind: "find" }
   | { kind: "reopen-panel" }
+  | { kind: "new-incognito" }
   | { kind: "view"; index: number };
 
 /**
@@ -85,6 +86,7 @@ export function appShortcut(e: KeyLike, inTerminal: boolean): AppShortcut | null
   if (key === ",") return { kind: "setup" };
   if (key === "a" && e.shiftKey) return { kind: "new-agent" };
   if (key === "t" && e.shiftKey) return { kind: "reopen-panel" };
+  if (key === "n" && e.shiftKey) return { kind: "new-incognito" };
   if (key === "f")
     return inTerminal
       ? e.shiftKey

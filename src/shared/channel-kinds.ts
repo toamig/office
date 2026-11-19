@@ -22,6 +22,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "setup.inventory",
   "providers.list",
   "sessions.list",
+  "sessions.get",
   "sessions.history",
   "layout.get",
   "dock.get",

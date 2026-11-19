@@ -13,6 +13,27 @@ import type {
   TerminalOpener,
 } from "./types";
 
+/** The only tools a Chat may use: read the brain and the web, nothing that runs or edits. */
+export const CHAT_TOOLS = "Read,Grep,Glob,WebSearch,WebFetch";
+
+/**
+ * The flags of a Chat: `--tools` limits what exists, `--allowedTools` lets those run without asking, and
+ * `--permission-mode dontAsk` (Allowed commands only) refuses anything else without ever asking. The brain is added
+ * to read with `--add-dir`.
+ */
+export function chatToolFlags(addDirs: string[], model?: string): string[] {
+  return [
+    ...(model ? ["--model", model] : []),
+    "--tools",
+    CHAT_TOOLS,
+    "--allowedTools",
+    CHAT_TOOLS,
+    "--permission-mode",
+    "dontAsk",
+    ...addDirs.flatMap((dir) => ["--add-dir", dir]),
+  ];
+}
+
 export const CLAUDE_MODELS = ["opus", "sonnet", "haiku"];
 const READ_ONLY_TOOLS = ["Read", "Grep", "Glob"];
 
@@ -190,10 +211,13 @@ export class ClaudeCodeProvider implements Provider {
       "stream-json",
       "--verbose",
       "--include-partial-messages",
-      o.resume ? "--resume" : "--session-id",
+      // An incognito conversation is never saved, so there is nothing to resume.
+      o.resume && !o.incognito ? "--resume" : "--session-id",
       o.officeSessionId,
-      ...this.roleFlags(runOptions),
-      ...permissionFlags(runOptions),
+      ...(o.restricted
+        ? chatToolFlags(o.addDirs ?? [], runOptions.role?.model)
+        : [...this.roleFlags(runOptions), ...permissionFlags(runOptions)]),
+      ...(o.incognito ? ["--no-session-persistence"] : []),
     ];
     return this.command(args);
   }

@@ -27,3 +27,10 @@ export function modelFits(
   if (provider === "claude-code") return false;
   return !Object.entries(known).some(([id, list]) => id !== provider && list.includes(model));
 }
+
+/** The role labels of a Chat (older explorations carry "explore"): a label, never a workspace role. */
+export const CHAT_LABELS: readonly string[] = ["chat", "explore"];
+
+/** Whether a session is a Chat: a plain conversation that reads the notes and the web and changes nothing. */
+export const isChatSession = (session: { role: string | null }): boolean =>
+  CHAT_LABELS.includes(session.role ?? "");

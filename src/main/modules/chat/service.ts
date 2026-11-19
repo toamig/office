@@ -31,6 +31,9 @@ export interface ChatServiceDeps {
 }
 
 /** Claude Code's permission modes a chat can use, as `claude --permission-mode` lists them (bypass is not offered here). */
+/** What a new saved chat is called until its first message names it. */
+export const NEW_CHAT = "New chat";
+
 export const PERMISSION_MODES = ["manual", "acceptEdits", "plan", "auto", "dontAsk"];
 
 /** How many times a start that the program refuses over the conversation flag is tried, flipping the flag each time. */
@@ -57,13 +60,22 @@ interface Live {
 export class ChatService {
   private readonly live = new Map<string, Live>();
   private readonly seqs = new Map<string, number>();
+  /** What an incognito chat has said: kept in memory only, never in a file. */
+  private readonly memory = new Map<string, ChatLine[]>();
+  private readonly incognitoDirs = new Map<string, string[]>();
+  /** Chats that were configured as incognito or restricted, by id (their config is not written for incognito). */
+  private readonly secret = new Map<string, { restricted: boolean; incognito: boolean }>();
 
   constructor(private readonly deps: ChatServiceDeps) {}
 
   // ---------- storage ----------
 
   private dir(id: string): string {
-    const dir = join(this.deps.chatsDir, id);
+    // An incognito chat keeps even its working files in its own temporary folder, which is deleted on close.
+    const incognito = this.secret.get(id)?.incognito === true;
+    const dir = incognito
+      ? join(this.deps.sessions.get(id).cwd, ".chat")
+      : join(this.deps.chatsDir, id);
     mkdirSync(dir, { recursive: true });
     return dir;
   }
@@ -73,6 +85,8 @@ export class ChatService {
   }
 
   history(id: string): ChatLine[] {
+    const kept = this.memory.get(id);
+    if (kept) return kept;
     const file = join(this.deps.chatsDir, id, "chat.jsonl");
     if (!existsSync(file)) return [];
     const lines: ChatLine[] = [];
@@ -92,7 +106,10 @@ export class ChatService {
     const seq = (this.seqs.get(id) ?? this.history(id).length) + 1;
     this.seqs.set(id, seq);
     const line: ChatLine = { seq, at: nowIso(), event };
-    appendFileSync(this.logFile(id), `${JSON.stringify(line)}\n`);
+    const memory = this.memory.get(id);
+    // An incognito chat's words stay in memory; nothing about it is written to a file.
+    if (memory) memory.push(line);
+    else appendFileSync(this.logFile(id), `${JSON.stringify(line)}\n`);
     this.deps.bus.emit("chat.event", { sessionId: id, line }, session?.projectId ?? undefined);
   }
 
@@ -105,11 +122,66 @@ export class ChatService {
   }
 
   /** What a chat was started with that is not a header choice: the extra folders it may read. */
-  configure(id: string, extra: { addDirs?: string[] }): void {
+  configure(
+    id: string,
+    extra: { addDirs?: string[]; restricted?: boolean; incognito?: boolean },
+  ): void {
+    this.secret.set(id, {
+      restricted: extra.restricted === true,
+      incognito: extra.incognito === true,
+    });
+    if (extra.incognito) {
+      // Nothing about an incognito chat is written to the app's data: its words stay in memory.
+      this.memory.set(id, []);
+      this.incognitoDirs.set(id, extra.addDirs ?? []);
+      return;
+    }
     writeTextFile(join(this.dir(id), "config.json"), `${JSON.stringify(extra, null, 2)}\n`);
   }
 
+  /** Turns incognito off: what was said so far is written to the chat's log, and it is an ordinary chat from now on. */
+  keep(id: string): void {
+    const kept = this.memory.get(id);
+    const flags = this.secret.get(id);
+    if (!kept || !flags) return;
+    this.memory.delete(id);
+    this.secret.set(id, { restricted: flags.restricted, incognito: false });
+    const dirs = this.incognitoDirs.get(id) ?? [];
+    this.incognitoDirs.delete(id);
+    writeTextFile(
+      join(this.dir(id), "config.json"),
+      `${JSON.stringify({ addDirs: dirs, restricted: flags.restricted }, null, 2)}\n`,
+    );
+    for (const line of kept) appendFileSync(this.logFile(id), `${JSON.stringify(line)}\n`);
+  }
+
+  /** Forgets everything about an incognito chat: its words, its process and its options. */
+  forget(id: string): void {
+    this.stop(id);
+    this.memory.delete(id);
+    this.secret.delete(id);
+    this.incognitoDirs.delete(id);
+    this.seqs.delete(id);
+    this.live.delete(id);
+  }
+
+  /** Whether the chat reads the brain and the web only (Chat), from what it was started with. */
+  private restricted(id: string): boolean {
+    const known = this.secret.get(id);
+    if (known) return known.restricted;
+    try {
+      const config = JSON.parse(readFileSync(join(this.dir(id), "config.json"), "utf8")) as {
+        restricted?: boolean;
+      };
+      return config.restricted === true;
+    } catch {
+      return false;
+    }
+  }
+
   private addDirs(id: string): string[] {
+    const kept = this.incognitoDirs.get(id);
+    if (kept) return kept;
     try {
       const config = JSON.parse(readFileSync(join(this.dir(id), "config.json"), "utf8")) as {
         addDirs?: string[];
@@ -182,10 +254,12 @@ export class ChatService {
     this.append(id, { t: "turn-start" });
     this.deps.sessions.setStatus(id, "working");
 
+    this.nameFromFirstMessage(row, text);
     const role = this.role(row);
-    const permission: RunPermission = role?.readOnly
-      ? { kind: "readonly" }
-      : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
+    const permission: RunPermission =
+      role?.readOnly || this.restricted(id)
+        ? { kind: "readonly" }
+        : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
     const kind = provider.chatKind ?? "claude";
     if (kind === "claude") {
       let live = this.live.get(id);
@@ -216,6 +290,17 @@ export class ChatService {
     void this.readCodex(id, live);
   }
 
+  /** A saved chat is named by its first message, so the list reads as what each was about. */
+  private nameFromFirstMessage(row: SessionRow, text: string): void {
+    if (row.title !== NEW_CHAT || row.incognito) return;
+    const name = text.replace(/\s+/g, " ").trim();
+    if (!name) return;
+    this.deps.sessions.rename(
+      row.id,
+      name.length > 60 ? `${name.slice(0, 57).trimEnd()}...` : name,
+    );
+  }
+
   /** Starts the program of a Claude chat. It is resumed if its conversation exists, and started fresh if not. */
   private startClaude(
     id: string,
@@ -225,13 +310,18 @@ export class ChatService {
   ): Live {
     const picked = this.options(id);
     const role = this.role(row);
-    const permission: RunPermission = role?.readOnly
-      ? { kind: "readonly" }
-      : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
+    const restricted = this.restricted(id);
+    const incognito = this.secret.get(id)?.incognito === true;
+    const permission: RunPermission =
+      role?.readOnly || restricted
+        ? { kind: "readonly" }
+        : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
     const spec = provider.chatCommand!({
       cwd: row.cwd,
       officeSessionId: id,
       resume: row.conversationStarted,
+      ...(restricted ? { restricted: true } : {}),
+      ...(incognito ? { incognito: true } : {}),
       ...(role ? { role } : {}),
       permission,
       ...(picked.model ? { model: picked.model } : {}),
