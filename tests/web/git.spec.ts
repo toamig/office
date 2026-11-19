@@ -56,8 +56,11 @@ test("worktrees: make one, open an agent in it, see it in the switcher and remov
   await expect(win.getByTestId("agent-folder")).toHaveAttribute("data-value", wtPath);
   await win.getByTestId("mode-provider").check();
   await pick(win, "agent-provider", { label: "Fake agent" });
+  await win.getByTestId("agent-goal").fill("Work in the worktree");
   await win.getByTestId("agent-start").click();
-  await expect(win.getByTestId("session-row").first()).toContainText("office/task-one", {
+  // The session is named by its goal; the branch it works on is in its details.
+  await expect(win.getByTestId("session-row").first()).toContainText("Work in the worktree");
+  await expect(win.getByTestId("inspector-body")).toContainText("office/task-one", {
     timeout: 20000,
   });
 

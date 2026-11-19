@@ -256,6 +256,7 @@ export const channels = {
   "sessions.kill": { req: z.object({ id: z.string() }), res: z.void() },
   "sessions.resume": { req: z.object({ id: z.string() }), res: SessionRow },
   "sessions.archive": { req: z.object({ id: z.string() }), res: z.void() },
+  "sessions.keep": { req: z.object({ id: z.string() }), res: z.void() },
   "sessions.rename": { req: z.object({ id: z.string(), title: z.string() }), res: z.void() },
   "layout.get": { req: z.object({ key: z.string() }), res: Layout.nullable() },
   "layout.set": { req: z.object({ key: z.string(), layout: Layout }), res: z.void() },

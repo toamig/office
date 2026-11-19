@@ -238,6 +238,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     projectPath: folderOf(projects),
     logsDir: sessionsDir(),
     defaultMode: () => box.current.sessionMode,
+    idleDays: () => box.current.sessionIdleDays,
   });
   const chat = new ChatService({
     bus,

@@ -34,5 +34,6 @@ export {
   tabsTogether,
   Workbench,
   type PanelComponent,
+  type WorkbenchPanel,
   type WorkbenchPreset,
 } from "./Workbench";

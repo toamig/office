@@ -5,7 +5,7 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   home: "Home",
   projects: "Projects",
   project: "Project",
-  agents: "Agents",
+  agents: "Sessions",
   git: "Git",
   board: "Board",
   brain: "Brain",

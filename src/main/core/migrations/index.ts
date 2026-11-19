@@ -6,6 +6,7 @@ import { migration005 } from "./005_task_base_branch";
 import { migration006 } from "./006_session_mode";
 import { migration007 } from "./007_conversation_started";
 import { migration008 } from "./008_pending_items";
+import { migration009 } from "./009_session_kept";
 
 export interface Migration {
   id: number;
@@ -23,4 +24,5 @@ export const migrations: Migration[] = [
   migration006,
   migration007,
   migration008,
+  migration009,
 ];

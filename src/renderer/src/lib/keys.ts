@@ -14,7 +14,7 @@ export interface KeyLike {
  * works as in Windows Terminal.
  * - "copy": Ctrl+C with text selected (the selection is cleared after), and Ctrl+Shift+C.
  * - "paste": Ctrl+V and Ctrl+Shift+V (through term.paste, so bracketed paste is kept).
- * - "app": Office's own (the views, Ctrl+/, Ctrl+, , Ctrl+Shift+A, find as Ctrl+Shift+F, zoom, Alt+arrows).
+ * - "app": Office's own (the views, Ctrl+/, Ctrl+, , Ctrl+Shift+A, Ctrl+Shift+T, find as Ctrl+Shift+F, zoom, Alt+arrows).
  * - "program": everything else, sent to the program as typed.
  */
 export type TerminalKey = "program" | "app" | "copy" | "paste";
@@ -34,7 +34,7 @@ export function terminalKeyAction(e: KeyLike, hasSelection: boolean): TerminalKe
   if (e.shiftKey) {
     if (key === "c") return "copy";
     if (key === "v") return "paste";
-    if (key === "f" || key === "a" || key === "b") return "app";
+    if (key === "f" || key === "a" || key === "b" || key === "t") return "app";
     if (key === "+" || key === "_") return "app"; // zoom
     return "program";
   }
@@ -63,6 +63,7 @@ export type AppShortcut =
   | { kind: "inspector" }
   | { kind: "new-agent" }
   | { kind: "find" }
+  | { kind: "reopen-panel" }
   | { kind: "view"; index: number };
 
 /**
@@ -83,6 +84,7 @@ export function appShortcut(e: KeyLike, inTerminal: boolean): AppShortcut | null
   if (key === "/") return { kind: "shortcuts" };
   if (key === ",") return { kind: "setup" };
   if (key === "a" && e.shiftKey) return { kind: "new-agent" };
+  if (key === "t" && e.shiftKey) return { kind: "reopen-panel" };
   if (key === "f")
     return inTerminal
       ? e.shiftKey

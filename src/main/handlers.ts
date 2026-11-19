@@ -273,6 +273,7 @@ function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.resume", (req) => ctx.sessions.resume(req.id));
   ctx.ipc.handle("sessions.archive", (req) => ctx.sessions.archive(req.id));
   ctx.ipc.handle("sessions.rename", (req) => ctx.sessions.rename(req.id, req.title));
+  ctx.ipc.handle("sessions.keep", (req) => ctx.sessions.keep(req.id));
   ctx.ipc.handle("layout.get", (req) => getLayout(ctx.db, req.key));
   ctx.ipc.handle("layout.set", (req) => setLayout(ctx.db, req.key, req.layout));
   ctx.ipc.handle("dock.get", (req) => getDock(ctx.db, req.key));
@@ -502,6 +503,8 @@ function registerConfigHandlers(ctx: AppContext): void {
       inspectorHidden: s.inspectorHidden,
       panes: s.panes,
       sessionMode: s.sessionMode,
+      sessionIdleDays: s.sessionIdleDays,
+      sessionsMulti: s.sessionsMulti,
       quietHours: s.quietHours ?? null,
       editorCommand: s.editorCommand,
       artVaultRoot: s.artVaultRoot,

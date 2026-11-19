@@ -1,13 +1,13 @@
 import { useState } from "react";
 import type { SessionRow } from "@shared/models";
-import { Button, Dialog, notifyError } from "../../ui";
+import { Button, Dialog, Input, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { Dropdown as Select } from "../../ui";
 
 const NEW_WORKTREE = "__new_worktree__";
 
-/** Start an agent: pick the project, a role or a provider and model, then an optional first prompt. */
+/** Start a session: say what it is for, pick the project, a role or a provider and model, then an optional first prompt. */
 export function StartAgentDialog({
   projectId,
   cwd,
@@ -34,6 +34,8 @@ export function StartAgentDialog({
   const [providerId, setProviderId] = useState("claude-code");
   const [model, setModel] = useState("");
   const [prompt, setPrompt] = useState("");
+  /** What the session is for: one line, which becomes its name. */
+  const [goal, setGoal] = useState("");
   const [busy, setBusy] = useState(false);
   // Chat or terminal: the machine's last choice, remembered when it is changed here.
   const settings = useQuery("settings.get");
@@ -58,19 +60,20 @@ export function StartAgentDialog({
         ...(project ? { projectId: project } : {}),
         ...(where ? { cwd: where } : {}),
         ...(mode === "role" ? { roleId } : { providerId, ...(model ? { model } : {}) }),
+        title: goal.trim(),
         ...(prompt.trim() ? { prompt: prompt.trim() } : {}),
         mode: sessionMode,
       });
       onStarted(session);
     } catch (err) {
-      notifyError(err, "Could not start the agent", "start-agent");
+      notifyError(err, "Could not start the session", "start-agent");
       setBusy(false);
     }
   };
 
   return (
     <Dialog
-      title="Start an agent"
+      title="Start a session"
       testId="start-agent-dialog"
       onClose={onClose}
       footer={
@@ -78,7 +81,9 @@ export function StartAgentDialog({
           <Button onClick={onClose}>Cancel</Button>
           <Button
             variant="primary"
-            disabled={busy || !project || (folder === NEW_WORKTREE && !newWorktree.trim())}
+            disabled={
+              busy || !goal.trim() || !project || (folder === NEW_WORKTREE && !newWorktree.trim())
+            }
             onClick={() => void start()}
             data-testid="agent-start"
           >
@@ -88,6 +93,14 @@ export function StartAgentDialog({
       }
     >
       <div className="grid gap-3">
+        <Input
+          label="What is this for?"
+          helper="One line. It becomes the session's name, and you can change it later."
+          value={goal}
+          placeholder="for example: fix the login bug"
+          onChange={(e) => setGoal(e.target.value)}
+          data-testid="agent-goal"
+        />
         <div className="flex items-center gap-4" data-testid="agent-mode">
           <span className="w-28">Open as</span>
           {(["chat", "terminal"] as const).map((m) => (

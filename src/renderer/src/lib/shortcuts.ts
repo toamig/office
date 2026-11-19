@@ -16,7 +16,8 @@ export const SHORTCUTS: Shortcut[] = [
   ...RAIL.map((v, i) => ({ keys: `Ctrl+${i + 1}`, label: `Go to ${VIEW_LABELS[v.id]}` })),
   { keys: "Ctrl+B", label: "Show or hide the sidebar" },
   { keys: "Ctrl+Shift+B", label: "Show or hide the details panel" },
-  { keys: "Ctrl+Shift+A", label: "New agent session" },
+  { keys: "Ctrl+Shift+A", label: "Start a session" },
+  { keys: "Ctrl+Shift+T", label: "Bring back the panel you closed last" },
   { keys: "Ctrl+,", label: "Setup" },
   { keys: "Ctrl+F", label: "Find in the current view" },
   { keys: "Ctrl+Shift+F", label: "Find in a terminal" },
@@ -28,6 +29,9 @@ export const SHORTCUTS: Shortcut[] = [
 
 /** Tells the focused view to open its find (a terminal, a chat, a list). */
 export const FIND_EVENT = "office-find";
+
+/** Tells the workbench on screen to bring back the panel closed last. */
+export const REOPEN_PANEL_EVENT = "office-reopen-panel";
 
 /** The app-wide keys. Ctrl+K lives with the quick switcher; Esc with the dialogs. */
 export function useGlobalShortcuts(toggleSidebar: () => void, toggleInspector: () => void): void {
@@ -46,6 +50,7 @@ export function useGlobalShortcuts(toggleSidebar: () => void, toggleInspector: (
       else if (action.kind === "inspector") toggleInspector();
       else if (action.kind === "new-agent") ui.navigate("agents", { start: "1" });
       else if (action.kind === "find") window.dispatchEvent(new Event(FIND_EVENT));
+      else if (action.kind === "reopen-panel") window.dispatchEvent(new Event(REOPEN_PANEL_EVENT));
       else {
         const target = RAIL[action.index];
         if (target) ui.navigate(target.id);

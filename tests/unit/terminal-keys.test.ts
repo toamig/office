@@ -95,6 +95,14 @@ describe("Office's shortcuts, in and out of a terminal", () => {
     expect(appShortcut(ctrl("b"), true)).toBeNull();
   });
 
+  it("brings back the last closed panel with Ctrl+Shift+T everywhere, including in a terminal", () => {
+    expect(appShortcut(ctrl("T", { shiftKey: true }), false)).toEqual({ kind: "reopen-panel" });
+    expect(appShortcut(ctrl("T", { shiftKey: true }), true)).toEqual({ kind: "reopen-panel" });
+    expect(terminalKeyAction(ctrl("T", { shiftKey: true }), false)).toBe("app");
+    // Plain Ctrl+T stays the program's.
+    expect(appShortcut(ctrl("t"), false)).toBeNull();
+  });
+
   it("binds nothing else", () => {
     for (const letter of ["w", "r", "u", "o", "p", "n", "s", "k"]) {
       expect(appShortcut(ctrl(letter), false)).toBeNull();

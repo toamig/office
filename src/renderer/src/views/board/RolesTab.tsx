@@ -427,8 +427,8 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
   return (
     <Card title="Project overrides" testId="panel-overrides">
       <p className="ui-muted mt-0">
-        A project can use another role whenever a pipeline or the Start agent dialog asks for one,
-        for example a project whose builder is Codex.
+        A project can use another role whenever a pipeline or the Start a session dialog asks for
+        one, for example a project whose builder is Codex.
       </p>
       <Dropdown
         value={projectId}

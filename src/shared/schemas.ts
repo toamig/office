@@ -39,6 +39,10 @@ export const MachineSettings = z.object({
   panes: z.record(z.string(), z.number()).default({}),
   /** How a new agent session opens: as a chat or in a terminal. */
   sessionMode: z.enum(["chat", "terminal"]).default("chat"),
+  /** Days a finished session may sit unused before Office asks whether it is still needed. */
+  sessionIdleDays: z.number().int().min(1).default(2),
+  /** Whether Sessions shows several sessions at once; off, it shows one at a time. */
+  sessionsMulti: z.boolean().default(false),
   modules: z.record(z.string(), z.boolean()).default({}),
   /**
    * Whether the welcome flow was finished. Absent means the setting was never recorded: a machine that was set

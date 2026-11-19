@@ -11,6 +11,10 @@ export interface MoreItem {
   /** A destructive action: set apart from the rest and shown in the danger colour. */
   danger?: boolean;
   testId?: string;
+  /** One muted line under the label, saying what the action is for. */
+  hint?: string;
+  /** For a list of things that are on or off: a check mark in front of the label. */
+  checked?: boolean;
 }
 
 /** The overflow menu of a page header: secondary actions, with the destructive ones set apart at the end. */
@@ -58,7 +62,15 @@ export function OverflowMenu({
         i.onSelect();
       }}
     >
-      {i.label}
+      {i.checked !== undefined && (
+        <span className="ui-menu-check" aria-hidden>
+          {i.checked ? "✓" : ""}
+        </span>
+      )}
+      <span className="ui-menu-text">
+        {i.label}
+        {i.hint && <span className="ui-menu-hint">{i.hint}</span>}
+      </span>
     </button>
   );
   return (

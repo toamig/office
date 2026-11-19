@@ -176,3 +176,8 @@ export async function launch(options: LaunchOptions = {}): Promise<Launched> {
   };
   return { app, page, ...rest };
 }
+
+/** The dock specs put several sessions side by side, which Sessions only does when the owner turns it on. */
+export async function allowSeveralSessions(page: Page): Promise<void> {
+  await page.evaluate(() => window.office.invoke("settings.set", { sessionsMulti: true }));
+}

@@ -38,7 +38,7 @@ type Tab = "overview" | "todos" | "agents" | "notes" | "preview" | "git";
 const TITLES: Record<Tab, string> = {
   overview: "Overview",
   todos: "Todos",
-  agents: "Agents",
+  agents: "Sessions",
   notes: "Notes",
   preview: "Preview",
   git: "Git",
@@ -430,7 +430,7 @@ function ProjectBody({
           onClick={() => navigate("agents", { project: id, start: "1" })}
           data-testid="start-agent"
         >
-          <Play /> Start agent
+          <Play /> Start a session
         </Button>
       }
       more={more}
@@ -446,6 +446,17 @@ function ProjectBody({
           scope={id}
           components={PROJECT_COMPONENTS}
           presets={PROJECT_PRESETS}
+          catalog={TABS.map((kind) => ({
+            id: kind,
+            title: TITLES[kind],
+            add: (api) =>
+              api.addPanel({
+                id: kind,
+                component: "project",
+                title: TITLES[kind],
+                params: { kind, id, testId: `tab-${kind}`, ...(note ? { note } : {}) },
+              }),
+          }))}
           initial={(api) => {
             for (const kind of TABS)
               api.addPanel({

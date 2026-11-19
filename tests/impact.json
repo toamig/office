@@ -143,6 +143,7 @@
     "src/main/modules/sessions": {
       "web": [
         "tests/web/agents.spec.ts",
+        "tests/web/sessions.spec.ts",
         "tests/web/capture.spec.ts",
         "tests/web/m2-flow.spec.ts",
         "tests/web/hooks.spec.ts",
@@ -179,6 +180,7 @@
     "src/renderer/src/views/Agents.tsx": {
       "web": [
         "tests/web/agents.spec.ts",
+        "tests/web/sessions.spec.ts",
         "tests/web/capture.spec.ts",
         "tests/web/polish.spec.ts",
         "tests/web/speed.spec.ts",
@@ -190,6 +192,7 @@
     "src/renderer/src/views/agents": {
       "web": [
         "tests/web/agents.spec.ts",
+        "tests/web/sessions.spec.ts",
         "tests/web/terminal.spec.ts",
         "tests/web/capture.spec.ts",
         "tests/web/hooks.spec.ts",

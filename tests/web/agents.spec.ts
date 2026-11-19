@@ -41,11 +41,12 @@ test("a fake agent session starts from the dialog, shows its status and takes it
   await pick(win, "agent-project", { label: "Alpha" });
   await win.getByTestId("mode-provider").check();
   await pick(win, "agent-provider", { label: "Fake agent" });
+  await win.getByTestId("agent-goal").fill("Say hello");
   await win.getByTestId("agent-prompt").fill("hello there");
   await win.getByTestId("agent-start").click();
 
   const row = win.getByTestId("session-row").first();
-  await expect(row).toContainText("Fake agent");
+  await expect(row).toContainText("Say hello");
   await expect(win.getByTestId("session-status").first()).toContainText(/starting|working/i);
   await expect.poll(() => terminalText(win)).toContain("fake-claude ready");
   await expect.poll(() => terminalText(win)).toContain("echo: hello there");

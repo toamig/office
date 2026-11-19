@@ -10,13 +10,14 @@ export function LiveAgentsPanel() {
   const sessions = useQuery("sessions.list", {}, ["session.status"]);
   const all = sessions.data ?? [];
   const live = all.filter((s) => s.running);
+  const idle = all.filter((s) => s.idle);
   const finished = all.filter(
     (s) => !s.running && (s.status === "exited" || s.status === "failed"),
   );
   return (
-    <Card title="Live agents" testId="panel-live">
+    <Card title="Live sessions" testId="panel-live">
       {live.length === 0 && finished.length === 0 && (
-        <EmptyState title="No agents running">Start one from a project page.</EmptyState>
+        <EmptyState title="No sessions running">Start one from a project page.</EmptyState>
       )}
       {live.map((s) => (
         <div key={s.id} className="ui-line" data-testid="live-agent">
@@ -29,7 +30,13 @@ export function LiveAgentsPanel() {
       {finished.length > 0 && (
         <div className="ui-line-sub pt-2" data-testid="finished-agents">
           {finished.length} finished {finished.length === 1 ? "session" : "sessions"} to wrap up in
-          Agents.
+          Sessions.
+        </div>
+      )}
+      {idle.length > 0 && (
+        <div className="ui-line-sub pt-2" data-testid="idle-sessions">
+          {idle.length} {idle.length === 1 ? "session is" : "sessions are"} past the idle time.{" "}
+          <LinkButton onClick={() => navigate("agents")}>Review</LinkButton>
         </div>
       )}
     </Card>

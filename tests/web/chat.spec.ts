@@ -148,6 +148,9 @@ test("a chat opens in a terminal and comes back on the same provider session, an
   await say(win, "before the switch");
   await expect(win.getByTestId("chat-turn")).toBeVisible({ timeout: 30000 });
 
+  // Open in terminal lives in the session's overflow menu, with one line saying what it is for.
+  await win.getByTestId("chat-more").click();
+  await expect(win.getByTestId("chat-more-menu")).toContainText("For slash commands, logins");
   await win.getByTestId("open-in-terminal").click();
   await expect(win.getByTestId("terminal")).toBeVisible();
   await expect.poll(() => terminalText(win), { timeout: 20000 }).toContain("fake-claude ready");
@@ -170,17 +173,18 @@ test("a chat opens in a terminal and comes back on the same provider session, an
   await app.close();
 });
 
-test("the Start agent dialog offers Chat or Terminal and remembers the choice", async () => {
+test("the Start a session dialog offers Chat or Terminal and remembers the choice", async () => {
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
   await expect(win.getByTestId("topbar")).toBeVisible();
   await win.getByTestId("rail-agents").click();
-  await win.getByRole("button", { name: /Start agent/ }).click();
+  await win.getByRole("button", { name: /Start a session/ }).click();
   await pick(win, "agent-project", { label: "Alpha" });
   await win.getByTestId("mode-provider").check();
   await pick(win, "agent-provider", { label: "Fake agent" });
   await expect(win.getByTestId("mode-terminal")).toBeChecked(); // the machine's earlier choice
   await win.getByTestId("mode-chat").check();
+  await win.getByTestId("agent-goal").fill("Remember the choice");
   await win.getByTestId("agent-start").click();
   await expect(win.getByTestId("chat")).toBeVisible({ timeout: 20000 });
   expect((await win.evaluate(() => window.office.invoke("settings.get"))).sessionMode).toBe("chat");

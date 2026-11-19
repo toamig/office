@@ -1,5 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
-import { launch } from "./helpers";
+import { allowSeveralSessions, launch } from "./helpers";
 
 /** Opens the Layout menu in the page header and picks one of its items by name. */
 async function layout(win: Page, item: string): Promise<void> {
@@ -9,6 +9,7 @@ async function layout(win: Page, item: string): Promise<void> {
 
 /** Two sessions of the fake provider in Alpha: a chat and a terminal. */
 async function twoSessions(win: Page): Promise<void> {
+  await allowSeveralSessions(win);
   await win.evaluate(async () => {
     await window.office.invoke("sessions.start", {
       providerId: "fake",

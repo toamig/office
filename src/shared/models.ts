@@ -569,6 +569,8 @@ export const SessionRow = z.object({
   mode: SessionMode,
   /** True once a process for the provider conversation has run, so resuming it is possible. */
   conversationStarted: z.boolean(),
+  /** Finished and unused for longer than the idle time, so Office asks whether it is still needed. */
+  idle: z.boolean(),
 });
 export type SessionRow = z.infer<typeof SessionRow>;
 
@@ -924,6 +926,8 @@ export const AppSettings = z.object({
   inspectorHidden: z.record(z.string(), z.boolean()),
   panes: z.record(z.string(), z.number()),
   sessionMode: z.enum(["chat", "terminal"]),
+  sessionIdleDays: z.number(),
+  sessionsMulti: z.boolean(),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
   editorCommand: z.string(),
   artVaultRoot: z.string(),
@@ -946,6 +950,8 @@ export const AppSettingsPatch = z.object({
   /** Divider positions to remember, by pane id; they are merged into the saved ones. */
   panes: z.record(z.string(), z.number()).optional(),
   sessionMode: z.enum(["chat", "terminal"]).optional(),
+  sessionIdleDays: z.number().int().min(1).max(60).optional(),
+  sessionsMulti: z.boolean().optional(),
   quietHours: z
     .object({
       from: z.string().regex(/^\d{2}:\d{2}$/),

@@ -1,9 +1,10 @@
-import { GitBranch, Square, SquareTerminal } from "lucide-react";
+import { GitBranch, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatState, SessionRow } from "@shared/models";
 import { PermissionRequests } from "../../components/PermissionRequests";
-import { OverflowMenu, StatusBadge, notifyError } from "../../ui";
+import { Button, OverflowMenu, StatusBadge, notifyError } from "../../ui";
+import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
@@ -18,6 +19,9 @@ const SANDBOX_LABELS: Record<string, string> = {
 };
 
 /** The permission modes in words, as the header shows them. */
+/** Said once, where the terminal is offered: what it is for. */
+const TERMINAL_HINT = "For slash commands, logins and anything the chat does not show";
+
 const PERMISSION_LABELS: Record<string, string> = {
   manual: "Ask first (default)",
   dontAsk: "Allowed commands only",
@@ -105,6 +109,7 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
     }
   };
 
+  const { wrapUp } = useSessionActions();
   const options = state?.options ?? {};
   // A narrow panel keeps the title and the status; model, permissions and Open in terminal go in a menu.
   const header = useRef<HTMLElement>(null);
@@ -150,6 +155,9 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
             />
           </span>
         )}
+        <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">
+          Wrap up
+        </Button>
         {narrow ? (
           <OverflowMenu
             label="Model, permissions and more"
@@ -184,6 +192,7 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
                 : []),
               {
                 label: "Open in terminal",
+                hint: TERMINAL_HINT,
                 testId: "open-in-terminal",
                 onSelect: () =>
                   void run(async () => {
@@ -246,18 +255,22 @@ export function ChatView({ session, onChanged }: { session: SessionRow; onChange
                 </Select>
               </>
             )}
-            <button
-              className="chat-link"
-              onClick={() =>
-                void run(async () => {
-                  await office.invoke("chat.toTerminal", { id: session.id });
-                  onChanged();
-                })
-              }
-              data-testid="open-in-terminal"
-            >
-              <SquareTerminal size={13} /> Open in terminal
-            </button>
+            <OverflowMenu
+              label="More about this session"
+              testId="chat-more"
+              items={[
+                {
+                  label: "Open in terminal",
+                  hint: TERMINAL_HINT,
+                  testId: "open-in-terminal",
+                  onSelect: () =>
+                    void run(async () => {
+                      await office.invoke("chat.toTerminal", { id: session.id });
+                      onChanged();
+                    }),
+                },
+              ]}
+            />
           </>
         )}
       </header>

@@ -18,18 +18,37 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useQuery } from "../lib/hooks";
+import { REOPEN_PANEL_EVENT } from "../lib/shortcuts";
 import { office } from "../lib/ipc";
 import { Button, IconButton } from "./Button";
 import { Dialog } from "./Dialog";
 import { Input } from "./Field";
 import { notifyDone, notifyError } from "./Notifications";
-import { OverflowMenu, PageActionsContext } from "./Page";
+import { OverflowMenu, PageActionsContext, type MoreItem } from "./Page";
 
 export interface WorkbenchPreset {
   id: string;
   label: string;
   /** Arranges the panels that are open; it may add the ones the layout needs. */
   apply: (api: DockviewApi) => void;
+}
+
+/** A panel the workbench can show, so a closed one can be brought back from the Panels list. */
+export interface WorkbenchPanel {
+  id: string;
+  title: string;
+  /** Adds the panel (it is not open). */
+  add: (api: DockviewApi) => void;
+}
+
+/** What is needed to put a closed panel back where it was. */
+interface ClosedPanel {
+  id: string;
+  component: string;
+  title: string;
+  params: Record<string, unknown>;
+  /** A panel that shared its group, so the closed one returns beside it. */
+  beside: string | null;
 }
 
 export type PanelComponent = FunctionComponent<IDockviewPanelProps<Record<string, unknown>>>;
@@ -110,6 +129,9 @@ export function Workbench({
   onActive,
   toolbar,
   empty,
+  catalog = [],
+  layoutItems = [],
+  groupActions = true,
 }: {
   /** The kind of workbench: "agents", "project" or "git". */
   workbench: string;
@@ -125,15 +147,25 @@ export function Workbench({
   toolbar?: React.ReactNode;
   /** Shown over the dock while no panel is open. */
   empty?: React.ReactNode;
+  /** Every panel this view can show: the Layout menu lists them with a check for the open ones. */
+  catalog?: WorkbenchPanel[];
+  /** More items for the Layout menu, after the arrangements. */
+  layoutItems?: MoreItem[];
+  /** Whether each group offers Split and Float beside its tabs. */
+  groupActions?: boolean;
 }) {
   const key = `${workbench}:${scope}`;
   const saved = useQuery("dock.list", { prefix: `set:${workbench}:` }, []);
   const apiRef = useRef<DockviewApi | null>(null);
+  const root = useRef<HTMLDivElement>(null);
   const loaded = useRef(false);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [naming, setNaming] = useState(false);
   const [name, setName] = useState("");
   const [count, setCount] = useState(1);
+  /** Changes whenever the panels do, so the Panels list shows what is open now. */
+  const [openIds, setOpenIds] = useState<Set<string>>(new Set());
+  const closed = useRef<ClosedPanel[]>([]);
 
   const save = useCallback((): void => {
     const api = apiRef.current;
@@ -149,7 +181,23 @@ export function Workbench({
     apiRef.current = api;
     api.onDidLayoutChange(() => {
       setCount(api.panels.length);
+      setOpenIds(new Set(api.panels.map((p) => p.id)));
       save();
+    });
+    // Remember each closed panel, so it can be brought back where it was.
+    api.onDidRemovePanel((panel) => {
+      if (!loaded.current) return;
+      const sibling = panel.group.panels.find((p) => p.id !== panel.id);
+      closed.current = [
+        ...closed.current.filter((c) => c.id !== panel.id),
+        {
+          id: panel.id,
+          component: panel.api.component,
+          title: panel.api.title ?? panel.id,
+          params: (panel.params ?? {}) as Record<string, unknown>,
+          beside: sibling?.id ?? null,
+        },
+      ].slice(-20);
     });
     api.onDidActivePanelChange((e) => onActive?.(e.panel?.id ?? null));
     void office.invoke("dock.get", { key }).then(
@@ -221,6 +269,36 @@ export function Workbench({
     }
   };
 
+  /** Brings a closed panel back, beside the one it shared a group with when that is still open. */
+  const reopen = (panel: ClosedPanel): void => {
+    const api = apiRef.current;
+    if (!api) return;
+    closed.current = closed.current.filter((c) => c.id !== panel.id);
+    const reference = panel.beside ? api.getPanel(panel.beside) : undefined;
+    api.addPanel({
+      id: panel.id,
+      component: panel.component,
+      title: panel.title,
+      params: panel.params,
+      renderer: "always",
+      ...(reference ? { position: { referencePanel: reference.id } } : {}),
+    });
+    save();
+  };
+  const reopenLast = (): void => {
+    const last = closed.current.at(-1);
+    if (last) reopen(last);
+  };
+  // Ctrl+Shift+T (the app's shortcut) brings back the panel closed last, in the workbench that is on screen.
+  useEffect(() => {
+    const onReopen = (): void => {
+      if (root.current && root.current.offsetParent !== null) reopenLast();
+    };
+    window.addEventListener(REOPEN_PANEL_EVENT, onReopen);
+    return () => window.removeEventListener(REOPEN_PANEL_EVENT, onReopen);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const slot = useContext(PageActionsContext);
   const savedNames = saved.data ?? [];
   const layoutMenu = (
@@ -249,12 +327,43 @@ export function Workbench({
           testId: "workbench-save-as",
           onSelect: () => setNaming(true),
         },
+        ...layoutItems,
+        ...(catalog.length > 0
+          ? catalog.map((c) => {
+              const open = openIds.has(c.id);
+              return {
+                label: c.title,
+                checked: open,
+                testId: `workbench-panel-${c.id}`,
+                onSelect: () => {
+                  const api = apiRef.current;
+                  if (!api) return;
+                  const existing = api.getPanel(c.id);
+                  if (existing) existing.api.setActive();
+                  else {
+                    const was = closed.current.find((x) => x.id === c.id);
+                    if (was) reopen(was);
+                    else {
+                      c.add(api);
+                      save();
+                    }
+                  }
+                },
+              };
+            })
+          : []),
+        {
+          label: "Reopen the last closed panel",
+          hint: "Ctrl+Shift+T",
+          testId: "workbench-reopen",
+          onSelect: reopenLast,
+        },
         { label: "Reset layout", testId: "workbench-reset", onSelect: reset },
       ]}
     />
   );
   return (
-    <div className="workbench" data-testid="workbench" data-workbench={workbench}>
+    <div className="workbench" data-testid="workbench" data-workbench={workbench} ref={root}>
       {slot ? createPortal(layoutMenu, slot) : <div className="workbench-bar">{layoutMenu}</div>}
       {toolbar && <div className="workbench-bar">{toolbar}</div>}
       <div className="workbench-dock">
@@ -267,7 +376,7 @@ export function Workbench({
           className="dockview-theme-office"
           components={components as Record<string, FunctionComponent<IDockviewPanelProps>>}
           defaultTabComponent={WorkTab as FunctionComponent<IDockviewPanelHeaderProps>}
-          rightHeaderActionsComponent={GroupActions}
+          {...(groupActions ? { rightHeaderActionsComponent: GroupActions } : {})}
           onReady={ready}
         />
       </div>

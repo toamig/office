@@ -35,6 +35,9 @@ export interface SessionServiceDeps {
   logsDir: string;
   /** How a session opens when the caller does not say: the machine setting. Terminal when absent. */
   defaultMode?: () => SessionMode;
+  /** Days a finished session may sit unused before it is asked about. Two when absent. */
+  idleDays?: () => number;
+  now?: () => Date;
 }
 
 interface DbSession {
@@ -56,6 +59,7 @@ interface DbSession {
   captured_at: string | null;
   mode: string;
   conversation_started: number;
+  kept_at: string | null;
 }
 
 interface Runtime extends LiveState {
@@ -100,10 +104,11 @@ export class SessionService {
     const now = nowIso();
     deps.db
       .prepare(
-        `UPDATE sessions SET status = 'exited', ended_at = COALESCE(ended_at, ?), updated_at = ?
+        // updated_at stays as it was: it is when the session was last used, which the idle time counts from.
+        `UPDATE sessions SET status = 'exited', ended_at = COALESCE(ended_at, ?)
          WHERE status IN ('starting','working','needs-you','idle')`,
       )
-      .run(now, now);
+      .run(now);
   }
 
   startTimer(): void {
@@ -138,7 +143,19 @@ export class SessionService {
       running: r.mode === "chat" ? (this.chat?.running(r.id) ?? false) : this.pty.isRunning(r.id),
       mode: r.mode === "chat" ? "chat" : "terminal",
       conversationStarted: r.conversation_started === 1,
+      idle: this.isIdle(r),
     };
+  }
+
+  /** A finished session nobody has touched for the idle time (Keep counts as touching it). */
+  private isIdle(r: DbSession): boolean {
+    if (r.archived_at || r.provider === "terminal") return false;
+    if (r.status !== "idle" && r.status !== "exited" && r.status !== "failed") return false;
+    const last =
+      [r.updated_at, r.kept_at ?? "", r.last_output_at ?? ""].sort().at(-1) ?? r.updated_at;
+    const days = this.deps.idleDays?.() ?? 2;
+    const now = this.deps.now ? this.deps.now() : new Date();
+    return now.getTime() - new Date(last).getTime() > days * 86_400_000;
   }
 
   find(id: string): SessionRow | undefined {
@@ -460,6 +477,13 @@ export class SessionService {
     this.deps.db
       .prepare("UPDATE sessions SET title = ?, updated_at = ? WHERE id = ?")
       .run(title, nowIso(), id);
+    this.emitStatus(id);
+  }
+
+  /** "Still needed?" answered with Keep: the idle time starts again from now. */
+  keep(id: string): void {
+    const at = (this.deps.now ? this.deps.now() : new Date()).toISOString();
+    this.deps.db.prepare("UPDATE sessions SET kept_at = ? WHERE id = ?").run(at, id);
     this.emitStatus(id);
   }
 

@@ -1,7 +1,8 @@
 import { GitBranch, MessageSquare, Square } from "lucide-react";
 import type { SessionRow } from "@shared/models";
 import { office } from "../../lib/ipc";
-import { Dropdown as Select } from "../../ui";
+import { useSessionActions } from "../../components/SessionActions";
+import { Button, Dropdown as Select } from "../../ui";
 import { StatusChip } from "../../components/StatusChip";
 
 /**
@@ -21,6 +22,7 @@ export function PaneHeader({
   onPick: (id: string) => void;
   onChanged: () => void;
 }) {
+  const { wrapUp } = useSessionActions();
   if (!session) return null;
   return (
     <div className="pane-header" data-testid="pane-header">
@@ -57,6 +59,9 @@ export function PaneHeader({
           <MessageSquare size={13} /> Back to chat
         </button>
       )}
+      <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">
+        Wrap up
+      </Button>
       {session.running && (
         <button
           className="bar-button"

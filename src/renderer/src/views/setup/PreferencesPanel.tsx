@@ -126,6 +126,31 @@ export function PreferencesPanel() {
           </div>
         )}
       </Card>
+      <Card title="Sessions" testId="panel-sessions">
+        {s && (
+          <div className="flex flex-wrap items-center gap-2">
+            <span>Ask whether a session is still needed after</span>
+            <input
+              type="number"
+              min={1}
+              max={60}
+              className="w-20"
+              value={s.sessionIdleDays}
+              aria-label="Days before a session is asked about"
+              data-testid="session-idle-days"
+              onChange={(e) => {
+                const days = Number(e.target.value);
+                if (Number.isInteger(days) && days >= 1 && days <= 60)
+                  void set({ sessionIdleDays: days });
+              }}
+            />
+            <span>days of doing nothing.</span>
+            <span className="ui-helper w-full">
+              It asks once, with Wrap up and Keep. Keep starts the time again.
+            </span>
+          </div>
+        )}
+      </Card>
       <Card title="Art vault" testId="panel-art-vault">
         {s && (
           <div className="flex flex-wrap items-center gap-2">

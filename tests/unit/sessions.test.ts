@@ -49,7 +49,7 @@ const workspace: Workspace = {
   briefTime: "08:00",
 };
 
-function setup() {
+function setup(clock: { now?: () => Date; idleDays?: () => number } = {}) {
   const dir = mkdtempSync(join(tmpdir(), "office-sess-"));
   const db = openDb(join(dir, "office.db"));
   const bus = new Bus();
@@ -67,6 +67,8 @@ function setup() {
     workspace: () => workspace,
     projectPath: (id) => (id === "p" ? dir : undefined),
     logsDir: join(dir, "logs"),
+    ...(clock.now ? { now: clock.now } : {}),
+    ...(clock.idleDays ? { idleDays: clock.idleDays } : {}),
   });
   const statuses: string[] = [];
   bus.on("session.status", (e) => statuses.push((e.payload as { status: string }).status));
@@ -264,5 +266,39 @@ describe("layouts", () => {
     });
     setLayout(db, "all", { open: ["a"], active: "a", split: "grid", panes: [] });
     expect(getLayout(db, "all")?.split).toBe("grid");
+  });
+});
+
+describe("sessions that are still needed", () => {
+  it("are asked about once they sit unused for the idle time, and Keep starts the time again", () => {
+    let now = new Date("2026-11-19T10:00:00Z");
+    const { service, db } = setup({ now: () => now, idleDays: () => 2 });
+    const session = service.start({
+      providerId: "fake",
+      projectId: "p",
+      title: "Fix the login",
+      mode: "chat",
+    });
+    expect(session.idle).toBe(false);
+    // Two days and a bit later nothing has happened in it.
+    db.prepare("UPDATE sessions SET updated_at = ?, last_output_at = NULL WHERE id = ?").run(
+      "2026-11-17T09:00:00Z",
+      session.id,
+    );
+    expect(service.get(session.id).idle).toBe(true);
+    // Keep restarts the timer from now: it is not idle for another two days.
+    service.keep(session.id);
+    expect(service.get(session.id).idle).toBe(false);
+    now = new Date("2026-11-21T09:00:00Z");
+    expect(service.get(session.id).idle).toBe(false);
+    now = new Date("2026-11-21T11:00:00Z");
+    expect(service.get(session.id).idle).toBe(true);
+    // An archived session is never asked about, and a session that is working is not idle.
+    service.archive(session.id);
+    expect(service.get(session.id).idle).toBe(false);
+    db.prepare("UPDATE sessions SET archived_at = NULL, status = 'working' WHERE id = ?").run(
+      session.id,
+    );
+    expect(service.get(session.id).idle).toBe(false);
   });
 });

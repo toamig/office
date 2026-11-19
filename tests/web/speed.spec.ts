@@ -3,7 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { openDb } from "../../src/main/core/db";
-import { launch } from "./helpers";
+import { allowSeveralSessions, launch } from "./helpers";
 
 /** Each view's root element, and the rail button that opens it. */
 const VIEWS = [
@@ -90,6 +90,7 @@ test("switching views keeps a running terminal's scrollback and a streaming chat
   const { app } = await launch({ world: true, fakeTools: true });
   const win = await app.firstWindow();
   await expect(win.getByTestId("home")).toBeVisible();
+  await allowSeveralSessions(win);
   const terminal = await win.evaluate(() =>
     window.office.invoke("sessions.start", {
       providerId: "fake",

@@ -626,7 +626,8 @@
   padding: var(--space-1);
 }
 .ui-menu-item {
-  display: block;
+  display: flex;
+  align-items: flex-start;
   width: 100%;
   padding: var(--space-2) var(--space-3);
   border: 0;
@@ -1387,4 +1388,19 @@ input[type="radio"] {
 }
 .stage-card[data-dragging="true"] {
   opacity: 0.6;
+}
+
+.ui-menu-check {
+  display: inline-block;
+  width: var(--space-4);
+  flex: none;
+}
+.ui-menu-text {
+  display: grid;
+  gap: 2px;
+  text-align: left;
+}
+.ui-menu-hint {
+  color: var(--muted);
+  font-size: var(--text-xs);
 }

@@ -6,6 +6,7 @@ import { office } from "../lib/ipc";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
 import { InspectorSlot } from "../components/Inspector";
+import { SessionActionsContext, useSessionActions } from "../components/SessionActions";
 import { AgentInspector } from "./agents/AgentInspector";
 import { CaptureDialog } from "./agents/CaptureDialog";
 import { PaneHeader } from "./agents/PaneHeader";
@@ -20,6 +21,7 @@ import {
   Button,
   Dropdown,
   EmptyState,
+  Group,
   IconButton,
   Page,
   SplitPane,
@@ -46,103 +48,151 @@ function SessionList({
   onCloseSession: (s: SessionRow) => void;
 }) {
   const projects = useQuery("projects.list");
-  const name = (id: string | null): string => projects.data?.find((p) => p.id === id)?.name ?? "";
+  const name = (id: string | null): string =>
+    projects.data?.find((p) => p.id === id)?.name ?? "No project";
+  // Grouped by project, in the order each project's newest session appears, so what is live stays on top.
+  const groups = new Map<string, SessionRow[]>();
+  for (const s of sessions)
+    groups.set(name(s.projectId), [...(groups.get(name(s.projectId)) ?? []), s]);
+  const rows: Array<{ group: string } | { session: SessionRow }> = [...groups].flatMap(
+    ([group, list]) => [{ group }, ...list.map((session) => ({ session }))],
+  );
+  const menu = (s: SessionRow): void => {
+    void office
+      .invoke("app.popupMenu", {
+        items: [
+          { id: "resume", label: "Resume", enabled: !s.running && s.mode !== "chat" },
+          { id: "stop", label: "Stop", enabled: s.running },
+          { id: "close", label: "Wrap up" },
+        ],
+      })
+      .then((choice) => {
+        if (choice === "resume")
+          void office.invoke("sessions.resume", { id: s.id }).then(onChanged);
+        else if (choice === "stop")
+          void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
+        else if (choice === "close") onCloseSession(s);
+      });
+  };
   return (
     <div className="flex h-full flex-col" data-testid="session-list">
       {sessions.length === 0 && (
-        <EmptyState title="No sessions yet">Start an agent to begin.</EmptyState>
+        <EmptyState title="No sessions yet">Start a session to begin.</EmptyState>
       )}
       <VirtualList
-        items={sessions}
+        items={rows}
         estimate={58}
-        itemKey={(s) => s.id}
-        renderItem={(s) => (
-          <div
-            data-testid="session-row"
-            onClick={() => onOpen(s)}
-            onContextMenu={(e) => {
-              e.preventDefault();
-              void office
-                .invoke("app.popupMenu", {
-                  items: [
-                    { id: "resume", label: "Resume", enabled: !s.running && s.mode !== "chat" },
-                    { id: "stop", label: "Stop", enabled: s.running },
-                    { id: "close", label: "Close and wrap up" },
-                  ],
-                })
-                .then((choice) => {
-                  if (choice === "resume")
-                    void office.invoke("sessions.resume", { id: s.id }).then(onChanged);
-                  else if (choice === "stop")
-                    void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
-                  else if (choice === "close") onCloseSession(s);
-                });
-            }}
-            className="session-row ui-row"
-            data-selected={active === s.id ? "true" : undefined}
-            data-clickable="true"
-          >
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="flex-1 truncate font-medium">{s.title ?? s.provider}</span>
-                <span data-testid="session-status">
-                  <StatusChip status={s.status} />
-                </span>
+        itemKey={(r) => ("group" in r ? `group:${r.group}` : r.session.id)}
+        renderItem={(r) => {
+          if ("group" in r)
+            return (
+              <div className="px-3 pt-3" data-testid="session-group">
+                <Group>{r.group}</Group>
               </div>
-              <div className="ui-line-sub mt-1 flex flex-wrap gap-x-3">
-                {name(s.projectId) && <span>{name(s.projectId)}</span>}
-                {s.branch && <span>{s.branch}</span>}
-                {s.role && <span>Role: {s.role}</span>}
-                <Time iso={s.updatedAt} />
+            );
+          const s = r.session;
+          return (
+            <div
+              data-testid="session-row"
+              onClick={() => onOpen(s)}
+              onContextMenu={(e) => {
+                e.preventDefault();
+                menu(s);
+              }}
+              className="session-row ui-row"
+              data-selected={active === s.id ? "true" : undefined}
+              data-clickable="true"
+            >
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-2">
+                  <span className="flex-1 truncate font-medium" data-testid="session-goal">
+                    {s.title ?? s.provider}
+                  </span>
+                  <span data-testid="session-status">
+                    <StatusChip status={s.status} />
+                  </span>
+                </div>
+                <div className="ui-line-sub mt-1 flex flex-wrap gap-x-3">
+                  <Time iso={s.updatedAt} />
+                  {s.idle && <span data-testid="session-idle">Still needed?</span>}
+                </div>
               </div>
-            </div>
-            <div className="session-actions flex gap-0.5">
-              {!s.running && s.mode !== "chat" && (
+              <div className="session-actions flex gap-0.5">
+                {!s.running && s.mode !== "chat" && (
+                  <IconButton
+                    size="sm"
+                    label="Resume"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void office
+                        .invoke("sessions.resume", { id: s.id })
+                        .then(onChanged, (err: unknown) =>
+                          notifyError(err, "Could not resume that session", s.id),
+                        );
+                    }}
+                    data-testid="resume-session"
+                  >
+                    <Play />
+                  </IconButton>
+                )}
+                {s.running && (
+                  <IconButton
+                    size="sm"
+                    label="Stop"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
+                    }}
+                    data-testid="stop-session"
+                  >
+                    <Square />
+                  </IconButton>
+                )}
                 <IconButton
                   size="sm"
-                  label="Resume"
+                  label="Wrap up"
                   onClick={(e) => {
                     e.stopPropagation();
-                    void office
-                      .invoke("sessions.resume", { id: s.id })
-                      .then(onChanged, (err: unknown) =>
-                        notifyError(err, "Could not resume that session", s.id),
-                      );
+                    onCloseSession(s);
                   }}
-                  data-testid="resume-session"
+                  data-testid="close-session"
                 >
-                  <Play />
+                  <Archive />
                 </IconButton>
-              )}
-              {s.running && (
-                <IconButton
-                  size="sm"
-                  label="Stop"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    void office.invoke("sessions.kill", { id: s.id }).then(onChanged);
-                  }}
-                  data-testid="stop-session"
-                >
-                  <Square />
-                </IconButton>
-              )}
-              <IconButton
-                size="sm"
-                label="Close and wrap up"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onCloseSession(s);
-                }}
-                data-testid="close-session"
-              >
-                <Archive />
-              </IconButton>
+              </div>
             </div>
-          </div>
-        )}
+          );
+        }}
       />
     </div>
+  );
+}
+
+/** "Still needed?": asked once the session has sat unused for the idle time; Keep starts the time again. */
+function IdlePrompt({ session, onChanged }: { session: SessionRow; onChanged: () => void }) {
+  const { wrapUp } = useSessionActions();
+  return (
+    <Banner tone="attention" testId="idle-prompt">
+      <span className="flex flex-wrap items-center gap-3">
+        <span>Still needed? Nothing has happened here for a while.</span>
+        <Button size="sm" onClick={() => wrapUp(session)} data-testid="idle-wrap-up">
+          Wrap up
+        </Button>
+        <Button
+          size="sm"
+          onClick={() =>
+            void office
+              .invoke("sessions.keep", { id: session.id })
+              .then(onChanged, (err: unknown) =>
+                notifyError(err, "Could not keep that session", session.id),
+              )
+          }
+          data-testid="idle-keep"
+        >
+          Keep
+        </Button>
+      </span>
+    </Banner>
   );
 }
 
@@ -157,6 +207,7 @@ const SessionPanel: PanelComponent = ({ params }) => {
     );
   return (
     <div className="agent-pane h-full" data-testid="pane">
+      {session.idle && <IdlePrompt session={session} onChanged={sessions.reload} />}
       {session.mode !== "chat" && (
         <PaneHeader
           session={session}
@@ -218,11 +269,18 @@ export function Agents({ active: visible }: { active: boolean }) {
     "session.status",
   ]);
   const projects = useQuery("projects.list");
+  const settings = useQuery("settings.get", undefined, ["settings.changed"]);
+  /** Off by default: Sessions shows one session at a time. */
+  const multi = settings.data?.sessionsMulti ?? false;
   const [starting, setStarting] = useState(false);
   const [closing, setClosing] = useState<SessionRow | null>(null);
   const [activeId, setActiveId] = useState<string | null>(null);
   const api = useRef<DockviewApi | null>(null);
   const opened = useRef<string | null>(null);
+  const multiRef = useRef(false);
+  useEffect(() => {
+    multiRef.current = multi;
+  }, [multi]);
   /** A session the owner asked to open before the dock had loaded its saved layout. */
   const pendingOpen = useRef<SessionRow | null>(null);
   if (visible && applied !== visits) {
@@ -246,6 +304,10 @@ export function Agents({ active: visible }: { active: boolean }) {
       return;
     }
     const existing = dock.getPanel(s.id);
+    // One at a time: the session that was showing makes way (it keeps running; it is only closed as a panel).
+    if (!multiRef.current)
+      for (const p of [...dock.panels])
+        if (p.id !== s.id && p.id !== "agent-diff" && p.id !== "agent-preview") p.api.close();
     if (existing) existing.api.setActive();
     else
       dock.addPanel({
@@ -274,17 +336,17 @@ export function Agents({ active: visible }: { active: boolean }) {
 
   const activeSession = activeId ? byId.get(activeId) : undefined;
   /** Adds the diff and preview panels of the active session's project if they are not there. */
-  const ensureReview = (dock: DockviewApi): void => {
+  const ensureReview = (dock: DockviewApi, only?: string): void => {
     const projectId = activeSession?.projectId;
     if (!projectId) return;
-    if (!dock.getPanel("agent-diff"))
+    if (only !== "agent-preview" && !dock.getPanel("agent-diff"))
       dock.addPanel({
         id: "agent-diff",
         component: "agent-diff",
         title: "Changes",
         params: { projectId, testId: "dock-tab" },
       });
-    if (!dock.getPanel("agent-preview"))
+    if (only !== "agent-diff" && !dock.getPanel("agent-preview"))
       dock.addPanel({
         id: "agent-preview",
         component: "agent-preview",
@@ -325,13 +387,13 @@ export function Agents({ active: visible }: { active: boolean }) {
 
   return (
     <Page
-      title="Agents"
+      title="Sessions"
       subtitle="Agent conversations working on your projects."
       testId="agents"
       fill
       primary={
         <Button variant="primary" onClick={() => setStarting(true)} data-testid="start-agent-open">
-          <Play /> Start agent
+          <Play /> Start a session
         </Button>
       }
     >
@@ -349,51 +411,75 @@ export function Agents({ active: visible }: { active: boolean }) {
           ))}
         </Dropdown>
       </div>
-      {sessions.error && <Banner tone="danger">{sessions.error}</Banner>}
-      <SplitPane
-        id="agents"
-        defaultSize={280}
-        min={220}
-        minSecond={420}
-        first={
-          <SessionList
-            sessions={list}
-            active={activeId}
-            onOpen={open}
-            onChanged={sessions.reload}
-            onCloseSession={setClosing}
-          />
-        }
-        second={
-          <Workbench
-            key={scope}
-            workbench="agents"
-            scope={scope}
-            components={AGENT_COMPONENTS}
-            presets={presets}
-            initial={() => undefined}
-            onReady={(dock) => {
-              api.current = dock;
-              opened.current = null;
-              if (pendingOpen.current) {
-                const waiting = pendingOpen.current;
-                pendingOpen.current = null;
-                open(waiting);
+      <SessionActionsContext.Provider value={{ wrapUp: setClosing }}>
+        {sessions.error && <Banner tone="danger">{sessions.error}</Banner>}
+        <SplitPane
+          id="agents"
+          defaultSize={280}
+          min={220}
+          minSecond={420}
+          first={
+            <SessionList
+              sessions={list}
+              active={activeId}
+              onOpen={open}
+              onChanged={sessions.reload}
+              onCloseSession={setClosing}
+            />
+          }
+          second={
+            <Workbench
+              key={scope}
+              workbench="agents"
+              scope={scope}
+              components={AGENT_COMPONENTS}
+              presets={presets}
+              groupActions={multi}
+              catalog={[
+                {
+                  id: "agent-diff",
+                  title: "Changes",
+                  add: (dock) => ensureReview(dock, "agent-diff"),
+                },
+                {
+                  id: "agent-preview",
+                  title: "Preview",
+                  add: (dock) => ensureReview(dock, "agent-preview"),
+                },
+              ]}
+              layoutItems={[
+                {
+                  label: "Show several sessions at once",
+                  hint: "Off, Sessions shows one session at a time",
+                  checked: multi,
+                  testId: "sessions-multi",
+                  onSelect: () => void office.invoke("settings.set", { sessionsMulti: !multi }),
+                },
+              ]}
+              initial={() => undefined}
+              onReady={(dock) => {
+                api.current = dock;
+                opened.current = null;
+                if (pendingOpen.current) {
+                  const waiting = pendingOpen.current;
+                  pendingOpen.current = null;
+                  open(waiting);
+                }
+                // Whatever the saved layout had open, the sessions it names are still sessions.
+                setActiveId(dock.activePanel?.id ?? null);
+              }}
+              onActive={(id) => {
+                if (id && id !== "agent-diff" && id !== "agent-preview") setActiveId(id);
+              }}
+              empty={
+                <EmptyState title="Nothing open">
+                  Open a session from the list, or start a new agent.
+                </EmptyState>
               }
-              // Whatever the saved layout had open, the sessions it names are still sessions.
-              setActiveId(dock.activePanel?.id ?? null);
-            }}
-            onActive={(id) => {
-              if (id && id !== "agent-diff" && id !== "agent-preview") setActiveId(id);
-            }}
-            empty={
-              <EmptyState title="Nothing open">
-                Open a session from the list, or start a new agent.
-              </EmptyState>
-            }
-          />
-        }
-      />
+            />
+          }
+        />
+      </SessionActionsContext.Provider>
       <InspectorSlot view="agents">
         <AgentInspector session={activeSession} />
       </InspectorSlot>

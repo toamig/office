@@ -170,6 +170,17 @@ export function Git() {
               scope={current.id}
               components={GIT_COMPONENTS}
               presets={GIT_PRESETS}
+              catalog={TABS.map((kind) => ({
+                id: kind,
+                title: TITLES[kind],
+                add: (api) =>
+                  api.addPanel({
+                    id: kind,
+                    component: "git",
+                    title: TITLES[kind],
+                    params: { kind, projectId: current.id, testId: `git-tab-${kind}` },
+                  }),
+              }))}
               initial={(api) => {
                 for (const kind of TABS)
                   api.addPanel({
