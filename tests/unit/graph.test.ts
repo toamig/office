@@ -1,5 +1,15 @@
+import { mkdtempSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { layoutGraph, parseLog, parseRefs, type LogCommit } from "../../src/main/modules/git/graph";
+import {
+  layoutGraph,
+  parseLog,
+  parseRefs,
+  readGraph,
+  type LogCommit,
+} from "../../src/main/modules/git/graph";
+import { FOLD_COLOR, foldLanes } from "../../src/shared/graph-lanes";
 
 const commit = (hash: string, parents: string[], refs = "", subject = hash): LogCommit => ({
   hash,
@@ -131,5 +141,53 @@ describe("reading git's log", () => {
     ]);
     expect(parseRefs("HEAD -> main, tag: v2").map((l) => l.kind)).toEqual(["branch", "tag"]);
     expect(parseLog("")).toEqual([]);
+  });
+});
+
+describe("folding the lanes of a busy repo", () => {
+  /** n commits each on a lane of its own, all waiting for one root: n parallel branches. */
+  const many = (n: number) =>
+    layoutGraph([
+      ...Array.from({ length: n }, (_, i) => commit(`b${i}`, ["root"], `branch-${i}`)),
+      commit("root", []),
+    ]);
+
+  it("leaves a graph that already fits alone", () => {
+    const { rows, width } = many(5);
+    const folded = foldLanes(rows, width, 12);
+    expect(folded).toMatchObject({ width, hidden: 0 });
+    expect(folded.rows).toBe(rows);
+  });
+
+  it("folds every lane past the cap into one muted lane, so the graph is never wider than the cap and one", () => {
+    const { rows, width } = many(40);
+    expect(width).toBe(40);
+    const folded = foldLanes(rows, width, 12);
+    expect(folded.width).toBe(13);
+    expect(folded.hidden).toBe(27);
+    for (const r of folded.rows) {
+      expect(r.col).toBeLessThanOrEqual(12);
+      for (const s of [...r.through, ...r.fromAbove]) expect(s.lane).toBeLessThanOrEqual(12);
+      for (const t of r.toBelow) expect(t.to).toBeLessThanOrEqual(12);
+      // One line per lane: the folded lane is drawn once, not once per branch in it.
+      expect(new Set(r.through.map((s) => s.lane)).size).toBe(r.through.length);
+    }
+    // A branch past the cap has its dot in the folded lane, in the muted colour; the labels are kept.
+    const far = folded.rows.find((r) => r.hash === "b30");
+    expect(far).toMatchObject({ col: 12, color: FOLD_COLOR });
+    expect(far?.labels).toEqual([{ kind: "branch", name: "branch-30", current: false }]);
+    // Where the folded lanes meet the root, one line arrives from them.
+    const root = folded.rows.at(-1);
+    expect(root?.fromAbove.filter((f) => f.lane === 12)).toHaveLength(1);
+    // The first lanes are untouched.
+    expect(folded.rows[0]).toMatchObject({ col: 0, color: 0 });
+    expect(folded.rows[11]).toMatchObject({ col: 11 });
+  });
+});
+
+describe("a git log that fails", () => {
+  it("is an error the owner can read, not an empty graph", async () => {
+    const dir = mkdtempSync(join(tmpdir(), "office-notrepo-"));
+    await expect(readGraph(dir, 300, [])).rejects.toThrow(/Git could not read the history/);
   });
 });

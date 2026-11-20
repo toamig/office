@@ -203,6 +203,25 @@ export function Git() {
               scope={current.id}
               components={GIT_COMPONENTS}
               presets={GIT_PRESETS}
+              migrate={(api) => {
+                // A layout saved before the graph had the Branches and Worktrees tabs: they are gone, the graph takes their place.
+                let removed = false;
+                for (const p of [...api.panels]) {
+                  const kind = (p.params as { kind?: string } | undefined)?.kind;
+                  if (kind === "branches" || kind === "worktrees") {
+                    p.api.close();
+                    removed = true;
+                  }
+                }
+                if (!api.getPanel("graph"))
+                  api.addPanel({
+                    id: "graph",
+                    component: "git",
+                    title: TITLES.graph,
+                    params: { kind: "graph", projectId: current.id, testId: "git-tab-graph" },
+                  });
+                if (removed) api.getPanel("graph")?.api.setActive();
+              }}
               catalog={TABS.map((kind) => ({
                 id: kind,
                 title: TITLES[kind],

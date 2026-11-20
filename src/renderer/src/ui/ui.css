@@ -1463,11 +1463,19 @@ input[type="radio"] {
   overflow: auto;
 }
 .graph-row {
-  display: flex;
+  display: grid;
+  /* The lanes get a fixed width and the commit text the rest, so the text never leaves the view. */
+  grid-template-columns: var(--graph-lanes, 40px) minmax(0, 1fr);
   align-items: center;
   min-height: 34px;
   gap: var(--space-2);
   border-radius: var(--radius-sm);
+}
+.graph-lanes-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  padding-bottom: var(--space-2);
 }
 .graph-row:hover,
 .graph-row[data-selected="true"] {

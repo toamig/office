@@ -126,6 +126,7 @@ export function Workbench({
   initial,
   presets,
   onReady,
+  migrate,
   onActive,
   toolbar,
   empty,
@@ -142,6 +143,8 @@ export function Workbench({
   initial: (api: DockviewApi) => void;
   presets: WorkbenchPreset[];
   onReady?: (api: DockviewApi) => void;
+  /** Called with a layout that was restored from this PC's saved one, to bring an old layout up to date. */
+  migrate?: (api: DockviewApi) => void;
   /** The id of the panel that became active (or null when none is). */
   onActive?: (panelId: string | null) => void;
   toolbar?: React.ReactNode;
@@ -203,8 +206,10 @@ export function Workbench({
     void office.invoke("dock.get", { key }).then(
       (json) => {
         try {
-          if (json) api.fromJSON(JSON.parse(json));
-          else initial(api);
+          if (json) {
+            api.fromJSON(JSON.parse(json));
+            migrate?.(api);
+          } else initial(api);
         } catch {
           api.clear();
           initial(api);

@@ -1,4 +1,5 @@
 import type { GraphLabel, GraphRow, GraphView } from "../../../shared/models";
+import { IpcFailure } from "../../core/ipc";
 import { git } from "./run";
 
 /** One commit as `git log` gives it, before it is placed in a lane. */
@@ -134,7 +135,13 @@ export async function readGraph(dir: string, limit: number, remotes: string[]): 
     "-n",
     String(limit + 1),
   ]);
-  const all = out.code === 0 ? parseLog(out.stdout) : [];
+  // A failing log is an error the owner can see, never an empty graph.
+  if (out.code !== 0)
+    throw new IpcFailure(
+      "git-failed",
+      `Git could not read the history: ${out.stderr.trim().split("\n")[0] || `exit ${out.code}`}`,
+    );
+  const all = parseLog(out.stdout);
   const commits = all.slice(0, limit);
   const { rows, width } = layoutGraph(commits);
   // A ref with a slash is a remote branch only when its first part is a remote of this repo.

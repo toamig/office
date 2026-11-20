@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { growBigRepo, LUCKY_FLOCK } from "../fixtures/repos/big";
 import { commit, sh } from "../fixtures/repos/make";
 import { launch } from "./helpers";
 
@@ -120,5 +121,79 @@ test("a long history is drawn in windows, loads more on request, and scrolls smo
   expect(frame).toBeLessThan(34);
   await win.getByTestId("graph-more").click();
   await expect(win.getByTestId("graph-row").last()).toBeAttached();
+  await app.close();
+});
+
+test("a big repo (120 branches, 60 worktrees, 1300 commits) draws its newest commits with the text in view", async () => {
+  test.setTimeout(240000);
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  growBigRepo(world.code["alpha"]?.work as string, LUCKY_FLOCK);
+  const win = await app.firstWindow();
+  for (const [width, height] of [
+    [1366, 860],
+    [1920, 1080],
+  ] as const) {
+    await win.setViewportSize({ width, height });
+    await win.getByTestId("rail-projects").click();
+    await win.getByTestId("rail-git").click();
+    await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+    const started = Date.now();
+    const rows = win.getByTestId("graph-row");
+    await expect(rows.first()).toBeVisible({ timeout: 30000 });
+    // The newest commits are there within about a second of the repo opening, though the history is long.
+    expect(Date.now() - started).toBeLessThan(4000);
+    // The commit text is in view in a column of its own, however many lanes the repo has.
+    const subject = rows.first().locator(".graph-subject");
+    await expect(subject).toBeVisible();
+    const box = await subject.boundingBox();
+    expect(box).not.toBeNull();
+    expect((box?.x ?? 0) + (box?.width ?? 0)).toBeLessThanOrEqual(width);
+    expect(box?.width ?? 0).toBeGreaterThan(100);
+    // The lanes are capped, with the rest folded into a lane that expands.
+    const toggle = win.getByTestId("graph-lanes-toggle");
+    await expect(toggle).toContainText("branches");
+    const lanesBox = await rows.first().getByTestId("graph-lines").boundingBox();
+    expect(lanesBox?.width ?? 999).toBeLessThanOrEqual(12 * 16 + 24 + 16);
+    await toggle.click();
+    await expect(toggle).toContainText("Fold");
+    // Unfolded, the lanes squeeze into the same column: the text does not move.
+    const after = await subject.boundingBox();
+    expect(Math.abs((after?.x ?? 0) - (box?.x ?? 0))).toBeLessThan(40);
+    expect((after?.x ?? 0) + (after?.width ?? 0)).toBeLessThanOrEqual(width);
+    await toggle.click();
+  }
+  await app.close();
+});
+
+test("a Git layout saved before the graph (with Branches and Worktrees tabs) opens on the graph", async () => {
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  const win = await app.firstWindow();
+  await win.setViewportSize({ width: 1700, height: 950 });
+  await win.getByTestId("rail-git").click();
+  await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+  await expect(win.getByTestId("graph-tab")).toBeVisible();
+  // What the desk saved for this repo, turned back into the old tabs.
+  await expect
+    .poll(() => win.evaluate(() => window.office.invoke("dock.get", { key: "git:alpha" })), {
+      timeout: 15000,
+    })
+    .not.toBeNull();
+  const saved = (await win.evaluate(() =>
+    window.office.invoke("dock.get", { key: "git:alpha" }),
+  )) as string;
+  const old = saved
+    .replaceAll('"graph"', '"branches"')
+    .replaceAll("git-tab-graph", "git-tab-branches")
+    .replaceAll('"Graph"', '"Branches"');
+  expect(old).not.toBe(saved);
+  await win.evaluate((json) => window.office.invoke("dock.set", { key: "git:alpha", json }), old);
+  await win.getByTestId("rail-home").click();
+  await win.getByTestId("rail-git").click();
+  await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+  // No empty tab: the graph is there and showing the history.
+  await expect(win.getByTestId("graph-tab")).toBeVisible({ timeout: 15000 });
+  await expect(win.getByTestId("graph-row").first()).toBeVisible();
   await app.close();
 });

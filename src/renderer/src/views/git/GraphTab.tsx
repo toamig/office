@@ -1,5 +1,6 @@
 import { GitBranch, GitFork, Wrench } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { foldLanes } from "@shared/graph-lanes";
 import type { BranchCompare, BranchInfo, GraphLabel, GraphRow, WorktreeInfo } from "@shared/models";
 import { InspectorSlot } from "../../components/Inspector";
 import { VirtualList } from "../../components/VirtualList";
@@ -7,6 +8,7 @@ import { useQuery } from "../../lib/hooks";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import {
+  Banner,
   Button,
   Card,
   Dialog,
@@ -27,13 +29,24 @@ const PAD = 12;
 /** The colour classes of lanes: the design system's own tones, taken in turn. */
 const LANE_COLORS = 6;
 const PAGE = 300;
-
-const laneX = (lane: number): number => PAD + lane * LANE_W;
+/** Past this many lanes the rest are folded into one, so the commit text always has room. */
+const LANE_CAP = 12;
 
 /** The lines and the dot of one commit: lanes that arrive from above, pass by, or leave below. */
-function Lines({ row, width, here }: { row: GraphRow; width: number; here: boolean }) {
+function Lines({
+  row,
+  width,
+  laneW,
+  here,
+}: {
+  row: GraphRow;
+  width: number;
+  laneW: number;
+  here: boolean;
+}) {
   const cy = ROW_H / 2;
-  const w = PAD * 2 + Math.max(0, width - 1) * LANE_W;
+  const laneX = (lane: number): number => PAD + lane * laneW;
+  const w = PAD * 2 + Math.max(0, width - 1) * laneW;
   return (
     <svg
       className="graph-lines"
@@ -201,6 +214,28 @@ export function GraphTab({ projectId }: { projectId: string }) {
   }, []);
 
   const g = graph.data;
+  const [expanded, setExpanded] = useState(false);
+  const laid = useMemo(
+    () =>
+      g
+        ? expanded
+          ? { rows: g.rows, width: g.width, hidden: 0 }
+          : foldLanes(g.rows, g.width, LANE_CAP)
+        : null,
+    [g, expanded],
+  );
+  const manyLanes = g !== undefined && g.width > LANE_CAP + 1;
+  // Unfolded, every lane squeezes into the room the folded graph takes, so the text column stays where it is.
+  const fixedPx = PAD * 2 + LANE_CAP * LANE_W;
+  const laneW = expanded
+    ? Math.max(
+        2,
+        Math.min(LANE_W, Math.floor((fixedPx - PAD * 2) / Math.max(1, (laid?.width ?? 1) - 1))),
+      )
+    : LANE_W;
+  const lanesPx = expanded
+    ? Math.max(fixedPx, PAD * 2 + Math.max(0, (laid?.width ?? 1) - 1) * laneW)
+    : PAD * 2 + Math.max(0, (laid?.width ?? 1) - 1) * LANE_W;
   const infoOf = (name: string): BranchInfo | undefined =>
     branches.data?.local.find((b) => b.name === name);
   const worktreeOf = (name: string): WorktreeInfo | undefined =>
@@ -244,7 +279,16 @@ export function GraphTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="graph-tab" data-testid="graph-tab" ref={tab}>
-      {graph.error && <p className="ui-bad">{graph.error}</p>}
+      {graph.error && (
+        <Banner tone="danger" testId="graph-error">
+          <span className="flex flex-wrap items-center gap-3">
+            <span>{graph.error}</span>
+            <Button size="sm" onClick={graph.reload} data-testid="graph-retry">
+              Try again
+            </Button>
+          </span>
+        </Banner>
+      )}
       {stash && (
         <div className="ui-ask flex items-center gap-3" data-testid="stash-offer">
           <span className="flex-1">
@@ -344,15 +388,35 @@ export function GraphTab({ projectId }: { projectId: string }) {
               ))}
           </aside>
         )}
-        <div className="graph-main" data-testid="graph-main">
-          {g && g.rows.length === 0 && (
+        <div
+          className="graph-main"
+          data-testid="graph-main"
+          style={{ "--graph-lanes": `${lanesPx}px` } as React.CSSProperties}
+        >
+          {manyLanes && (
+            <div className="graph-lanes-bar">
+              <Button
+                size="sm"
+                onClick={() => setExpanded(!expanded)}
+                data-testid="graph-lanes-toggle"
+              >
+                {expanded
+                  ? "Fold the extra branches"
+                  : `+${(g?.width ?? 0) - LANE_CAP - 1} branches`}
+              </Button>
+              <span className="ui-muted">
+                {expanded ? `All ${g?.width} lanes` : `Showing the first ${LANE_CAP} lanes`}
+              </span>
+            </div>
+          )}
+          {g && g.rows.length === 0 && !graph.error && (
             <EmptyState title="No commits yet">
               Make a commit and its history draws here.
             </EmptyState>
           )}
-          {g && g.rows.length > 0 && (
+          {laid && laid.rows.length > 0 && (
             <VirtualList
-              items={g.rows}
+              items={laid.rows}
               estimate={ROW_H}
               itemKey={(r) => r.hash}
               testId="graph-list"
@@ -370,7 +434,7 @@ export function GraphTab({ projectId }: { projectId: string }) {
                     data-branch-head={headBranch}
                     onClick={() => setSelected(row.hash)}
                   >
-                    <Lines row={row} width={g.width} here={isHere} />
+                    <Lines row={row} width={laid.width} laneW={laneW} here={isHere} />
                     <div className="graph-text">
                       {isHere && (
                         <span className="graph-here" data-testid="graph-here">
@@ -385,7 +449,7 @@ export function GraphTab({ projectId }: { projectId: string }) {
                             projectId={projectId}
                             info={infoOf(l.name)}
                             worktree={worktreeOf(l.name)}
-                            current={g.head.branch}
+                            current={g?.head.branch ?? null}
                             onSwitch={(n) => void doSwitch(n)}
                             onCompare={(a, b) => void compare(a, b)}
                           />
