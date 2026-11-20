@@ -1,0 +1,6 @@
+build	Install	2026-01-01T10:00:00.1Z npm ci finished
+build	Test	2026-01-01T10:01:00.1Z > vitest run
+build	Test	2026-01-01T10:01:01.1Z FAIL tests/unit/sheep.test.ts > counts the flock
+build	Test	2026-01-01T10:01:01.2Z AssertionError: expected 3 to be 4
+build	Test	2026-01-01T10:01:01.3Z  at src/game/flock.ts:41:9
+build	Test	2026-01-01T10:01:02.0Z Process completed with exit code 1.

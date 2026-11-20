@@ -61,7 +61,7 @@ test("an uncommitted brain file is reviewed with its diff and committed, or disc
   await app.close();
 });
 
-test("a problem with no fix starts a session with the problem as its brief and its goal filled in", async () => {
+test("a problem with no fix has one Fix in a session button that starts a chat with the problem as its first message", async () => {
   const { app, world } = await launch({ world: true, fakeTools: true });
   if (!world) throw new Error("no world");
   const win = await app.firstWindow();
@@ -78,19 +78,24 @@ test("a problem with no fix starts a session with the problem as its brief and i
   await win.getByTestId("health-details").click();
   await expect(win.getByTestId("health-output")).toContainText("hub: 6 files");
 
-  await error.getByTestId("health-session").click();
-  await expect(win.getByTestId("start-agent-dialog")).toBeVisible();
-  await expect(win.getByTestId("agent-goal")).toHaveValue(
-    "Fix: Alpha/OpenItems.md: broken link Alpha/Missing",
+  await error.getByTestId("fix-start").click();
+  // No dialog: the chat opens at once, with the goal and the problem as its first message.
+  await expect(win.getByTestId("start-agent-dialog")).toHaveCount(0);
+  await expect(win.getByTestId("chat")).toBeVisible();
+  await expect(win.getByTestId("chat-user").first()).toContainText("broken link [[Alpha/Missing]]");
+  await expect(win.getByTestId("chat-user").first()).toContainText("Done means:");
+  const sessions = await win.evaluate(() => window.office.invoke("sessions.list", {}));
+  const fix = sessions.find(
+    (s) => s.title === "Fix: Alpha/OpenItems.md: broken link Alpha/Missing",
   );
-  await expect(win.getByTestId("agent-prompt")).toHaveValue(/broken link \[\[Alpha\/Missing\]\]/);
+  expect(fix?.mode).toBe("chat");
   // It starts in the brain repo that holds the problem.
-  await expect(win.getByTestId("agent-folder")).toContainText("Alpha");
-  await win.getByTestId("mode-provider").check();
-  await win.getByTestId("agent-start").click();
-  await expect(win.getByTestId("session-goal").first()).toHaveText(
-    "Fix: Alpha/OpenItems.md: broken link Alpha/Missing",
-  );
+  expect((fix?.cwd ?? "").split("\\").join("/")).toMatch(/\/Alpha$/);
+
+  // Back on the Brain page the problem is marked, with a way to open the session.
+  await win.getByTestId("rail-brain").click();
+  await expect(error.getByTestId("fix-being")).toContainText("Being fixed in");
+  await expect(error.getByTestId("fix-start")).toHaveCount(0);
   await app.close();
 });
 

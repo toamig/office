@@ -4,8 +4,9 @@ import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { useUi, type ViewId } from "../stores/ui";
 import { Button, Card, EmptyState, Group, LinkButton, Page, StatusBadge, notifyError } from "../ui";
-import { describeValidate, fixGoal } from "@shared/health";
-import { useStartFix, RepoItem } from "../components/HealthItems";
+import { describeValidate } from "@shared/health";
+import { FixButton } from "../components/Fix";
+import { RepoItem } from "../components/HealthItems";
 import { PendingGroups } from "../components/PendingList";
 import { PermissionRequests } from "../components/PermissionRequests";
 import { usePending } from "../lib/pending";
@@ -123,7 +124,6 @@ function HealthPanel() {
   const validate = health.data?.validate;
   const problems = validate?.problems ?? [];
   const warnings = health.data?.warnings ?? [];
-  const startFix = useStartFix();
   const allGood =
     outOfSync.length === 0 &&
     hubAttention.length === 0 &&
@@ -182,13 +182,7 @@ function HealthPanel() {
         <div key={w.at + w.message} className="ui-line" data-testid="health-warning">
           <StatusBadge status="behind" label="Warning" />
           <div className="ui-line-main">{w.message}</div>
-          <Button
-            size="sm"
-            onClick={() => startFix(fixGoal(w.message), w.message, ".")}
-            data-testid="health-session"
-          >
-            Start a session to fix
-          </Button>
+          <FixButton subject={{ type: "warning", message: w.message }} />
         </div>
       ))}
     </Card>

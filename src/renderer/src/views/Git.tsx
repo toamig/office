@@ -3,6 +3,7 @@ import { useState } from "react";
 import { PrsPanel } from "../components/PrsPanel";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
+import { fixAction } from "../lib/fix";
 import { RepoItem } from "../components/HealthItems";
 import { useUi } from "../stores/ui";
 import {
@@ -186,7 +187,14 @@ export function Git() {
                     void office
                       .invoke("git.syncProject", { id: current.id })
                       .catch((err: unknown) =>
-                        notifyError(err, `Could not sync ${current.name}`, `sync-${current.id}`),
+                        notifyError(
+                          err,
+                          `Could not sync ${current.name}`,
+                          `sync-${current.id}`,
+                          fixAction(`Could not sync ${current.name}`, err, {
+                            projectId: current.id,
+                          }),
+                        ),
                       )
                   }
                   data-testid="git-sync-repo"

@@ -1,5 +1,6 @@
 import { useQuery } from "../../lib/hooks";
 import { office } from "../../lib/ipc";
+import { fixAction } from "../../lib/fix";
 import { Button, Card, StatusBadge, Time, notifyError } from "../../ui";
 
 /** The chosen repo on the side: where it stands, its last commit, and what you can do with it. */
@@ -10,7 +11,7 @@ export function GitInspector({ projectId }: { projectId: string }) {
     try {
       await work();
     } catch (err) {
-      notifyError(err, title, `git-${projectId}`);
+      notifyError(err, title, `git-${projectId}`, fixAction(title, err, { projectId }));
     }
   };
   if (!d) return null;

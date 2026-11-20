@@ -2,6 +2,7 @@ import { GitCommitHorizontal, Upload } from "lucide-react";
 import { useState } from "react";
 import { Button, Card, EmptyState, Textarea, notify, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
+import { fixAction } from "../../lib/fix";
 import { useQuery } from "../../lib/hooks";
 import { Dropdown as Select } from "../../ui";
 import { VirtualList } from "../../components/VirtualList";
@@ -47,7 +48,12 @@ export function CommitTab({ projectId }: { projectId: string }) {
       setSkipped([]);
       status.reload();
     } catch (err) {
-      notifyError(err, "The commit did not go through", "commit");
+      notifyError(
+        err,
+        "The commit did not go through",
+        "commit",
+        fixAction("The commit did not go through", err, { projectId }),
+      );
     } finally {
       setBusy(false);
     }
@@ -64,7 +70,12 @@ export function CommitTab({ projectId }: { projectId: string }) {
           subject: "commit",
         });
     } catch (err) {
-      notifyError(err, "The push did not go through", "commit");
+      notifyError(
+        err,
+        "The push did not go through",
+        "commit",
+        fixAction("The push did not go through", err, { projectId }),
+      );
     }
     status.reload();
   };

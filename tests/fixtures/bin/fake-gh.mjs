@@ -59,6 +59,14 @@ if (args[0] === "--version") {
 } else if (args[0] === "run" && args[1] === "list") {
   const file = process.env["FAKE_GH_RUNS"];
   console.log(file && existsSync(file) ? readFileSync(file, "utf8") : "[]");
+} else if (args[0] === "run" && args[1] === "view" && args.includes("--log-failed")) {
+  // FAKE_GH_LOG_FAILED is a file holding what `gh run view <id> --log-failed` prints ("job<TAB>step<TAB>line").
+  const file = process.env["FAKE_GH_LOG_FAILED"];
+  if (!file || !existsSync(file)) {
+    console.error("fake-gh: no failed log for this run");
+    process.exit(1);
+  }
+  process.stdout.write(readFileSync(file, "utf8"));
 } else {
   console.error(`fake-gh: unhandled arguments ${JSON.stringify(args)}`);
   process.exit(1);

@@ -1,10 +1,10 @@
 import { useState } from "react";
-import { fixGoal } from "@shared/health";
 import type { HealthProblem, HubRepoRow } from "@shared/models";
 import { DiffFiles } from "./DiffFiles";
-import { useQuery } from "../lib/hooks";
+import { BeingFixed, FixButton, useFixMenuItem } from "./Fix";
+import { fixAction } from "../lib/fix";
 import { office } from "../lib/ipc";
-import { useUi } from "../stores/ui";
+import { useQuery } from "../lib/hooks";
 import { NoteText } from "../views/project/Notes";
 import {
   Banner,
@@ -13,25 +13,11 @@ import {
   EmptyState,
   Input,
   LinkButton,
+  OverflowMenu,
   StatusBadge,
   notifyDone,
   notifyError,
 } from "../ui";
-
-/** The absolute folder of a brain repo ("." is the hub), for a session started to fix something in it. */
-export function useRepoDir(): (folder: string) => string {
-  const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
-  const root = workspace.data?.workspaceRoot ?? "";
-  return (folder) => (folder === "." || folder === "" ? root : `${root}/${folder}`);
-}
-
-/** Opens the Start a session dialog with the goal, the problem as the brief and the folder already filled in. */
-export function useStartFix(): (goal: string, brief: string, folder: string) => void {
-  const navigate = useUi((s) => s.navigate);
-  const dir = useRepoDir();
-  return (goal, brief, folder) =>
-    navigate("agents", { start: "1", goal, prompt: brief, cwd: dir(folder) });
-}
 
 /** The uncommitted files of a brain repo with their changes; Commit takes them all, Discard throws them away (asking first). */
 function ChangesDialog({ folder, onClose }: { folder: string; onClose: () => void }) {
@@ -143,19 +129,16 @@ function ChangesDialog({ folder, onClose }: { folder: string; onClose: () => voi
 export function RepoItem({ repo }: { repo: HubRepoRow }) {
   const [reviewing, setReviewing] = useState(false);
   const [busy, setBusy] = useState(false);
-  const startFix = useStartFix();
   const name = repo.folder === "." ? "Hub" : repo.folder;
+  const subject = { type: "repo", folder: repo.folder, state: repo.state } as const;
+  const fixItem = useFixMenuItem(subject);
   const act = async (work: () => Promise<unknown>, done: string, failed: string): Promise<void> => {
     setBusy(true);
     try {
       await work();
       notifyDone(done, name, "health");
     } catch (err) {
-      notifyError(err, failed, "health", {
-        label: "Start a session to fix",
-        run: () =>
-          startFix(`Fix: ${name} would not update`, `${failed}: ${String(err)}`, repo.folder),
-      });
+      notifyError(err, failed, "health", fixAction(failed, err, { folder: repo.folder }));
     } finally {
       setBusy(false);
     }
@@ -202,27 +185,23 @@ export function RepoItem({ repo }: { repo: HubRepoRow }) {
         Push
       </Button>
     );
-  else
-    action = (
-      <Button
-        size="sm"
-        onClick={() =>
-          startFix(
-            `Fix: ${name} needs attention`,
-            `The brain repo ${name} reports: ${repo.state}.`,
-            repo.folder,
-          )
-        }
-        data-testid="health-session"
-      >
-        Start a session to fix
-      </Button>
-    );
+  else action = <FixButton subject={subject} />;
+  // Office's own fix stays the main button; a session to fix it another way sits in the item's menu.
+  const safe = repo.uncommitted > 0 || repo.behind > 0 || repo.ahead > 0;
   return (
     <div className="ui-line" data-testid="health-repo" data-repo={repo.folder}>
       <StatusBadge status="behind" label={name} />
       <span className="ui-line-main">{repo.state}</span>
+      {safe && fixItem.entry && <BeingFixed entry={fixItem.entry} />}
       {action}
+      {safe && fixItem.item && (
+        <OverflowMenu
+          label="More for this repo"
+          testId="health-repo-more"
+          floating
+          items={[fixItem.item]}
+        />
+      )}
       {reviewing && <ChangesDialog folder={repo.folder} onClose={() => setReviewing(false)} />}
     </div>
   );
@@ -230,8 +209,6 @@ export function RepoItem({ repo }: { repo: HubRepoRow }) {
 
 /** One finding of the brain's check, as formatted text, with the one thing to do about it. */
 export function ProblemItem({ problem }: { problem: HealthProblem }) {
-  const startFix = useStartFix();
-  const folder = problem.repo ?? ".";
   return (
     <div className="ui-line" data-testid="health-problem" data-level={problem.level}>
       <StatusBadge
@@ -242,46 +219,26 @@ export function ProblemItem({ problem }: { problem: HealthProblem }) {
       <div className="ui-line-main">
         <NoteText>{problem.message}</NoteText>
       </div>
-      <Button
-        size="sm"
-        onClick={() =>
-          startFix(
-            fixGoal(problem.message),
-            `The brain's check reports${problem.file ? ` in ${problem.file}` : ""}:
-
-${problem.message}`,
-            folder,
-          )
-        }
-        data-testid="health-session"
-      >
-        Start a session to fix
-      </Button>
+      <FixButton
+        subject={{
+          type: "validate",
+          message: problem.message,
+          file: problem.file ?? null,
+          repo: problem.repo ?? null,
+        }}
+      />
     </div>
   );
 }
 
 /** A content-audit entry as formatted text, with its note links clickable, and a session to fix it. */
 export function AuditItem({ repo, entry }: { repo: string; entry: string }) {
-  const startFix = useStartFix();
   return (
     <div className="ui-line" data-testid="audit-entry">
       <div className="ui-line-main">
         <NoteText>{entry}</NoteText>
       </div>
-      <Button
-        size="sm"
-        onClick={() =>
-          startFix(
-            fixGoal(entry),
-            `An open content-audit entry of ${repo}:\n\n${entry}`,
-            repo === "hub" ? "." : repo,
-          )
-        }
-        data-testid="health-session"
-      >
-        Start a session to fix
-      </Button>
+      <FixButton subject={{ type: "audit", repo, entry }} />
     </div>
   );
 }

@@ -105,6 +105,7 @@
     "src/main/modules/pending": {
       "web": [
         "tests/web/pending.spec.ts",
+        "tests/web/health.spec.ts",
         "tests/web/inbox.spec.ts",
         "tests/web/home.spec.ts",
         "tests/web/hooks.spec.ts"

@@ -11,6 +11,7 @@ import {
   notifyError,
 } from "../../ui";
 import { office } from "../../lib/ipc";
+import { fixAction } from "../../lib/fix";
 import { useQuery } from "../../lib/hooks";
 import { useUi } from "../../stores/ui";
 
@@ -26,7 +27,12 @@ export function WorktreesTab({ projectId }: { projectId: string }) {
       await work();
       list.reload();
     } catch (err) {
-      notifyError(err, "Could not change the worktree", "worktrees");
+      notifyError(
+        err,
+        "Could not change the worktree",
+        "worktrees",
+        fixAction("Could not change the worktree", err, { projectId }),
+      );
     }
   };
 

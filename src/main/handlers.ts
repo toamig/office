@@ -240,6 +240,19 @@ function registerSetupHandlers(ctx: AppContext): void {
     },
   );
   ctx.ipc.handle("providers.list", () => providerList.get(null));
+  // Fix in a session starts a chat with Claude Code when it is installed, else with the first agent that can chat.
+  ctx.ipc.handle("fix.start", async (req) => {
+    const list = await providerList.get(null);
+    const chatty = list.filter((p) => p.installed && ctx.providers.get(p.id)?.chatCommand);
+    const pick = chatty.find((p) => p.id === "claude-code") ?? chatty[0];
+    if (!pick)
+      throw new IpcFailure(
+        "no-provider",
+        "No agent is installed that can chat. Install Claude Code or Codex in Setup first",
+      );
+    return ctx.fix.start(req, pick.id);
+  });
+  ctx.ipc.handle("fix.list", () => ctx.fix.list());
   // The tools were looked at again (Check again, the timer): the providers are asked again too.
   ctx.bus.on("setup.changed", (event) => {
     if ((event.payload as { from?: string } | null)?.from !== "cache") providerList.invalidate();

@@ -15,6 +15,8 @@ import {
   TaskView,
   CaptureResult,
   DiffResult,
+  FixEntry,
+  FixSubject,
   GraphView,
   GithubOverview,
   RepoStatus,
@@ -82,6 +84,7 @@ export const eventTypes = [
   "run.progress",
   "run.done",
   "pending.changed",
+  "fix.changed",
   "brief.changed",
   "vault.changed",
   "task.changed",
@@ -498,6 +501,10 @@ export const channels = {
   "tasks.cancel": { req: z.object({ id: z.string() }), res: z.void() },
   "tasks.retry": { req: z.object({ id: z.string() }), res: z.void() },
   "pending.list": { req: z.void(), res: z.array(PendingItem) },
+  /** Starts a chat session at once, in the folder of the problem, with Ask first and a first message that says everything Office knows. */
+  "fix.start": { req: FixSubject, res: SessionRow },
+  /** The problems that have a session fixing them, whose session is still open. */
+  "fix.list": { req: z.void(), res: z.array(FixEntry) },
   "pending.dismiss": {
     req: z.object({ key: z.string(), fingerprint: z.string() }),
     res: z.void(),

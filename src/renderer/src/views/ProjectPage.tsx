@@ -5,6 +5,7 @@ import { labelOf } from "@shared/tone";
 import { PrsPanel } from "../components/PrsPanel";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
+import { fixAction } from "../lib/fix";
 import { useUi } from "../stores/ui";
 import {
   Banner,
@@ -350,7 +351,7 @@ function ProjectBody({
     try {
       await work();
     } catch (err) {
-      notifyError(err, title, `project-${id}`);
+      notifyError(err, title, `project-${id}`, fixAction(title, err, { projectId: id }));
     }
   };
   const sync = async (): Promise<void> => {
@@ -368,7 +369,12 @@ function ProjectBody({
         });
       }
     } catch (err) {
-      notifyError(err, "Sync did not finish", `sync-${id}`);
+      notifyError(
+        err,
+        "Sync did not finish",
+        `sync-${id}`,
+        fixAction("Sync did not finish", err, { projectId: id }),
+      );
     }
   };
 

@@ -3,6 +3,7 @@ import type { PendingItem } from "@shared/models";
 import { office } from "../lib/ipc";
 import { useUi, type ViewId } from "../stores/ui";
 import { Button, Group, StatusBadge, notifyError } from "../ui";
+import { FixButton } from "./Fix";
 
 const KIND_LABEL: Record<PendingItem["kind"], string> = {
   permission: "Approval",
@@ -16,6 +17,18 @@ const KIND_LABEL: Record<PendingItem["kind"], string> = {
   "review-requested": "Review",
   waiting: "For you",
 };
+
+/** The pending items that are something broken, which a session can fix (a question or a review is the owner's to answer). */
+const FIXABLE: ReadonlySet<PendingItem["kind"]> = new Set([
+  "agent-failed",
+  "task-failed",
+  "conflict",
+  "push-failed",
+  "ci-failed",
+]);
+
+/** Whether a session can fix this pending item. */
+export const isFixable = (item: PendingItem): boolean => FIXABLE.has(item.kind);
 
 /** The kind of a pending item, in words. */
 export const kindName = (kind: PendingItem["kind"]): string => KIND_LABEL[kind];
@@ -59,6 +72,7 @@ export function PendingRow({ item, compact = false }: { item: PendingItem; compa
         <div>{item.title}</div>
         {item.detail && !compact && <div className="ui-line-sub">{item.detail}</div>}
       </div>
+      {isFixable(item) && <FixButton subject={{ type: "pending", key: item.key }} />}
       <Button variant="ghost" size="sm" onClick={() => open(item)} data-testid="pending-open">
         <ExternalLink /> Open
       </Button>

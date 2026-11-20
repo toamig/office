@@ -1,9 +1,10 @@
-import { mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { SetupState, SyncReport, WorkspaceView } from "../shared/models";
 import type { MachineSettings } from "../shared/types";
 import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
+import { run } from "./core/exec";
 import { IpcRegistry } from "./core/ipc";
 import { NtfyChannel } from "./core/channels/ntfy";
 import { ModuleManager } from "./core/modules";
@@ -25,6 +26,7 @@ import {
 import { isConfigured, loadSettings, updateSettings } from "./core/settings";
 import { WorkspaceStore } from "./core/workspace";
 import { GithubService } from "./modules/github/gh";
+import { FixService } from "./modules/pending/fix";
 import { PendingService } from "./modules/pending/service";
 import { ProjectService } from "./modules/git/service";
 import { ProviderRegistry } from "./modules/providers/registry";
@@ -82,6 +84,8 @@ export interface AppContext {
   permissions: PermissionBroker;
   /** What waits on the owner, derived from live state. */
   pending: PendingService;
+  /** Fix in a session: a chat started for a problem, and which problems have one. */
+  fix: FixService;
   /** Agent conversations shown as chats (M6.5). */
   chat: ChatService;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
@@ -371,6 +375,83 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
 
 type Orchestration = ReturnType<typeof createOrchestration>;
 
+// eslint-disable-next-line no-control-regex
+const ANSI = /\u001b\[[0-9;?]*[ -/]*[@-~]|\u001b\][^\u0007]*\u0007/g;
+
+/** The words and tool output at the end of a session: a chat's last lines, a terminal's last screen. */
+function sessionTail(agents: Agents, id: string): string {
+  const session = agents.sessions.find(id);
+  if (!session) return "";
+  if (session.mode === "chat") {
+    const lines = agents.chat.history(id).slice(-40);
+    const parts: string[] = [];
+    for (const { event } of lines) {
+      if (event.t === "assistant" && event.text.trim()) parts.push(event.text.trim());
+      else if (event.t === "tool-result" && event.output.trim())
+        parts.push(`${event.isError ? "[error] " : ""}${event.output.trim()}`);
+      else if (event.t === "error") parts.push(`[error] ${event.message}`);
+    }
+    return parts.join("\n").trim();
+  }
+  return agents.sessions.history(id).data.replace(ANSI, "").replace(/\r/g, "").trim();
+}
+
+/** Fix in a session: what it reads from the rest of the app, and how it starts the chat. */
+function createFix(
+  base: Base,
+  notes: Notes,
+  agents: Agents,
+  orch: Orchestration,
+  pending: PendingService,
+): FixService {
+  const { box, bus, db } = base;
+  const { projects } = notes;
+  const dirOf = folderOf(projects);
+  return new FixService({
+    db,
+    bus,
+    findPending: (key) => pending.list().find((i) => i.key === key),
+    failedRun: (projectId) =>
+      agents.github.pendingState().find((g) => g.projectId === projectId)?.ci ?? null,
+    projectDir: dirOf,
+    projectName: (id) => projects.find(id)?.name ?? id,
+    workspaceRoot: () => box.current.workspaceRoot,
+    session: (id) => agents.sessions.find(id),
+    sessionTail: (id) => sessionTail(agents, id),
+    task: (id) => {
+      const task = orch.tasks.list().find((t) => t.id === id);
+      if (!task) return undefined;
+      const stage = task.stages.find((s) => s.status === "failed") ?? task.stages[task.stageIndex];
+      let output = "";
+      if (stage?.outputPath && existsSync(stage.outputPath))
+        output = readFileSync(stage.outputPath, "utf8").slice(-4000);
+      return {
+        title: task.title,
+        stage: stage?.stageId ?? "a stage",
+        error: stage?.error ?? "",
+        output,
+        dir: task.worktree ?? dirOf(task.projectId) ?? null,
+      };
+    },
+    exec: (cmd, args, cwd) =>
+      run(cmd, args, { cwd, timeoutMs: 60_000 }).then((r) => ({
+        code: r.code,
+        stdout: r.stdout,
+        stderr: r.stderr,
+      })),
+    startSession: (input) =>
+      agents.sessions.start({
+        providerId: input.providerId,
+        ...(input.projectId ? { projectId: input.projectId } : {}),
+        cwd: input.cwd,
+        title: input.title,
+        prompt: input.prompt,
+        // A chat that asks before it acts: the permission mode of a chat is Ask first until the owner changes it.
+        mode: "chat",
+      }),
+  });
+}
+
 /** Starting and stopping everything that watches or ticks, and Sync all. */
 function createLifecycle(
   base: Base,
@@ -518,6 +599,7 @@ export async function createContext(
       github: () => agents.github.pendingState(),
     },
   });
+  const fix = createFix(base, notes, agents, orch, pending);
   agents.github.onChange = () => pending.changed();
   // The brief says what waits on the owner, from the same list as the bell.
   agents.brief.needsYou = () => pending.list().map((i) => i.title);
@@ -537,6 +619,7 @@ export async function createContext(
     ...agents,
     permissions: agents.broker,
     pending,
+    fix,
     ...orch,
     projects: notes.projects,
     vault: notes.vault,

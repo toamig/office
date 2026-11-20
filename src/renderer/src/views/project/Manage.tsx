@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { ProjectSummary } from "@shared/models";
 import { office } from "../../lib/ipc";
+import { fixAction } from "../../lib/fix";
 import { useUi } from "../../stores/ui";
 import { Button, Dialog, Input, notifyError, type MoreItem } from "../../ui";
 import { PointerDialog } from "../onboarding/PointerDialog";
@@ -23,7 +24,12 @@ export function useProjectManage(project: ProjectSummary): {
     try {
       await office.invoke("projects.update", { id: project.id, ...patch });
     } catch (err) {
-      notifyError(err, `Could not change ${project.name}`, `project-${project.id}`);
+      notifyError(
+        err,
+        `Could not change ${project.name}`,
+        `project-${project.id}`,
+        fixAction(`Could not change ${project.name}`, err, { projectId: project.id }),
+      );
     }
   };
   const items: MoreItem[] = [

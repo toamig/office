@@ -13,6 +13,7 @@ import {
   notifyError,
 } from "../../ui";
 import { office } from "../../lib/ipc";
+import { fixAction } from "../../lib/fix";
 import { useQuery } from "../../lib/hooks";
 
 /** Local and remote branches: switch (with a stash offer), create, compare, delete merged ones. */
@@ -28,7 +29,12 @@ export function BranchesTab({ projectId }: { projectId: string }) {
       await work();
       branches.reload();
     } catch (err) {
-      notifyError(err, "Could not change the branch", "branches");
+      notifyError(
+        err,
+        "Could not change the branch",
+        "branches",
+        fixAction("Could not change the branch", err, { projectId }),
+      );
     }
   };
 

@@ -271,6 +271,45 @@ export const PendingItem = z.object({
 });
 export type PendingItem = z.infer<typeof PendingItem>;
 
+/** A problem Office shows, as it is handed to Fix in a session. */
+export const FixSubject = z.discriminatedUnion("type", [
+  /** A pending item, by its key: Office gathers what it knows about that kind of problem. */
+  z.object({ type: z.literal("pending"), key: z.string() }),
+  /** A finding of the brain's check. */
+  z.object({
+    type: z.literal("validate"),
+    message: z.string(),
+    file: z.string().nullable(),
+    repo: z.string().nullable(),
+  }),
+  /** A brain repo that needs attention. */
+  z.object({ type: z.literal("repo"), folder: z.string(), state: z.string() }),
+  z.object({ type: z.literal("audit"), repo: z.string(), entry: z.string() }),
+  z.object({ type: z.literal("warning"), message: z.string() }),
+  /** An error pop-up that has a project or a folder. */
+  z.object({
+    type: z.literal("error"),
+    title: z.string(),
+    cause: z.string(),
+    projectId: z.string().optional(),
+    folder: z.string().optional(),
+  }),
+  /** Any other problem (a Setup or project problem without a button of its own). */
+  z.object({
+    type: z.literal("problem"),
+    key: z.string(),
+    title: z.string(),
+    detail: z.string(),
+    projectId: z.string().optional(),
+    folder: z.string().optional(),
+  }),
+]);
+export type FixSubject = z.infer<typeof FixSubject>;
+
+/** A problem that is being fixed in a session, by the key the problem has on screen. */
+export const FixEntry = z.object({ key: z.string(), sessionId: z.string(), title: z.string() });
+export type FixEntry = z.infer<typeof FixEntry>;
+
 export const PermissionRequest = z.object({
   id: z.string(),
   runId: z.string(),

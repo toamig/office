@@ -1,6 +1,7 @@
 import { RefreshCw } from "lucide-react";
 import { useState } from "react";
 import type { ToolStatus } from "@shared/models";
+import { FixButton } from "../../components/Fix";
 import { Banner, Button, Skeleton, StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
@@ -120,6 +121,18 @@ export function ToolsStep() {
                 >
                   Run
                 </Button>
+              )}
+              {t.installed && t.loggedIn !== false && t.problem && !quickFix && (
+                <FixButton
+                  subject={{
+                    type: "problem",
+                    key: `tool:${t.id}`,
+                    title: `${t.label} has a problem`,
+                    detail: [t.problem, t.fix ? `Suggested fix: ${t.fix}` : ""]
+                      .filter(Boolean)
+                      .join("\n"),
+                  }}
+                />
               )}
               {!t.installed && t.id === "codex" && (
                 <Button onClick={() => void start("run", t)} data-testid="tool-install">

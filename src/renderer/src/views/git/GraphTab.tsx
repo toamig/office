@@ -7,6 +7,7 @@ import { InspectorSlot } from "../../components/Inspector";
 import { VirtualList } from "../../components/VirtualList";
 import { useQuery } from "../../lib/hooks";
 import { office } from "../../lib/ipc";
+import { fixAction } from "../../lib/fix";
 import { useUi } from "../../stores/ui";
 import {
   Banner,
@@ -137,7 +138,12 @@ function BranchLabel({
                     void office
                       .invoke("git.syncProject", { id: projectId })
                       .catch((err: unknown) =>
-                        notifyError(err, `Could not sync ${label.name}`, "branches"),
+                        notifyError(
+                          err,
+                          `Could not sync ${label.name}`,
+                          "branches",
+                          fixAction(`Could not sync ${label.name}`, err, { projectId }),
+                        ),
                       ),
                 },
               ]
@@ -306,7 +312,13 @@ export function GraphTab({ projectId }: { projectId: string }) {
       branches.reload();
     } catch (err) {
       if ((err as Error).message.includes("Stash them first")) setStash(name);
-      else notifyError(err, `Could not switch to ${name}`, "branches");
+      else
+        notifyError(
+          err,
+          `Could not switch to ${name}`,
+          "branches",
+          fixAction(`Could not switch to ${name}`, err, { projectId }),
+        );
     }
   };
   const compare = async (a: string, b: string): Promise<void> => {

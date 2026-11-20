@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from "react";
 import { usePending } from "../lib/pending";
 import { useUi } from "../stores/ui";
 import { Button, CountPill, EmptyState } from "../ui";
-import { dismissPending, kindName, useOpenPending } from "./PendingList";
+import { FixButton } from "./Fix";
+import { dismissPending, isFixable, kindName, useOpenPending } from "./PendingList";
 
 /**
  * The bell in the top bar: what waits on the owner, and nothing else. The badge counts the items in the colour of the
@@ -70,6 +71,13 @@ export function PendingBell() {
                   {item.detail ? `, ${item.detail}` : ""}
                 </span>
               </button>
+              {isFixable(item) && (
+                <FixButton
+                  subject={{ type: "pending", key: item.key }}
+                  variant="ghost"
+                  onStart={() => setShown(false)}
+                />
+              )}
               <Button
                 variant="ghost"
                 size="sm"
