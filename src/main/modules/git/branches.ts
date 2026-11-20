@@ -109,7 +109,7 @@ export interface SwitchResult {
 export async function switchBranch(
   path: string,
   name: string,
-  opts: { stash?: boolean; remote?: boolean } = {},
+  opts: { stash?: boolean; remote?: boolean; detach?: boolean } = {},
 ): Promise<SwitchResult> {
   const dirty = await dirtyCount(path);
   let stashed = false;
@@ -130,7 +130,12 @@ export async function switchBranch(
     if (stash.code !== 0) throw new IpcFailure("stash-failed", firstLine(stash.stderr));
     stashed = true;
   }
-  const args = opts.remote ? ["switch", "--track", name] : ["switch", name];
+  // Checking out a commit leaves HEAD on no branch (detached).
+  const args = opts.detach
+    ? ["switch", "--detach", name]
+    : opts.remote
+      ? ["switch", "--track", name]
+      : ["switch", name];
   const result = await git(path, args);
   if (result.code !== 0) {
     if (stashed) await git(path, ["stash", "pop"]);

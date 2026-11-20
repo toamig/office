@@ -23,7 +23,7 @@ import {
   removeWorktree,
 } from "./modules/git/worktrees";
 import { commitFiles, pushCurrent } from "./modules/git/commit";
-import { readGraph } from "./modules/git/graph";
+import { readGraph, showCommit } from "./modules/git/graph";
 import { git } from "./modules/git/run";
 import { getDiff } from "./modules/git/diff";
 import { readStatus } from "./modules/git/status";
@@ -373,6 +373,7 @@ function registerBranchHandlers(ctx: AppContext): void {
     const result = await switchBranch(repoOf(req.projectId), req.name, {
       ...(req.stash ? { stash: true } : {}),
       ...(req.remote ? { remote: true } : {}),
+      ...(req.detach ? { detach: true } : {}),
     });
     changed(req.projectId);
     return result;
@@ -384,6 +385,7 @@ function registerBranchHandlers(ctx: AppContext): void {
     });
     changed(req.projectId);
   });
+  ctx.ipc.handle("git.show", (req) => showCommit(repoOf(req.projectId), req.hash));
   ctx.ipc.handle("branches.compare", (req) => compareBranches(repoOf(req.projectId), req.a, req.b));
   ctx.ipc.handle("branches.delete", async (req) => {
     await deleteBranch(repoOf(req.projectId), req.name);

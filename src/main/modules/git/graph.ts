@@ -1,5 +1,6 @@
 import type { GraphLabel, GraphRow, GraphView } from "../../../shared/models";
 import { IpcFailure } from "../../core/ipc";
+import { parseUnifiedDiff } from "./diff";
 import { git } from "./run";
 
 /** One commit as `git log` gives it, before it is placed in a lane. */
@@ -161,4 +162,21 @@ export async function readGraph(dir: string, limit: number, remotes: string[]): 
       : { hash: null, branch: null },
     detached: head?.label.kind === "head",
   };
+}
+
+/** What one commit changed, with its message: `git show` of a hash the caller has already seen in the graph. */
+export async function showCommit(
+  dir: string,
+  hash: string,
+): Promise<{ subject: string; body: string; files: ReturnType<typeof parseUnifiedDiff> }> {
+  if (!/^[0-9a-f]{7,40}$/i.test(hash)) throw new IpcFailure("bad-hash", "That is not a commit");
+  const message = await git(dir, ["log", "-1", "--format=%s%x00%b", hash]);
+  const diff = await git(dir, ["show", "--no-color", "--no-ext-diff", "--format=", hash]);
+  if (message.code !== 0 || diff.code !== 0)
+    throw new IpcFailure(
+      "git-failed",
+      `Git could not show that commit: ${(diff.stderr || message.stderr).trim().split("\n")[0] ?? ""}`,
+    );
+  const [subject = "", body = ""] = message.stdout.split("\u0000");
+  return { subject: subject.trim(), body: body.trim(), files: parseUnifiedDiff(diff.stdout) };
 }

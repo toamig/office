@@ -2,6 +2,7 @@ import { GitBranch, GitFork, Wrench } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { foldLanes } from "@shared/graph-lanes";
 import type { BranchCompare, BranchInfo, GraphLabel, GraphRow, WorktreeInfo } from "@shared/models";
+import { DiffFiles } from "../../components/DiffFiles";
 import { InspectorSlot } from "../../components/Inspector";
 import { VirtualList } from "../../components/VirtualList";
 import { useQuery } from "../../lib/hooks";
@@ -11,6 +12,7 @@ import {
   Banner,
   Button,
   Card,
+  ContextMenu,
   Dialog,
   EmptyState,
   Group,
@@ -18,7 +20,9 @@ import {
   OverflowMenu,
   StatusBadge,
   Time,
+  notifyDone,
   notifyError,
+  type MoreItem,
 } from "../../ui";
 import { BranchesTab } from "./BranchesTab";
 import { WorktreesTab } from "./WorktreesTab";
@@ -117,12 +121,26 @@ function BranchLabel({
     <span className="graph-label" data-testid="graph-branch" data-branch={label.name}>
       <OverflowMenu
         trigger={label.name}
+        icon={<GitBranch size={13} aria-hidden />}
+        tooltip="Branch actions"
         floating
         size="sm"
         testId={`branch-menu-${label.name}`}
         items={[
           ...(label.current
-            ? []
+            ? [
+                {
+                  label: "Sync it (pull and push)",
+                  hint: "The branch you are on",
+                  testId: "branch-sync",
+                  onSelect: () =>
+                    void office
+                      .invoke("git.syncProject", { id: projectId })
+                      .catch((err: unknown) =>
+                        notifyError(err, `Could not sync ${label.name}`, "branches"),
+                      ),
+                },
+              ]
             : [
                 {
                   label: "Switch to it",
@@ -182,6 +200,35 @@ function BranchLabel({
   );
 }
 
+/** What one commit changed, with its message. */
+function CommitChanges({
+  projectId,
+  hash,
+  onClose,
+}: {
+  projectId: string;
+  hash: string;
+  onClose: () => void;
+}) {
+  const shown = useQuery("git.show", { projectId, hash });
+  return (
+    <Dialog
+      title={shown.data?.subject ?? "Commit"}
+      testId="commit-changes"
+      wide
+      onClose={onClose}
+      footer={<Button onClick={onClose}>Close</Button>}
+    >
+      {shown.error && <Banner tone="danger">{shown.error}</Banner>}
+      {shown.data?.body && <p className="mt-0 whitespace-pre-wrap">{shown.data.body}</p>}
+      {shown.data && shown.data.files.length === 0 && (
+        <EmptyState title="No file changes">This commit changed no files.</EmptyState>
+      )}
+      {shown.data && <DiffFiles files={shown.data.files} testId="commit-files" />}
+    </Dialog>
+  );
+}
+
 /**
  * The Git desk's main view of a repo: a vertical graph of its branches, newest at the top. Each branch is a lane in
  * its own colour, a commit a dot, a fork where a branch started and a join where one was merged; names sit at the
@@ -201,6 +248,13 @@ export function GraphTab({ projectId }: { projectId: string }) {
   const [tools, setTools] = useState(false);
   const [stash, setStash] = useState<string | null>(null);
   const [cmp, setCmp] = useState<BranchCompare | null>(null);
+  // What can be done with one commit: a right click or the ... on its row.
+  const [menuAt, setMenuAt] = useState<{ row: GraphRow; x: number; y: number } | null>(null);
+  const [showing, setShowing] = useState<GraphRow | null>(null);
+  const [branching, setBranching] = useState<GraphRow | null>(null);
+  const [checkout, setCheckout] = useState<GraphRow | null>(null);
+  const [newName, setNewName] = useState("");
+  const [switchToNew, setSwitchToNew] = useState(true);
   // A narrow desk keeps the filters out of the way until they are asked for.
   const tab = useRef<HTMLDivElement>(null);
   const [narrow, setNarrow] = useState(false);
@@ -260,6 +314,83 @@ export function GraphTab({ projectId }: { projectId: string }) {
       setCmp(await office.invoke("branches.compare", { projectId, a, b }));
     } catch (err) {
       notifyError(err, "Could not compare those branches", "branches");
+    }
+  };
+
+  const commitItems = (row: GraphRow): MoreItem[] => [
+    {
+      label: "Copy hash",
+      hint: row.short,
+      testId: "commit-copy",
+      onSelect: () => {
+        void navigator.clipboard.writeText(row.hash).then(
+          () => notifyDone("Copied", row.short, "commit-copy"),
+          () =>
+            notifyError(
+              new Error("The clipboard is not available"),
+              "Could not copy the hash",
+              "commit-copy",
+            ),
+        );
+      },
+    },
+    { label: "Show changes", testId: "commit-show", onSelect: () => setShowing(row) },
+    {
+      label: "Create a branch here...",
+      testId: "commit-branch",
+      onSelect: () => {
+        setNewName(`branch-${row.short}`);
+        setSwitchToNew(true);
+        setBranching(row);
+      },
+    },
+    {
+      label: "Check out this commit...",
+      hint: "Leaves HEAD on no branch",
+      testId: "commit-checkout",
+      onSelect: () => setCheckout(row),
+    },
+    ...(g && (g.head.branch || g.head.hash) && g.head.hash !== row.hash
+      ? [
+          {
+            label: g.head.branch ? `Compare with ${g.head.branch}` : "Compare with HEAD",
+            testId: "commit-compare",
+            onSelect: () => void compare(g.head.branch ?? g.head.hash ?? "HEAD", row.hash),
+          },
+        ]
+      : []),
+  ];
+  const makeBranch = async (): Promise<void> => {
+    if (!branching || !newName.trim()) return;
+    try {
+      await office.invoke("branches.create", {
+        projectId,
+        name: newName.trim(),
+        from: branching.hash,
+        switchTo: switchToNew,
+      });
+      notifyDone(`Branch ${newName.trim()} made`, `At ${branching.short}`, "commit-branch");
+      setBranching(null);
+      graph.reload();
+      branches.reload();
+    } catch (err) {
+      notifyError(err, "Could not make that branch", "branches");
+    }
+  };
+  const detach = async (row: GraphRow, withStash = false): Promise<void> => {
+    try {
+      await office.invoke("branches.switch", {
+        projectId,
+        name: row.hash,
+        detach: true,
+        stash: withStash,
+      });
+      setCheckout(null);
+      graph.reload();
+      branches.reload();
+    } catch (err) {
+      if ((err as Error).message.includes("Stash them first")) setStash(`commit ${row.short}`);
+      else notifyError(err, `Could not check out ${row.short}`, "branches");
     }
   };
 
@@ -433,6 +564,11 @@ export function GraphTab({ projectId }: { projectId: string }) {
                     data-focus={labels.some((l) => l.name === focus) ? "true" : undefined}
                     data-branch-head={headBranch}
                     onClick={() => setSelected(row.hash)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setSelected(row.hash);
+                      setMenuAt({ row, x: e.clientX, y: e.clientY });
+                    }}
                   >
                     <Lines row={row} width={laid.width} laneW={laneW} here={isHere} />
                     <div className="graph-text">
@@ -465,6 +601,14 @@ export function GraphTab({ projectId }: { projectId: string }) {
                         ),
                       )}
                       <span className="graph-subject truncate">{row.subject}</span>
+                      <span className="graph-commit-more" onClick={(e) => e.stopPropagation()}>
+                        <OverflowMenu
+                          label="Commit actions"
+                          floating
+                          testId={`commit-menu-${row.short}`}
+                          items={commitItems(row)}
+                        />
+                      </span>
                     </div>
                   </div>
                 );
@@ -508,6 +652,80 @@ export function GraphTab({ projectId }: { projectId: string }) {
           </Card>
         )}
       </InspectorSlot>
+      {menuAt && (
+        <ContextMenu
+          items={commitItems(menuAt.row)}
+          at={{ x: menuAt.x, y: menuAt.y }}
+          onClose={() => setMenuAt(null)}
+          testId="commit-context-menu"
+        />
+      )}
+      {showing && (
+        <CommitChanges projectId={projectId} hash={showing.hash} onClose={() => setShowing(null)} />
+      )}
+      {branching && (
+        <Dialog
+          title={`Make a branch at ${branching.short}`}
+          testId="commit-branch-dialog"
+          onClose={() => setBranching(null)}
+          footer={
+            <>
+              <Button onClick={() => setBranching(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                disabled={!newName.trim()}
+                onClick={() => void makeBranch()}
+                data-testid="commit-branch-make"
+              >
+                Make the branch
+              </Button>
+            </>
+          }
+        >
+          <div className="grid gap-3">
+            <p className="m-0 ui-muted">{branching.subject}</p>
+            <Input
+              label="Branch name"
+              value={newName}
+              onChange={(e) => setNewName(e.target.value)}
+              data-testid="commit-branch-name"
+            />
+            <label className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                checked={switchToNew}
+                onChange={(e) => setSwitchToNew(e.target.checked)}
+              />{" "}
+              Switch to it
+            </label>
+          </div>
+        </Dialog>
+      )}
+      {checkout && (
+        <Dialog
+          title={`Check out ${checkout.short}?`}
+          testId="commit-checkout-dialog"
+          onClose={() => setCheckout(null)}
+          footer={
+            <>
+              <Button onClick={() => setCheckout(null)}>Cancel</Button>
+              <Button
+                variant="primary"
+                onClick={() => void detach(checkout)}
+                data-testid="commit-checkout-yes"
+              >
+                Check out this commit
+              </Button>
+            </>
+          }
+        >
+          <p className="m-0">
+            This puts you on that commit, on no branch (a detached HEAD). You can look around and
+            run it, but a commit you make there belongs to no branch and is easy to lose. Make a
+            branch from it first, or switch back to a branch when you are done.
+          </p>
+        </Dialog>
+      )}
       {cmp && (
         <Dialog
           title={`${cmp.a} and ${cmp.b}`}

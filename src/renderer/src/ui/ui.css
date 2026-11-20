@@ -1561,3 +1561,15 @@ input[type="radio"] {
   font-size: var(--text-xs);
   font-weight: 600;
 }
+
+/* The ... of a commit row shows when the row is hovered or has focus, and stays while its menu is open. */
+.graph-commit-more {
+  flex: none;
+  margin-left: auto;
+  opacity: 0;
+}
+.graph-row:hover .graph-commit-more,
+.graph-row:focus-within .graph-commit-more,
+.graph-commit-more:has([aria-expanded="true"]) {
+  opacity: 1;
+}

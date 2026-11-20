@@ -18,7 +18,7 @@ export {
   type Note,
   type NoteTone,
 } from "./Notifications";
-export { CardGrid, OverflowMenu, Page, PageHeader, type MoreItem } from "./Page";
+export { CardGrid, ContextMenu, OverflowMenu, Page, PageHeader, type MoreItem } from "./Page";
 export { SplitPane } from "./SplitPane";
 export { Group, LinkButton, Muted, ShortPath, Time } from "./Text";
 export {

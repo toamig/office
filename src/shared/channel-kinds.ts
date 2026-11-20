@@ -55,6 +55,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "tasks.get",
   "pending.list",
   "git.graph",
+  "git.show",
   "vault.health",
   "health.changes",
   "notes.list",

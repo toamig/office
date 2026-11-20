@@ -197,3 +197,94 @@ test("a Git layout saved before the graph (with Branches and Worktrees tabs) ope
   await expect(win.getByTestId("graph-row").first()).toBeVisible();
   await app.close();
 });
+
+test("a branch name and a commit each have a menu, and the words say which is which", async () => {
+  const { app, world } = await launch({ world: true, fakeTools: true });
+  if (!world) throw new Error("no world");
+  const alpha = world.code["alpha"]?.work as string;
+  commit(alpha, "one.txt", "1\n", "First change");
+  commit(alpha, "two.txt", "2\n", "Second change");
+  commit(alpha, "three.txt", "3\n", "Third change");
+  const win = await app.firstWindow();
+  await win.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await win.setViewportSize({ width: 1700, height: 950 });
+  await win.getByTestId("rail-git").click();
+  await win.getByTestId("git-repo").filter({ hasText: "Alpha" }).click();
+  const rows = win.getByTestId("graph-row");
+  const tip = rows.filter({ hasText: "Third change" });
+  const middle = rows.filter({ hasText: "Second change" });
+  await expect(tip).toHaveCount(1, { timeout: 30000 });
+
+  // A branch name looks like a branch, says what it is on hover, and its menu is about the branch.
+  const branch = tip
+    .locator('[data-testid="graph-branch"][data-branch="main"]')
+    .getByRole("button");
+  await expect(branch).toHaveAttribute("title", "Branch actions");
+  await expect(branch.locator("svg").first()).toBeVisible();
+  await branch.click();
+  const branchMenu = win.getByTestId("branch-menu-main-menu");
+  await expect(branchMenu).toContainText("Sync it");
+  await expect(branchMenu).not.toContainText("Copy hash");
+  await win.keyboard.press("Escape");
+
+  // Every commit has its own menu: a ... on the row (hover or focus), and a right click.
+  await middle.hover();
+  const more = middle.getByRole("button", { name: "Commit actions" });
+  await expect(more).toBeVisible();
+  await more.click();
+  const menu = win.locator('[role="menu"]').filter({ hasText: "Copy hash" });
+  for (const words of [
+    "Copy hash",
+    "Show changes",
+    "Create a branch here...",
+    "Check out this commit...",
+    "Compare with main",
+  ])
+    await expect(menu).toContainText(words);
+  await expect(menu).not.toContainText("Switch to it");
+  await win.keyboard.press("Escape");
+  await middle.click({ button: "right" });
+  const context = win.getByTestId("commit-context-menu");
+  await expect(context).toContainText("Show changes");
+  await expect(context).toContainText("Check out this commit...");
+
+  // Show changes: what that commit changed.
+  await context.getByTestId("commit-show").click();
+  await expect(win.getByTestId("commit-changes")).toContainText("Second change");
+  await expect(win.getByTestId("commit-files")).toContainText("two.txt");
+  await win.getByTestId("commit-changes").getByRole("button", { name: "Close" }).click();
+
+  // Copy hash puts the commit's hash on the clipboard.
+  await middle.click({ button: "right" });
+  await win.getByTestId("commit-copy").click();
+  const hash = sh(alpha, "rev-parse", "HEAD~1").trim();
+  await expect.poll(() => win.evaluate(() => navigator.clipboard.readText())).toBe(hash);
+
+  // Create a branch here makes it at that commit, without leaving the current branch when asked not to.
+  await middle.click({ button: "right" });
+  await win.getByTestId("commit-branch").click();
+  await win.getByTestId("commit-branch-name").fill("from-second");
+  await win.getByRole("checkbox", { name: "Switch to it" }).uncheck();
+  await win.getByTestId("commit-branch-make").click();
+  await expect
+    .poll(() => {
+      try {
+        return sh(alpha, "rev-parse", "from-second").trim();
+      } catch {
+        return "";
+      }
+    })
+    .toBe(hash);
+  expect(sh(alpha, "branch", "--show-current").trim()).toBe("main");
+
+  // Check out asks first and explains the detached HEAD.
+  await middle.click({ button: "right" });
+  await win.getByTestId("commit-checkout").click();
+  await expect(win.getByTestId("commit-checkout-dialog")).toContainText("detached HEAD");
+  expect(sh(alpha, "branch", "--show-current").trim()).toBe("main");
+  await win.getByTestId("commit-checkout-yes").click();
+  await expect.poll(() => sh(alpha, "branch", "--show-current").trim()).toBe("");
+  expect(sh(alpha, "rev-parse", "HEAD").trim()).toBe(hash);
+  await expect(win.getByTestId("graph-head")).toContainText("HEAD (detached)", { timeout: 20000 });
+  await app.close();
+});

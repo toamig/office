@@ -25,6 +25,8 @@ export function OverflowMenu({
   testId = "page-more",
   floating = false,
   size = "md",
+  icon,
+  tooltip,
 }: {
   items: MoreItem[];
   label?: string;
@@ -35,6 +37,10 @@ export function OverflowMenu({
   floating?: boolean;
   /** The size of a word trigger. */
   size?: "sm" | "md";
+  /** An icon before the word of a word trigger. */
+  icon?: ReactNode;
+  /** What the trigger says on hover. */
+  tooltip?: string;
 }) {
   const [open, setOpen] = useState(false);
   const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
@@ -85,6 +91,7 @@ export function OverflowMenu({
       {trigger ? (
         <Button
           size={size}
+          title={tooltip}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={(e) => {
@@ -101,6 +108,7 @@ export function OverflowMenu({
           }}
           data-testid={testId}
         >
+          {icon}
           {trigger} <ChevronDown />
         </Button>
       ) : (
@@ -209,6 +217,70 @@ export function CardGrid({ children, testId }: { children: ReactNode; testId?: s
   return (
     <div className="ui-grid" data-testid={testId}>
       {children}
+    </div>
+  );
+}
+
+/**
+ * A menu opened where the pointer is (a right click): the same rows as an overflow menu, placed on the screen. It
+ * closes on a pick, on Esc, and on a click anywhere else.
+ */
+export function ContextMenu({
+  items,
+  at,
+  onClose,
+  testId = "context-menu",
+}: {
+  items: MoreItem[];
+  at: { x: number; y: number };
+  onClose: () => void;
+  testId?: string;
+}) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const away = (e: MouseEvent): void => {
+      if (!box.current?.contains(e.target as Node)) onClose();
+    };
+    const esc = (e: KeyboardEvent): void => {
+      if (e.key === "Escape") onClose();
+    };
+    document.addEventListener("mousedown", away);
+    document.addEventListener("keydown", esc);
+    return () => {
+      document.removeEventListener("mousedown", away);
+      document.removeEventListener("keydown", esc);
+    };
+  }, [onClose]);
+  const height = items.length * 40 + 16;
+  const top = at.y + height > window.innerHeight ? Math.max(8, at.y - height) : at.y;
+  const left = Math.min(at.x, Math.max(8, window.innerWidth - 260));
+  return (
+    <div
+      ref={box}
+      className="ui-popover ui-menu"
+      role="menu"
+      data-testid={testId}
+      style={{ position: "fixed", top, left, right: "auto" }}
+    >
+      {items.map((i) => (
+        <button
+          key={i.label}
+          type="button"
+          role="menuitem"
+          className="ui-menu-item"
+          data-danger={i.danger ? "true" : undefined}
+          data-testid={i.testId}
+          onClick={() => {
+            onClose();
+            i.onSelect();
+          }}
+        >
+          <span className="ui-menu-text">
+            {i.label}
+            {i.hint && <span className="ui-menu-hint">{i.hint}</span>}
+          </span>
+        </button>
+      ))}
     </div>
   );
 }

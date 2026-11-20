@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { fixGoal } from "@shared/health";
 import type { HealthProblem, HubRepoRow } from "@shared/models";
+import { DiffFiles } from "./DiffFiles";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { useUi } from "../stores/ui";
@@ -95,31 +96,7 @@ function ChangesDialog({ folder, onClose }: { folder: string; onClose: () => voi
             Everything in this repo is committed.
           </EmptyState>
         )}
-        <div data-testid="health-files">
-          {files.map((f) => (
-            <details key={f.path} className="mb-2" open={files.length <= 3}>
-              <summary className="font-medium">
-                {f.path}{" "}
-                <span className="ui-muted">
-                  +{f.additions} -{f.deletions}
-                </span>
-              </summary>
-              <div className="font-mono text-[length:var(--text-sm)]">
-                {f.hunks.flatMap((h) =>
-                  h.lines.map((l, i) => (
-                    <div
-                      key={`${h.header}-${i}`}
-                      className="whitespace-pre-wrap break-all px-2"
-                      data-diff={l.kind}
-                    >
-                      {l.kind === "add" ? "+" : l.kind === "del" ? "-" : " "} {l.text}
-                    </div>
-                  )),
-                )}
-              </div>
-            </details>
-          ))}
-        </div>
+        <DiffFiles files={files} testId="health-files" />
         <Input
           label="Commit message"
           value={message}

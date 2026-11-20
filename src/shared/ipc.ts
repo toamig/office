@@ -328,6 +328,8 @@ export const channels = {
       name: z.string(),
       stash: z.boolean().optional(),
       remote: z.boolean().optional(),
+      /** Check out a commit (name is its hash): HEAD ends up on no branch. */
+      detach: z.boolean().optional(),
     }),
     res: z.object({ stashed: z.boolean() }),
   },
@@ -339,6 +341,11 @@ export const channels = {
       switchTo: z.boolean().optional(),
     }),
     res: z.void(),
+  },
+  /** What one commit changed, with its message. */
+  "git.show": {
+    req: z.object({ projectId: z.string(), hash: z.string() }),
+    res: z.object({ subject: z.string(), body: z.string(), files: DiffResult.shape.files }),
   },
   "branches.compare": {
     req: z.object({ projectId: z.string(), a: z.string(), b: z.string() }),
