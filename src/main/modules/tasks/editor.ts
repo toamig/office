@@ -188,7 +188,7 @@ export class WorkspaceEditor {
     });
   }
 
-  async saveWorkflow(workflow: Workflow): Promise<void> {
+  async saveWorkflow(workflow: Workflow, condition?: { absent?: boolean; previous?: Workflow }): Promise<void> {
     if (workflow.schedule && !validCron(workflow.schedule))
       throw new IpcFailure("bad-cron", `"${workflow.schedule}" is not a valid cron expression`);
     await this.edit(`Workspace: workflow ${workflow.id}`, (json) => {
@@ -197,7 +197,13 @@ export class WorkspaceEditor {
         throw new IpcFailure("not-found", "Choose a project in this workspace.");
       if (!workflow.projectId && (workflow.read === "project" || workflow.read === "both"))
         throw new IpcFailure("invalid", "Choose a project before allowing project files.");
-      const list = workflowsFor(workspace).filter((item) => item.id !== workflow.id);
+      const all = workflowsFor(workspace);
+      const current = all.find((item) => item.id === workflow.id);
+      if (condition?.absent && current)
+        throw new IpcFailure("exists", "A workflow with that name already exists.");
+      if (condition?.previous && JSON.stringify(current) !== JSON.stringify(condition.previous))
+        throw new IpcFailure("changed", "This workflow changed after the preview. Ask for a new preview.");
+      const list = all.filter((item) => item.id !== workflow.id);
       json["workflows"] = [...list, workflow];
       delete json["automations"];
     });

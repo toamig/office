@@ -3,6 +3,7 @@ import { cpSync, mkdirSync, mkdtempSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { stripVTControlCharacters } from "node:util";
 import type { SessionRow, SpawnInput, SpawnReport, SpawnStep } from "../../../shared/models";
 import type { Bus } from "../../core/bus";
 import { IpcFailure } from "../../core/ipc";
@@ -107,14 +108,15 @@ export class ExploreService {
   /** What a chat said, as text for a summary: the owner's words and the answers, in order. */
   transcript(id: string): string | null {
     const session = this.deps.sessions.find(id);
-    if (!session || !CHAT_LABELS.includes(session.role ?? "")) return null;
+    if (!session || session.incognito) return null;
     const lines = this.deps.sessions.chat?.history(id) ?? [];
     const out: string[] = [];
     for (const { event } of lines) {
       if (event.t === "user" && event.text) out.push(`Owner: ${event.text}`);
       else if (event.t === "assistant" && event.text) out.push(`Assistant: ${event.text}`);
     }
-    return out.length > 0 ? out.join("\n\n") : null;
+    const terminal = stripVTControlCharacters(this.deps.sessions.history(id).data).trim();
+    return [out.join("\n\n"), terminal].filter(Boolean).join("\n\n").slice(-20_000) || null;
   }
 
   private spawnDeps(): SpawnDeps {
@@ -145,8 +147,9 @@ export class ExploreService {
       );
     }
     const result = await runSpawn(this.spawnDeps(), input);
-    if (result.ok && result.projectId && input.exploreSessionId)
-      this.deps.sessions.linkProject(input.exploreSessionId, result.projectId);
+    const source = input.exploreSessionId ? this.deps.sessions.find(input.exploreSessionId) : undefined;
+    if (result.ok && result.projectId && source && !source.projectId && CHAT_LABELS.includes(source.role ?? ""))
+      this.deps.sessions.linkProject(source.id, result.projectId);
     return result;
   }
 }

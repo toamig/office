@@ -40,9 +40,10 @@ import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
 import { RequestRouter } from "./modules/ask/router";
 import { ChatService } from "./modules/chat/service";
+import { OfficeTools } from "./modules/chat/office-tools";
 import { RunService } from "./modules/runs/service";
 import { WorkflowResults } from "./modules/runs/workflow-results";
-import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
+import { ConversationBridge, writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
 import { VaultOps } from "./modules/vault/ops";
@@ -97,6 +98,7 @@ export interface AppContext {
   fix: FixService;
   /** Agent conversations shown as chats (M6.5). */
   chat: ChatService;
+  officeTools: OfficeTools;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
   /** Starting a brain, adding projects, the agent pointer (M9). */
@@ -237,6 +239,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     onWaiting: (runId, waiting) => permissionHook.listeners.forEach((fn) => fn(runId, waiting)),
   });
   const bridgeScript = join(dirname(relayScript), "office-permission-mcp.mjs");
+  const conversationBridge = new ConversationBridge(bridgeScript, () => box.current.workspaceRoot);
   const runs = new RunService({
     db,
     bus,
@@ -280,6 +283,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     defaultMode: () => box.current.sessionMode,
     autonomySettings: () => box.current,
     brainScope: (id) => brainScope(store.state.workspace, box.current.workspaceRoot, id),
+    officeMcp: (id) => conversationBridge.config(id),
     idleDays: () => box.current.sessionIdleDays,
   });
   const chat = new ChatService({
@@ -392,6 +396,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     broker,
     permissionHook,
     chat,
+    conversationBridge,
   };
 }
 
@@ -652,6 +657,14 @@ export async function createContext(
   const agents = createAgents(base, notes, relayScript);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
+  const officeTools = new OfficeTools({
+    bus, store, settings: () => box.current, sessions: agents.sessions, explore: agents.explore,
+    recorder: agents.recorder, ops: notes.ops, scheduler: orch.scheduler, editor: orch.editor, tasks: orch.tasks,
+  });
+  agents.relay.officeTools = {
+    authorized: (id, header) => agents.conversationBridge.valid(id, header),
+    request: (id, body, signal) => officeTools.request(id, body, signal),
+  };
   const requestRouter = new RequestRouter({
     workspace: () => store.state.workspace,
     enabled: () => box.current.requestRouterEnabled,
@@ -670,14 +683,6 @@ export async function createContext(
       agents.chat.send(session.id, request);
       return session.id;
     },
-    session: (project, title, prompt) => agents.sessions.start({
-      projectId: project.id, title, prompt, mode: "chat", providerId: cheapestProvider(),
-    }).id,
-    reminder: async (projectId, date, text) => {
-      await notes.ops.addReminder(projectId, date, text);
-      bus.emit("vault.changed", {});
-    },
-    note: (projectId, text) => agents.recorder.saveNote(projectId, text),
   });
   const onboarding = new OnboardingService({
     workspace: () => store.state.workspace,
@@ -746,6 +751,7 @@ export async function createContext(
     ...agents,
     toolConfig,
     requestRouter,
+    officeTools,
     permissions: agents.broker,
     pending,
     fix,

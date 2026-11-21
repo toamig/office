@@ -33,6 +33,34 @@ export const WorkflowResult = z.object({
 });
 export type WorkflowResult = z.infer<typeof WorkflowResult>;
 
+export const workflowOutputLabels: Record<Workflow["output"], string> = {
+  "worth-a-look": "Worth a look", pending: "Needs you", note: "Brain note",
+};
+
+export const workflowReadLabels: Record<Workflow["read"], string> = {
+  brain: "Brain notes", project: "Project files", both: "Project files and Brain notes", none: "Prompt only",
+};
+
+const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+export function describeSchedule(schedule: string | null): string {
+  if (!schedule) return "On demand";
+  const [minute, hour, day, month, weekday] = schedule.trim().split(/\s+/);
+  if (schedule === "* * * * *") return "Every minute";
+  if (minute && /^\*\/\d+$/.test(minute) && hour === "*" && day === "*" && month === "*" && weekday === "*")
+    return `Every ${minute.slice(2)} minutes`;
+  if (minute && hour && /^\d{1,2}$/.test(minute) && /^\d{1,2}$/.test(hour) && month === "*") {
+    const time = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
+    if (day === "*" && weekday === "*") return `Daily at ${time}`;
+    if (day === "*" && weekday && /^[0-7](?:,[0-7])*$/.test(weekday)) {
+      const days = weekday.split(",").map((value) => weekdays[Number(value) % 7]).join(", ");
+      return `Every ${days} at ${time}`;
+    }
+    if (day && /^\d{1,2}$/.test(day) && weekday === "*") return `Day ${day} of each month at ${time}`;
+  }
+  return "Custom schedule";
+}
+
 export function workflowsFor(workspace: Workspace | null): Workflow[] {
   if (!workspace) return [];
   const saved = workspace.workflows ?? [];

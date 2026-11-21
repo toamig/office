@@ -1,9 +1,10 @@
 import { GitBranch, Square } from "lucide-react";
-import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatState, SessionRow } from "@shared/models";
 import { AutonomyPicker } from "../../components/AutonomyPicker";
 import { PermissionRequests } from "../../components/PermissionRequests";
+import { OfficeConfirmations } from "../../components/OfficeConfirmations";
 import { Button, OverflowMenu, notifyError } from "../../ui";
 import { isChatSession } from "@shared/roles";
 import { useSessionActions } from "../../components/SessionActions";
@@ -67,12 +68,16 @@ export function ChatView({
   /** Buttons for the end of the header, from the view that owns the chat (Chat adds Close). */
   headerActions?: ReactNode;
 }) {
-  // A Chat is a plain conversation: no wrap up, no terminal, no autonomy picker (it cannot ask for anything).
+  // A plain Chat has no wrap-up, terminal or autonomy picker.
   const plain = isChatSession(session);
   const { conversation, ready } = useConversation(session.id);
   const [state, setState] = useState<ChatState | null>(null);
   const list = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
+  const revealConfirmation = useCallback(() => {
+    const el = list.current;
+    if (el) el.scrollTop = el.scrollHeight;
+  }, []);
 
   useEffect(() => {
     let alive = true;
@@ -254,7 +259,7 @@ export function ChatView({
           {ready && items.length === 0 && (
             <div className="chat-empty" data-testid="chat-empty">
               {plain
-                ? "Ask anything. It can read your notes and search the web, and it changes nothing."
+                ? "Ask a question or request an Office action."
                 : "Ask the agent anything about this project."}
             </div>
           )}
@@ -262,6 +267,7 @@ export function ChatView({
             <ChatMessage key={`${item.kind}-${"id" in item ? item.id : i}-${i}`} item={item} />
           ))}
           <PermissionRequests compact runId={session.id} />
+          {!session.incognito && <OfficeConfirmations sessionId={session.id} onReveal={revealConfirmation} />}
           {conversation.working &&
             !items.some((i) => i.kind === "assistant" && i.streaming && i.text !== "") && (
               <div className="working-dots" data-testid="chat-working" aria-label="Working">

@@ -1,6 +1,5 @@
 // office-permission-mcp: a tiny MCP server over stdio that Claude Code starts for a headless run
-// (--mcp-config). It serves one tool, office_permission, and forwards each call to the running Office app,
-// which asks the owner and answers allow or deny. Plain Node, no dependencies.
+// It forwards permission requests and conversation tools to the running Office app.
 //
 //   node office-permission-mcp.mjs <run id>
 //
@@ -13,6 +12,8 @@ import { join } from "node:path";
 import { createInterface } from "node:readline";
 
 const runId = process.argv[2] ?? "";
+const conversationToken = process.env.OFFICE_CONVERSATION_TOKEN;
+const permissionEnabled = !conversationToken || process.env.OFFICE_HOST_PERMISSION === "1";
 
 function dataDir() {
   if (process.env.OFFICE_DATA) return process.env.OFFICE_DATA;
@@ -33,26 +34,22 @@ function relayInfo() {
 
 const deny = (message) => ({ behavior: "deny", message });
 
-/** Asks Office. No timeout of its own: the owner may answer much later. */
-function ask(args) {
+/** The owner may take a while to answer, so the server keeps the connection open. */
+function relay(route, payload, token) {
   const info = relayInfo();
-  if (!info || !runId) return Promise.resolve(deny("Office is not running, so nobody can approve this."));
+  if (!info || !runId) return Promise.resolve({ error: "Office is not running." });
   return new Promise((resolve) => {
-    const body = JSON.stringify({
-      tool_name: args.tool_name,
-      input: args.input ?? {},
-      tool_use_id: args.tool_use_id,
-    });
+    const body = JSON.stringify(payload);
     const req = http.request(
       {
         host: "127.0.0.1",
         port: info.port,
-        path: `/permission/${encodeURIComponent(runId)}`,
+        path: `/${route}/${encodeURIComponent(runId)}`,
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           "Content-Length": Buffer.byteLength(body),
-          Authorization: `Bearer ${info.token}`,
+          Authorization: `Bearer ${token ?? info.token}`,
         },
       },
       (res) => {
@@ -61,18 +58,24 @@ function ask(args) {
         res.on("data", (c) => (text += c));
         res.on("end", () => {
           try {
-            const answer = JSON.parse(text);
-            if (answer && answer.behavior === "allow") resolve({ behavior: "allow", updatedInput: answer.updatedInput ?? args.input ?? {} });
-            else resolve(deny(typeof answer?.message === "string" ? answer.message : "The owner declined this request."));
+            if (res.statusCode !== 200) resolve({ error: "Office refused the connection." });
+            else resolve(JSON.parse(text));
           } catch {
-            resolve(deny("Office sent an answer that could not be read."));
+            resolve({ error: "Office sent an answer that could not be read." });
           }
         });
       },
     );
-    req.on("error", () => resolve(deny("Office could not be reached, so nobody can approve this.")));
+    req.on("error", () => resolve({ error: "Office could not be reached." }));
     req.end(body);
   });
+}
+
+async function ask(args) {
+  const answer = await relay("permission", args);
+  if (answer?.behavior === "allow")
+    return { behavior: "allow", updatedInput: answer.updatedInput ?? args.input ?? {} };
+  return deny(answer?.message ?? answer?.error ?? "The owner declined this request.");
 }
 
 const TOOL = {
@@ -101,18 +104,32 @@ async function handle(msg) {
         protocolVersion: msg.params?.protocolVersion ?? "2025-06-18",
         capabilities: { tools: {} },
         serverInfo: { name: "office", version: "1" },
+        ...(conversationToken ? { instructions: "Use Office tools for actions the owner asks for. Office handles approvals." } : {}),
       },
     });
   }
   if (msg.id === undefined) return; // notifications need no answer
   if (msg.method === "ping") return send({ id: msg.id, result: {} });
-  if (msg.method === "tools/list") return send({ id: msg.id, result: { tools: [TOOL] } });
+  if (msg.method === "tools/list") {
+    const result = conversationToken ? await relay("office-tools", { kind: "list" }, conversationToken) : {};
+    const tools = [...(permissionEnabled ? [TOOL] : []), ...(Array.isArray(result?.tools) ? result.tools : [])];
+    return send({ id: msg.id, result: { tools } });
+  }
   if (msg.method === "tools/call") {
-    if (msg.params?.name !== TOOL.name) {
+    const name = msg.params?.name;
+    const args = msg.params?.arguments ?? {};
+    if (name === TOOL.name && permissionEnabled) {
+      const decision = await ask(args);
+      return send({ id: msg.id, result: { content: [{ type: "text", text: JSON.stringify(decision) }] } });
+    }
+    if (!conversationToken || typeof name !== "string") {
       return send({ id: msg.id, error: { code: -32602, message: `Unknown tool ${msg.params?.name}` } });
     }
-    const decision = await ask(msg.params.arguments ?? {});
-    return send({ id: msg.id, result: { content: [{ type: "text", text: JSON.stringify(decision) }] } });
+    const result = await relay("office-tools", { kind: "call", name, arguments: args }, conversationToken);
+    return send({ id: msg.id, result: {
+      ...(result?.error ? { isError: true } : {}),
+      content: [{ type: "text", text: JSON.stringify(result) }],
+    } });
   }
   send({ id: msg.id, error: { code: -32601, message: `Method not found: ${msg.method}` } });
 }

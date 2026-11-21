@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { parse as parseToml } from "smol-toml";
 import type { Inventory } from "../../../shared/models";
 import type { Role } from "../../../shared/types";
+import { OFFICE_TOOL_GUIDANCE } from "../../../shared/office-tools";
+import { PERMISSION_TOOL_TIMEOUT_MS } from "../runs/mcp-config";
 import { resolveCommand, resolveTool, spawnStream } from "../../core/exec";
 import { codexConfigPath, dataDir } from "../../core/paths";
 import { writeTextFile } from "../../core/settings";
@@ -70,6 +72,20 @@ export function rememberCodexModel(model: string): void {
 export const codexEffort = (effort: NonNullable<Role["effort"]>): string =>
   effort === "max" ? "xhigh" : effort;
 
+function officeMcpFlags(o: RunOptions): string[] {
+  const server = o.officeMcp;
+  if (!server) return [];
+  const env = Object.entries(server.env).map(([key, value]) => `${key} = ${JSON.stringify(value)}`).join(", ");
+  return [
+    "-c", `mcp_servers.office.command=${JSON.stringify(server.command)}`,
+    "-c", `mcp_servers.office.args=${JSON.stringify(server.args)}`,
+    "-c", `mcp_servers.office.env={ ${env} }`,
+    "-c", "mcp_servers.office.enabled=true",
+    "-c", 'mcp_servers.office.default_tools_approval_mode="approve"',
+    "-c", `mcp_servers.office.tool_timeout_sec=${PERMISSION_TOOL_TIMEOUT_MS / 1000}`,
+  ];
+}
+
 function scopedPermissions(o: RunOptions, sandbox: Role["codexSandbox"]): string[] {
   if (!o.brain || !sandbox || sandbox === "danger-full-access") return [];
   const { root, writable, readOnly, private: hidden } = o.brain;
@@ -114,12 +130,13 @@ export function codexHeadlessArgs(
     if (sandbox && !scope.length) flags.push("-s", sandbox);
   }
   flags.push(...scope);
+  flags.push(...officeMcpFlags(o));
   if (o.tools !== undefined) {
     flags.push("-c", "features.apps=false", "-c", "features.plugins=false");
     if (!o.tools) flags.push("-c", "features.shell_tool=false");
   }
   flags.push("--skip-git-repo-check", "-o", resultFile);
-  const instructions = [o.role?.instructions.trim(), o.brain?.instructions].filter(Boolean).join("\n\n");
+  const instructions = [o.role?.instructions.trim(), o.brain?.instructions, o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
   const prompt = instructions ? `${instructions}\n\n${o.prompt}` : o.prompt;
   const exec = o.role?.autonomy || o.permission?.kind === "readonly" ? ["-a", "never", "exec"] : ["exec"];
   return o.resumeId ? [...exec, "resume", ...flags, o.resumeId, prompt] : [...exec, ...flags, prompt];
@@ -182,7 +199,8 @@ export class CodexProvider implements Provider {
       "full-auto": "never",
     }[o.role.autonomy]);
     for (const dir of o.addDirs ?? []) args.push("--add-dir", dir);
-    const instructions = [o.role?.instructions, o.brain?.instructions].filter(Boolean).join("\n\n");
+    args.push(...officeMcpFlags(o));
+    const instructions = [o.role?.instructions, o.brain?.instructions, o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
     if (instructions) args.push("-c", `developer_instructions=${JSON.stringify(instructions)}`);
     args.push("-C", o.cwd);
     return args;
@@ -223,6 +241,7 @@ export class CodexProvider implements Provider {
         prompt: o.message ?? "",
         permission: o.permission,
         ...(o.brain ? { brain: o.brain } : {}),
+        ...(o.officeMcp ? { officeMcp: o.officeMcp } : {}),
         role: { ...role, ...(o.model ? { model: o.model } : {}) },
         ...(o.resume && o.threadId ? { resumeId: o.threadId } : {}),
       },

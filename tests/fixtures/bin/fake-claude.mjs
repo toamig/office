@@ -153,35 +153,44 @@ function listed(command, rules) {
   });
 }
 
-/** Asks the --permission-prompt-tool MCP server (a stdio program from --mcp-config) and returns its decision. */
-async function askPermissionTool(toolRef, command) {
-  const config = JSON.parse(readFileSync(flag("--mcp-config"), "utf8"));
-  const server = config.mcpServers[toolRef.split("__")[1]];
+/** Calls a test MCP server configured on the command line. */
+async function callTool(toolRef, input) {
+  const setup = flag("--mcp-config");
+  const config = JSON.parse(setup.startsWith("{") ? setup : readFileSync(setup, "utf8"));
+  const [, serverId, name] = toolRef.split("__");
+  const server = config.mcpServers[serverId];
   const child = spawn(server.command, server.args, {
     env: { ...process.env, ...(server.env ?? {}) },
     stdio: ["pipe", "pipe", "inherit"],
   });
   const lines = createInterface({ input: child.stdout });
   const waiting = new Map();
+  child.on("error", (error) => {
+    for (const { reject } of waiting.values()) reject(error);
+  });
+  child.on("exit", (code) => {
+    for (const { reject } of waiting.values()) reject(new Error(`MCP server exited (${code})`));
+  });
   lines.on("line", (line) => {
     const msg = JSON.parse(line);
-    waiting.get(msg.id)?.(msg);
+    waiting.get(msg.id)?.resolve(msg);
+    waiting.delete(msg.id);
   });
   let next = 1;
   const call = (method, params) =>
-    new Promise((resolve) => {
+    new Promise((resolve, reject) => {
       const id = next++;
-      waiting.set(id, resolve);
+      waiting.set(id, { resolve, reject });
       child.stdin.write(JSON.stringify({ jsonrpc: "2.0", id, method, params }) + "\n");
     });
   await call("initialize", { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "fake-claude", version: "1" } });
   child.stdin.write(JSON.stringify({ jsonrpc: "2.0", method: "notifications/initialized" }) + "\n");
-  const reply = await call("tools/call", {
-    name: toolRef.split("__")[2],
-    arguments: { tool_name: "Bash", input: { command }, tool_use_id: "toolu_fake" },
-  });
-  child.stdin.end();
-  return JSON.parse(reply.result.content[0].text);
+  try {
+    const reply = await call("tools/call", { name, arguments: input });
+    return JSON.parse(reply.result.content[0].text);
+  } finally {
+    child.stdin.end();
+  }
 }
 
 /** NEEDS_PERMISSION: <command> makes the run want to run a shell command. Returns [text, denials]. */
@@ -194,7 +203,7 @@ async function needsPermission(text) {
   if (listed(command, rules)) return [`Ran ${command}`, []];
   const tool = flag("--permission-prompt-tool");
   if (tool && flag("--permission-prompts") !== "none") {
-    const decision = await askPermissionTool(tool, command);
+    const decision = await callTool(tool, { tool_name: "Bash", input: { command }, tool_use_id: "toolu_fake" });
     if (decision.behavior === "allow") return [`Ran ${command} after the owner allowed it`, []];
     return [`Could not run ${command}: ${decision.message}`, []];
   }
@@ -256,6 +265,15 @@ async function chatLoop() {
       await tool(`${id}t`, "TodoWrite", { todos: [{ content: "Write the test", status: "completed" }, { content: "Run it", status: "in_progress" }, { content: "Ship", status: "pending" }] }, async () => ["Todos updated", false]);
     }
     let answer = `echo: ${text}${images ? ` (${images} image${images > 1 ? "s" : ""})` : ""}`;
+    if (text === "OFFICE_WORKFLOW") {
+      const name = "mcp__office__office_create_workflow";
+      const input = { name: "Weekly review", prompt: "Summarize the week", schedule: "0 9 * * 6" };
+      await tool(`${id}w`, name, input, async () => {
+        const result = await callTool(name, input);
+        answer = result.message ?? result.error;
+        return [answer, !!result.error];
+      });
+    }
     if (ask) {
       const command = ask[1].trim();
       let outcome = "";

@@ -1,6 +1,7 @@
 import type { Inventory } from "../../../shared/models";
 import type { Role } from "../../../shared/types";
 import type { BrainScope } from "../vault/scope";
+import type { ConversationMcp } from "../runs/mcp-config";
 
 /**
  * Who answers "may I run this?" in a headless run (spec 6.3, plan 9.5). Claude Code only; Codex runs in
@@ -23,6 +24,7 @@ export interface RunOptions {
   officeSessionId: string;
   addDirs?: string[];
   brain?: BrainScope;
+  officeMcp?: ConversationMcp;
   /** Folder for run output (Codex writes its result file here). */
   runDir?: string;
   /** Extra environment for the child process. */
@@ -88,6 +90,7 @@ export interface ChatCommandOptions {
   /** Extra folders the program may read (Explore adds the brain). */
   addDirs?: string[];
   brain?: BrainScope;
+  officeMcp?: ConversationMcp;
   /** Chat: only read and web tools, and Allowed commands only, so nothing can run or be edited. */
   restricted?: boolean;
   /** Nothing is kept by the program once the chat ends (`--no-session-persistence`). */

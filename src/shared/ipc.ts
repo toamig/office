@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
+import { OfficeConfirmation } from "./office-tools";
 import { ToolEdit, ToolEditPreview, ToolEntry } from "./tool-config";
 import { Workflow, WorkflowResult, WorkflowView } from "./workflow";
 import { PermissionProfile, Pipeline, Role } from "./schemas";
@@ -98,6 +99,7 @@ export const eventTypes = [
   "profiles.migrated",
   "recorder.changed",
   "workflow.changed",
+  "office.confirmation",
   "app.history",
   "app.terminal-action",
   "chat.event",
@@ -314,6 +316,13 @@ export const channels = {
   "requests.route": {
     req: z.object({ request: z.string().trim().min(1).max(6000), projectId: z.string().optional() }),
     res: RequestResult,
+  },
+  "office.confirmations": {
+    req: z.object({ sessionId: z.string() }), res: z.array(OfficeConfirmation),
+  },
+  "office.confirm": {
+    req: z.object({ sessionId: z.string(), id: z.string(), save: z.boolean(), edits: z.record(z.string(), z.json()).optional() }),
+    res: z.void(),
   },
   "recorder.answer": { req: z.object({ id: z.string(), save: z.boolean() }), res: z.void() },
   "recorder.undo": { req: z.object({ id: z.string() }), res: z.void() },

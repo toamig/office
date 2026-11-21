@@ -222,11 +222,11 @@ export class ChatService {
     };
   }
 
-  private permission(row: SessionRow, kind: "claude" | "codex"): RunPermission {
+  private permission(row: SessionRow, kind: "claude" | "codex", officeMcp = false): RunPermission {
     const role = this.deps.sessions.roleForAgent(row);
     if (role.readOnly || this.restricted(row.id)) return { kind: "readonly" };
     if (role.autonomy === "full-auto") return { kind: "full" };
-    if (kind === "codex") return { kind: "ask" };
+    if (kind === "codex" || officeMcp) return { kind: "ask" };
     return { kind: "ask", mcpConfig: this.deps.writeMcpConfig(row.id, this.dir(row.id)) };
   }
 
@@ -257,6 +257,7 @@ export class ChatService {
     // Codex: one program per turn.
     const threadId = row.providerSessionId ?? undefined;
     const brain = this.deps.sessions.brainForSession(row);
+    const officeMcp = this.deps.sessions.officeMcpForSession(row);
     const spec = provider.chatCommand({
       cwd: row.cwd,
       officeSessionId: id,
@@ -265,6 +266,7 @@ export class ChatService {
       role: this.deps.sessions.roleForAgent(row),
       permission: this.permission(row, kind),
       ...(brain ? { brain } : {}),
+      ...(officeMcp ? { officeMcp } : {}),
       ...(picked.model ? { model: picked.model } : {}),
       message: text,
       ...(threadId ? { threadId } : {}),
@@ -301,6 +303,7 @@ export class ChatService {
     const restricted = this.restricted(id);
     const incognito = this.secret.get(id)?.incognito === true;
     const brain = this.deps.sessions.brainForSession(row);
+    const officeMcp = this.deps.sessions.officeMcpForSession(row);
     const spec = provider.chatCommand!({
       cwd: row.cwd,
       officeSessionId: id,
@@ -308,8 +311,9 @@ export class ChatService {
       ...(restricted ? { restricted: true } : {}),
       ...(incognito ? { incognito: true } : {}),
       role: this.deps.sessions.roleForAgent(row),
-      permission: this.permission(row, "claude"),
+      permission: this.permission(row, "claude", Boolean(officeMcp)),
       ...(brain ? { brain } : {}),
+      ...(officeMcp ? { officeMcp } : {}),
       ...(picked.model ? { model: picked.model } : {}),
       runDir: this.dir(id),
       addDirs: this.addDirs(id),

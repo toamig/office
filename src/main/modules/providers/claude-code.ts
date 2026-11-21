@@ -1,4 +1,6 @@
 import type { Inventory } from "../../../shared/models";
+import { OFFICE_TOOL_GUIDANCE } from "../../../shared/office-tools";
+import { claudeMcpConfig } from "../runs/mcp-config";
 import { resolveCommand, resolveTool, spawnStream } from "../../core/exec";
 import { detectClaude } from "../setup/detect";
 import { claudeInventory } from "../setup/inventory";
@@ -21,13 +23,14 @@ export const CHAT_TOOLS = "Read,Grep,Glob,WebSearch,WebFetch,Agent";
  * `--permission-mode dontAsk` (Allowed commands only) refuses anything else without ever asking. The brain is added
  * to read with `--add-dir`.
  */
-export function chatToolFlags(addDirs: string[], model?: string): string[] {
+export function chatToolFlags(addDirs: string[], model?: string, officeMcp?: RunOptions["officeMcp"]): string[] {
   return [
     ...(model ? ["--model", model] : []),
     "--tools",
     CHAT_TOOLS,
     "--allowedTools",
     CHAT_TOOLS,
+    ...(officeMcp ? [OFFICE_TOOLS_RULE, "--mcp-config", claudeMcpConfig(officeMcp)] : []),
     "--permission-mode",
     "dontAsk",
     "--strict-mcp-config",
@@ -50,25 +53,34 @@ const disallowedTools = (rules: string[]): string[] =>
   rules.length > 0 ? ["--disallowedTools", ...rules] : [];
 /** The name Claude Code gives Office's permission tool: mcp__<server>__<tool>. */
 export const PERMISSION_TOOL = "mcp__office__office_permission";
+const OFFICE_TOOLS_RULE = "mcp__office__office_*";
+
+function officeConfig(o: RunOptions): string[] {
+  if (!o.officeMcp) return [];
+  const config = o.permission?.kind === "ask"
+    ? { ...o.officeMcp, env: { ...o.officeMcp.env, OFFICE_HOST_PERMISSION: "1" } }
+    : o.officeMcp;
+  return ["--mcp-config", claudeMcpConfig(config)];
+}
 
 /**
  * The flags that say who answers permission requests in a headless run. Every run sets
  * `--permission-prompts` explicitly, so the default of the installed Claude Code never decides.
  */
 export function permissionFlags(o: RunOptions): string[] {
-  const allowed = o.role?.allowedCommands ?? [];
+  const allowed = [...(o.role?.allowedCommands ?? []), ...(o.officeMcp ? [OFFICE_TOOLS_RULE] : [])];
   const denied = disallowedTools(o.role?.deniedCommands ?? []);
   const kind = o.permission?.kind;
-  if (kind === "full") return ["--permission-prompts", "none"];
+  if (kind === "full") return [...officeConfig(o), "--permission-prompts", "none"];
   if (kind === "readonly")
-    return [...allowedTools(READ_ONLY_TOOLS), ...denied, "--permission-prompts", "none"];
+    return [...allowedTools([...READ_ONLY_TOOLS, ...(o.officeMcp ? [OFFICE_TOOLS_RULE] : [])]), ...denied, ...officeConfig(o), "--permission-prompts", "none"];
   if (kind === "allowlist")
     return [...allowedTools(allowed), ...denied, "--permission-prompts", "none"];
   if (kind === "ask") {
     return [
       ...allowedTools(allowed),
       ...denied,
-      ...(o.permission?.mcpConfig ? ["--mcp-config", o.permission.mcpConfig] : []),
+      ...(o.officeMcp ? officeConfig(o) : o.permission?.mcpConfig ? ["--mcp-config", o.permission.mcpConfig] : []),
       "--permission-prompts",
       "host",
       "--permission-prompt-tool",
@@ -176,7 +188,7 @@ export class ClaudeCodeProvider implements Provider {
     if (role?.effort) flags.push("--effort", role.effort);
     const chosen = mode ?? role?.permissionMode;
     if (chosen) flags.push("--permission-mode", chosen);
-    const instructions = [role?.instructions, o.brain?.instructions].filter(Boolean).join("\n\n");
+    const instructions = [role?.instructions, o.brain?.instructions, o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
     if (instructions) flags.push("--append-system-prompt", instructions);
     for (const dir of new Set([...(o.addDirs ?? []), ...(o.brain?.writable ?? [])]))
       flags.push("--add-dir", dir);
@@ -184,11 +196,12 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   private terminalFlags(o: RunOptions): string[] {
-    if (!o.role?.autonomy) return this.roleFlags(o);
+    if (!o.role?.autonomy && !o.officeMcp) return this.roleFlags(o);
     return [
       ...this.roleFlags(o),
-      ...allowedTools(o.role?.allowedCommands ?? []),
+      ...allowedTools([...(o.role?.allowedCommands ?? []), ...(o.officeMcp ? [OFFICE_TOOLS_RULE] : [])]),
       ...disallowedTools(o.role?.deniedCommands ?? []),
+      ...officeConfig(o),
     ];
   }
 
@@ -242,6 +255,7 @@ export class ClaudeCodeProvider implements Provider {
       permission: o.permission,
       ...(o.addDirs ? { addDirs: o.addDirs } : {}),
       ...(o.brain ? { brain: o.brain } : {}),
+      ...(o.officeMcp ? { officeMcp: o.officeMcp } : {}),
     };
     const args = [
       "-p",
@@ -255,7 +269,7 @@ export class ClaudeCodeProvider implements Provider {
       o.resume && !o.incognito ? "--resume" : "--session-id",
       o.officeSessionId,
       ...(o.restricted
-        ? [...chatToolFlags(o.addDirs ?? [], runOptions.role?.model), ...this.roleFlags({ ...runOptions, role: undefined, addDirs: undefined })]
+        ? [...chatToolFlags(o.addDirs ?? [], runOptions.role?.model, o.officeMcp), ...this.roleFlags({ ...runOptions, role: undefined, addDirs: undefined })]
         : [...this.roleFlags(runOptions), ...permissionFlags(runOptions)]),
       ...(o.incognito ? ["--no-session-persistence"] : []),
     ];

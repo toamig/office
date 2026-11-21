@@ -23,6 +23,7 @@ import type { ProviderRegistry } from "../providers/registry";
 import type { CommandSpec } from "../providers/types";
 import { readStatus } from "../git/status";
 import type { BrainScope } from "../vault/scope";
+import type { ConversationMcp } from "../runs/mcp-config";
 import { PtyManager } from "./pty-manager";
 import {
   statusForClaudeHook,
@@ -45,6 +46,7 @@ export interface SessionServiceDeps {
   defaultMode?: () => SessionMode;
   autonomySettings?: () => { autonomy: AutonomyLevel; confirmedFullAuto: boolean };
   brainScope?: (projectId?: string) => BrainScope | undefined;
+  officeMcp?: (id: string) => ConversationMcp;
   /** Days a finished session may sit unused before it is asked about. Two when absent. */
   idleDays?: () => number;
   now?: () => Date;
@@ -268,6 +270,10 @@ export class SessionService {
     return row.brainRoot && row.brainRoot !== scope?.root ? undefined : scope;
   }
 
+  officeMcpForSession(row: SessionRow): ConversationMcp | undefined {
+    return row.incognito || row.provider === "terminal" ? undefined : this.deps.officeMcp?.(row.id);
+  }
+
   linkProject(id: string, projectId: string): void {
     this.deps.db.prepare("UPDATE sessions SET project_id = ? WHERE id = ? AND incognito = 0")
       .run(projectId, id);
@@ -338,13 +344,6 @@ export class SessionService {
       : input.autonomy
         ? this.checkedLevel(input.autonomy)
         : this.effectiveLevel(roleAutonomy(role));
-    const spec = provider.interactiveCommand({
-      cwd,
-      officeSessionId: id,
-      role: this.agentRole(providerId, role, autonomy),
-      ...(brain ? { brain } : {}),
-      ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
-    });
     const title = input.title ?? (input.roleId ? `${input.roleId}` : provider.label);
     const mode = input.mode ?? this.deps.defaultMode?.() ?? "terminal";
     if (mode === "chat" && provider.chatCommand) {
@@ -372,6 +371,13 @@ export class SessionService {
       if (input.prompt) this.chat?.send(id, input.prompt);
       return chat;
     }
+    const officeMcp = !extra.incognito ? this.deps.officeMcp?.(id) : undefined;
+    const spec = provider.interactiveCommand({
+      cwd, officeSessionId: id, role: this.agentRole(providerId, role, autonomy),
+      ...(brain ? { brain } : {}),
+      ...(officeMcp ? { officeMcp } : {}),
+      ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
+    });
     const row = this.launch({
       id,
       provider: providerId,
@@ -544,7 +550,9 @@ export class SessionService {
     // A conversation that never ran (a chat with no message yet) is started, not resumed: --resume of an
     // unknown conversation fails, and --session-id of a known one does.
     const brain = this.brainForSession(row);
-    const options = { cwd: row.cwd, officeSessionId: id, role: this.roleForAgent(row), ...(brain ? { brain } : {}) };
+    const officeMcp = this.officeMcpForSession(row);
+    const options = { cwd: row.cwd, officeSessionId: id, role: this.roleForAgent(row),
+      ...(brain ? { brain } : {}), ...(officeMcp ? { officeMcp } : {}) };
     const spec = row.conversationStarted
       ? provider.resumeCommand(providerSessionId, options)
       : provider.interactiveCommand(options);

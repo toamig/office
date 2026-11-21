@@ -327,6 +327,8 @@ function registerSessionHandlers(ctx: AppContext): void {
 
 /** Ask the brain, the audit, the morning brief and Explore. */
 function registerBrainHandlers(ctx: AppContext): void {
+  ctx.ipc.handle("office.confirmations", (req) => ctx.officeTools.list(req.sessionId));
+  ctx.ipc.handle("office.confirm", (req) => ctx.officeTools.answer(req.sessionId, req.id, req.save, req.edits));
   ctx.ipc.handle("requests.route", (req) => ctx.requestRouter.route(req.request, req.projectId));
   ctx.ipc.handle("recorder.digest", () => ctx.recorder.digest());
   ctx.ipc.handle("recorder.answer", (req) => ctx.recorder.answer(req.id, req.save));

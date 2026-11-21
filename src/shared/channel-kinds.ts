@@ -49,6 +49,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "app.chrome",
   "workflows.list",
   "workflows.results",
+  "office.confirmations",
   "settings.get",
   "modules.list",
   "preview.state",

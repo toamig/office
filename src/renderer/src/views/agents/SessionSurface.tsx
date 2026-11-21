@@ -1,6 +1,7 @@
 import type { SessionRow } from "@shared/models";
 import { ChatView } from "../chat/ChatView";
 import { TerminalView } from "./TerminalView";
+import { OfficeConfirmations } from "../../components/OfficeConfirmations";
 
 /**
  * What a session shows: a chat for a chat session, the embedded terminal for a terminal one. The terminal
@@ -15,5 +16,12 @@ export function SessionSurface({
 }) {
   if (session.mode === "chat")
     return <ChatView key={session.id} session={session} onChanged={onChanged} />;
-  return <TerminalView key={session.id} id={session.id} />;
+  return (
+    <div className="flex h-full min-h-0 w-full flex-col" key={session.id}>
+      <TerminalView id={session.id} />
+      {!session.incognito && <div className="max-h-[50%] overflow-auto px-4">
+        <OfficeConfirmations sessionId={session.id} />
+      </div>}
+    </div>
+  );
 }
