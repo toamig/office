@@ -256,12 +256,14 @@ export class ChatService {
     }
     // Codex: one program per turn.
     const threadId = row.providerSessionId ?? undefined;
+    const brain = this.deps.sessions.brainForSession(row);
     const spec = provider.chatCommand({
       cwd: row.cwd,
       officeSessionId: id,
       resume: Boolean(threadId),
       role: this.deps.sessions.roleForAgent(row),
       permission: this.permission(row, kind),
+      ...(brain ? { brain } : {}),
       ...(picked.model ? { model: picked.model } : {}),
       message: text,
       ...(threadId ? { threadId } : {}),
@@ -297,6 +299,7 @@ export class ChatService {
     const picked = this.options(id);
     const restricted = this.restricted(id);
     const incognito = this.secret.get(id)?.incognito === true;
+    const brain = this.deps.sessions.brainForSession(row);
     const spec = provider.chatCommand!({
       cwd: row.cwd,
       officeSessionId: id,
@@ -305,6 +308,7 @@ export class ChatService {
       ...(incognito ? { incognito: true } : {}),
       role: this.deps.sessions.roleForAgent(row),
       permission: this.permission(row, "claude"),
+      ...(brain ? { brain } : {}),
       ...(picked.model ? { model: picked.model } : {}),
       runDir: this.dir(id),
       addDirs: this.addDirs(id),

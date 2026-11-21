@@ -197,6 +197,7 @@ export type HealthView = z.infer<typeof HealthView>;
 
 export const WriteResult = z.object({
   committed: z.boolean(),
+  commit: z.string().optional(),
   pushed: z.boolean(),
   pushError: z.string().optional(),
   validateErrors: z.array(z.string()),
@@ -257,6 +258,7 @@ export const PendingItem = z.object({
     "ci-failed",
     "review-requested",
     "waiting",
+    "save-proposal",
   ]),
   /** danger (red) for something broken, attention (amber) for something that waits for an answer. */
   severity: z.enum(["danger", "attention"]),
@@ -269,8 +271,23 @@ export const PendingItem = z.object({
   fingerprint: z.string(),
   /** For a waiting line: what ticking it off needs. */
   waitingRaw: z.string().optional(),
+  proposalId: z.string().optional(),
 });
 export type PendingItem = z.infer<typeof PendingItem>;
+
+export const RecordedNote = z.object({
+  id: z.string(),
+  path: z.string(),
+  summary: z.string(),
+});
+export type RecordedNote = z.infer<typeof RecordedNote>;
+
+export const WrapUpResult = z.object({
+  saved: z.number(),
+  proposed: z.number(),
+  error: z.string().optional(),
+});
+export type WrapUpResult = z.infer<typeof WrapUpResult>;
 
 /** A problem Office shows, as it is handed to Fix in a session. */
 export const FixSubject = z.discriminatedUnion("type", [
@@ -618,6 +635,7 @@ export const SessionRow = z.object({
   branch: z.string().nullable(),
   role: z.string().nullable(),
   autonomy: AutonomyLevel.optional(),
+  brainRoot: z.string().optional(),
   title: z.string().nullable(),
   status: SessionStatus,
   interactive: z.boolean(),
@@ -680,26 +698,6 @@ export const HookStatus = z.object({
   notify: z.string().optional(),
 });
 export type HookStatus = z.infer<typeof HookStatus>;
-
-export const CaptureItem = z.object({ text: z.string(), kind: z.enum(["waiting", "todo"]) });
-export type CaptureItem = z.infer<typeof CaptureItem>;
-
-export const CaptureResult = z.object({
-  /** False for tools that cannot be resumed headless (Codex): the dialog opens empty. */
-  supported: z.boolean(),
-  items: z.array(CaptureItem),
-  runId: z.string().nullable(),
-  error: z.string().optional(),
-});
-export type CaptureResult = z.infer<typeof CaptureResult>;
-
-export const CaptureCommit = z.object({
-  id: z.string(),
-  items: z.array(z.object({ text: z.string(), dest: z.enum(["waiting", "todo", "drop"]) })),
-  /** False keeps the session open once its leftovers are saved; auto-archive then closes it after quiet days. */
-  archive: z.boolean().optional(),
-});
-export type CaptureCommit = z.infer<typeof CaptureCommit>;
 
 export const AskResult = z.object({
   done: z.boolean(),

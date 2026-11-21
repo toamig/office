@@ -10,6 +10,7 @@ import { migration009 } from "./009_session_kept";
 import { migration010 } from "./010_chat_kinds";
 import { migration011 } from "./011_fixes";
 import { migration012 } from "./012_autonomy";
+import { migration013 } from "./013_recorder";
 
 export interface Migration {
   id: number;
@@ -31,4 +32,5 @@ export const migrations: Migration[] = [
   migration010,
   migration011,
   migration012,
+  migration013,
 ];

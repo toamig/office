@@ -16,6 +16,7 @@ const KIND_LABEL: Record<PendingItem["kind"], string> = {
   "ci-failed": "Checks failed",
   "review-requested": "Review",
   waiting: "For you",
+  "save-proposal": "Brain",
 };
 
 /** The pending items that are something broken, which a session can fix (a question or a review is the owner's to answer). */
@@ -61,6 +62,14 @@ export async function tickWaiting(item: PendingItem): Promise<void> {
 /** One pending item: what it is, where it is resolved (Open) and how to ignore it (Dismiss). */
 export function PendingRow({ item, compact = false }: { item: PendingItem; compact?: boolean }) {
   const open = useOpenPending();
+  const answer = async (save: boolean): Promise<void> => {
+    if (!item.proposalId) return;
+    try {
+      await office.invoke("recorder.answer", { id: item.proposalId, save });
+    } catch (error) {
+      notifyError(error, "Could not save the proposed note", "recorder");
+    }
+  };
   return (
     <div className="ui-line" data-testid="pending-item" data-kind={item.kind}>
       <StatusBadge
@@ -70,12 +79,16 @@ export function PendingRow({ item, compact = false }: { item: PendingItem; compa
       />
       <div className="ui-line-main">
         <div>{item.title}</div>
-        {item.detail && !compact && <div className="ui-line-sub">{item.detail}</div>}
+        {item.detail && (!compact || item.proposalId) && <div className="ui-line-sub">{item.detail}</div>}
       </div>
       {isFixable(item) && <FixButton subject={{ type: "pending", key: item.key }} />}
-      <Button variant="ghost" size="sm" onClick={() => open(item)} data-testid="pending-open">
-        <ExternalLink /> Open
-      </Button>
+      {item.proposalId ? (
+        <Button size="sm" onClick={() => void answer(true)}>Save note</Button>
+      ) : (
+        <Button variant="ghost" size="sm" onClick={() => open(item)} data-testid="pending-open">
+          <ExternalLink /> Open
+        </Button>
+      )}
       {item.kind === "waiting" && (
         <Button size="sm" onClick={() => void tickWaiting(item)} data-testid="pending-done">
           <Check /> Done
@@ -84,7 +97,7 @@ export function PendingRow({ item, compact = false }: { item: PendingItem; compa
       <Button
         variant="ghost"
         size="sm"
-        onClick={() => void dismissPending(item)}
+        onClick={() => void (item.proposalId ? answer(false) : dismissPending(item))}
         data-testid="pending-dismiss"
       >
         Dismiss

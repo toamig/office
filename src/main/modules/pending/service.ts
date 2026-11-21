@@ -20,6 +20,7 @@ export interface PendingSources {
   projects: () => ProjectSummary[];
   waiting: () => WaitingEntry[];
   github: () => Array<{ projectId: string; ci: RunInfo | null; reviews: PrInfo[] }>;
+  proposals?: () => PendingItem[];
 }
 
 export interface PendingDeps {
@@ -36,6 +37,7 @@ const WATCHED = [
   "permission.changed",
   "project.status",
   "vault.changed",
+  "recorder.changed",
   "workspace.changed",
 ] as const;
 
@@ -138,7 +140,7 @@ export class PendingService {
 
   private collect(): PendingItem[] {
     const { sources } = this.deps;
-    const items: PendingItem[] = [];
+    const items: PendingItem[] = sources.proposals?.() ?? [];
     const projects = sources.projects();
     const projectName = new Map(projects.map((p) => [p.id, p.name]));
     const where = (id: string | null): string => (id ? (projectName.get(id) ?? "") : "");

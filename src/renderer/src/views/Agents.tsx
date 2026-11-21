@@ -8,7 +8,7 @@ import { useUi } from "../stores/ui";
 import { InspectorSlot } from "../components/Inspector";
 import { SessionActionsContext, useSessionActions } from "../components/SessionActions";
 import { AgentInspector } from "./agents/AgentInspector";
-import { CaptureDialog } from "./agents/CaptureDialog";
+import { WrapUpDialog } from "./agents/WrapUpDialog";
 import { PaneHeader } from "./agents/PaneHeader";
 import { DiffTab } from "./git/DiffTab";
 import { PreviewTab } from "./PreviewTab";
@@ -484,7 +484,7 @@ export function Agents({ active: visible }: { active: boolean }) {
         <AgentInspector session={activeSession} />
       </InspectorSlot>
       {closing && (
-        <CaptureDialog
+        <WrapUpDialog
           session={closing}
           onClose={() => {
             setClosing(null);

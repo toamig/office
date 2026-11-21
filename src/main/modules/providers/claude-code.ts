@@ -78,9 +78,20 @@ export function permissionFlags(o: RunOptions): string[] {
   return [...(o.role?.readOnly ? allowedTools(READ_ONLY_TOOLS) : []), ...denied];
 }
 
-function autonomyFlags(o: RunOptions): string[] {
-  if (o.role?.autonomy !== "ask-first") return [];
-  const settings = { permissions: { ask: ["Edit", "Write", "NotebookEdit", "Bash", "PowerShell"] } };
+export function claudePath(path: string): string {
+  const normalized = path.replaceAll("\\", "/").replace(/^([a-z]):/i, (_, drive: string) => `/${drive.toLowerCase()}`);
+  return `/${normalized.replace(/([*?[\]])/g, "\\$1")}`;
+}
+
+function sessionSettings(o: Pick<RunOptions, "brain" | "role">): string[] {
+  const ask = o.role?.autonomy === "ask-first" ? ["Edit", "Write", "NotebookEdit", "Bash", "PowerShell"] : [];
+  const denied = o.brain ? [
+    ...o.brain.private.map((dir) => `Read(${claudePath(dir)}/**)`),
+    ...[...o.brain.readOnly, ...o.brain.private].map((dir) => `Edit(${claudePath(dir)}/**)`),
+    ...["_index.md", "brain.repos.json"].map((file) => `Edit(${claudePath(`${o.brain!.root}/${file}`)})`),
+  ] : [];
+  if (!ask.length && !denied.length) return [];
+  const settings = { permissions: { ask, deny: denied } };
   return ["--settings", JSON.stringify(settings)];
 }
 
@@ -96,7 +107,7 @@ export function claudeHeadlessArgs(
     "stream-json",
     "--verbose",
     ...roleFlags,
-    ...(o.tools ? ["--tools", o.tools] : []),
+    ...(o.tools === undefined ? [] : ["--tools", o.tools]),
   ];
   if (o.resumeId) args.push("--resume", o.resumeId);
   args.push(...permissionFlags(o));
@@ -163,9 +174,11 @@ export class ClaudeCodeProvider implements Provider {
     if (role?.effort) flags.push("--effort", role.effort);
     const chosen = mode ?? role?.permissionMode;
     if (chosen) flags.push("--permission-mode", chosen);
-    if (role?.instructions) flags.push("--append-system-prompt", role.instructions);
-    for (const dir of o.addDirs ?? []) flags.push("--add-dir", dir);
-    return [...flags, ...autonomyFlags(o)];
+    const instructions = [role?.instructions, o.brain?.instructions].filter(Boolean).join("\n\n");
+    if (instructions) flags.push("--append-system-prompt", instructions);
+    for (const dir of new Set([...(o.addDirs ?? []), ...(o.brain?.writable ?? [])]))
+      flags.push("--add-dir", dir);
+    return [...flags, ...sessionSettings(o)];
   }
 
   private terminalFlags(o: RunOptions): string[] {
@@ -187,7 +200,7 @@ export class ClaudeCodeProvider implements Provider {
     // refused without asking (plan 6.3). A stage that asks the owner, and a read-only run, keep their own mode.
     const args = claudeHeadlessArgs(
       o,
-      this.roleFlags(o, o.permission?.kind === "allowlist" || o.tools ? "dontAsk" : undefined),
+      this.roleFlags(o, o.permission?.kind === "allowlist" || o.tools !== undefined ? "dontAsk" : undefined),
     );
     const spec = this.command(args, o.env);
     const stream = spawnStream(spec.cmd, spec.args, {
@@ -226,6 +239,7 @@ export class ClaudeCodeProvider implements Provider {
       role,
       permission: o.permission,
       ...(o.addDirs ? { addDirs: o.addDirs } : {}),
+      ...(o.brain ? { brain: o.brain } : {}),
     };
     const args = [
       "-p",
@@ -239,7 +253,7 @@ export class ClaudeCodeProvider implements Provider {
       o.resume && !o.incognito ? "--resume" : "--session-id",
       o.officeSessionId,
       ...(o.restricted
-        ? chatToolFlags(o.addDirs ?? [], runOptions.role?.model)
+        ? [...chatToolFlags(o.addDirs ?? [], runOptions.role?.model), ...this.roleFlags({ ...runOptions, role: undefined, addDirs: undefined })]
         : [...this.roleFlags(runOptions), ...permissionFlags(runOptions)]),
       ...(o.incognito ? ["--no-session-persistence"] : []),
     ];

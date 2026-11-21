@@ -143,6 +143,9 @@ export class ExploreService {
         "Creating a public repo needs its own explicit confirmation",
       );
     }
-    return runSpawn(this.spawnDeps(), input);
+    const result = await runSpawn(this.spawnDeps(), input);
+    if (result.ok && result.projectId && input.exploreSessionId)
+      this.deps.sessions.linkProject(input.exploreSessionId, result.projectId);
+    return result;
   }
 }

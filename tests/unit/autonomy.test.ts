@@ -13,7 +13,7 @@ const flag = (args: string[], key: string) => args[args.indexOf(key) + 1];
 
 describe("autonomy", () => {
   it.each([
-    ["ask-first", "manual", "workspace-write", "untrusted"],
+    ["ask-first", "manual", "read-only", "on-request"],
     ["act-on-risk", "acceptEdits", "workspace-write", "on-request"],
     ["full-auto", "bypassPermissions", "danger-full-access", "never"],
   ] as const)("uses the selected mode when starting and resuming %s", (level, mode, sandbox, approval) => {

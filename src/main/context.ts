@@ -53,6 +53,8 @@ import { ToolsMonitor } from "./modules/setup/tools-monitor";
 import { computeSetupState } from "./modules/setup/state";
 import { VaultService } from "./modules/vault/service";
 import { VaultWriter } from "./modules/vault/writer";
+import { brainScope } from "./modules/vault/scope";
+import { Recorder } from "./modules/vault/recorder";
 
 /** Everything the main process shares: settings, workspace, database, bus and the IPC registry. */
 export interface AppContext {
@@ -69,6 +71,7 @@ export interface AppContext {
   ask: AskService;
   explore: ExploreService;
   brief: BriefService;
+  recorder: Recorder;
   hooks: HooksManager;
   editor: WorkspaceEditor;
   tasks: TaskEngine;
@@ -240,7 +243,10 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     projectsRoot: () => box.current.projectsRoot,
     projectPaths: () => box.current.projectPaths,
     workspaceRoot: () => box.current.workspaceRoot,
-    written: () => bus.emit("brief.changed", {}),
+    written: () => {
+      recorder.markBrief();
+      bus.emit("brief.changed", {});
+    },
   });
   const sessions = new SessionService({
     db,
@@ -252,6 +258,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     logsDir: sessionsDir(),
     defaultMode: () => box.current.sessionMode,
     autonomySettings: () => box.current,
+    brainScope: (id) => brainScope(store.state.workspace, box.current.workspaceRoot, id),
     idleDays: () => box.current.sessionIdleDays,
   });
   const chat = new ChatService({
@@ -262,6 +269,44 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     broker,
     writeMcpConfig: (id, dir) => writePermissionMcpConfig(dir, id, bridgeScript),
   });
+  const recorder = new Recorder({
+    db,
+    writer,
+    workspace: () => store.state.workspace,
+    root: () => box.current.workspaceRoot,
+    projectFolder: folderOf(projects),
+    sessions: () => sessions.list({ chats: true, includeArchived: true }),
+    chatsDir: join(dataDir(), "chats"),
+    terminalsDir: sessionsDir(),
+    settings: () => ({
+      enabled: box.current.recorderEnabled,
+      learning: box.current.learningEnabled,
+      idleMinutes: box.current.recorderIdleMinutes,
+    }),
+    complete: async (session, prompt) => {
+      const providerId = session.provider;
+      const handle = runs.start({
+        kind: "recorder", providerId, cwd: dataDir(), prompt, tools: "",
+        ...(session.projectId ? { projectId: session.projectId } : {}),
+        role: {
+          provider: providerId,
+          model: providerId === "codex" ? "gpt-5.4-mini" : "haiku",
+          instructions: "", readOnly: true, allowedCommands: [],
+        },
+      });
+      const result = await handle.result;
+      if (!result.ok) throw new Error(result.error || "The recorder run failed.");
+      return result.resultText;
+    },
+    changed: () => {
+      vaultChanged();
+      bus.emit("recorder.changed", {});
+    },
+  });
+  const vaultChanged = (): void => {
+    notes.vault.invalidate();
+    bus.emit("vault.changed", {});
+  };
   sessions.chat = {
     send: (id, text) => chat.send(id, text),
     configure: (id, extra) => chat.configure(id, extra),
@@ -308,6 +353,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     ask,
     github,
     brief,
+    recorder,
     sessions,
     hooks,
     relay,
@@ -466,7 +512,7 @@ function createLifecycle(
 ): Pick<AppContext, "sync" | "syncProject" | "start" | "stop"> {
   const { box, bus, store, notifier } = base;
   const { vault, projects, health } = notes;
-  const { github, brief, sessions, relay, explore } = agents;
+  const { github, brief, sessions, relay, explore, recorder } = agents;
   const { scheduler, modules } = orch;
   const waiting = new WaitingWatcher(vault, notifier, () => store.state.workspace?.projects ?? []);
   bus.on("vault.changed", () => {
@@ -501,6 +547,7 @@ function createLifecycle(
     github.stop();
     scheduler.stop();
     sessions.stopTimer();
+    recorder.stop();
     await relay.stop();
     projects.stopAuto();
     await vault.unwatch();
@@ -528,6 +575,7 @@ function createLifecycle(
     scheduler.start();
     void projects.refreshAll();
     sessions.startTimer();
+    recorder.start();
     const archive = (): void => {
       sessions.autoArchive(store.state.workspace?.archiveAfterDays ?? 7);
       // Saved chats that nobody has used for the idle time archive themselves, unless pinned.
@@ -600,6 +648,7 @@ export async function createContext(
       projects: () => notes.projects.list(),
       waiting: () => notes.vault.allWaiting(),
       github: () => agents.github.pendingState(),
+      proposals: () => agents.recorder.pending(),
     },
   });
   const fix = createFix(base, notes, agents, orch, pending);

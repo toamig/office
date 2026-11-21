@@ -11,6 +11,7 @@ import { PendingGroups } from "../components/PendingList";
 import { PermissionRequests } from "../components/PermissionRequests";
 import { usePending } from "../lib/pending";
 import { LiveAgentsPanel, TodayPanel } from "./home/LiveAndToday";
+import { SavedNotes } from "./home/SavedNotes";
 
 /** Home shows the first few; Needs you shows them all. */
 const SHOWN = 8;
@@ -107,6 +108,7 @@ function BriefPanel() {
               <Markdown>{item.markdown}</Markdown>
             </div>
           ))}
+        <SavedNotes />
       </div>
     </Card>
   );

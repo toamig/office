@@ -42,6 +42,9 @@ export const MachineSettings = z.object({
   sessionMode: z.enum(["chat", "terminal"]).default("chat"),
   autonomy: AutonomyLevel.default(DEFAULT_AUTONOMY),
   confirmedFullAuto: z.boolean().default(false),
+  recorderEnabled: z.boolean().default(true),
+  learningEnabled: z.boolean().default(true),
+  recorderIdleMinutes: z.number().int().positive().default(10),
   /** Days a finished session may sit unused before Office asks whether it is still needed. */
   sessionIdleDays: z.number().int().min(1).default(2),
   /** Whether Sessions shows several sessions at once; off, it shows one at a time. */

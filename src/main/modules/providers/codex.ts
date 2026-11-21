@@ -70,6 +70,23 @@ export function rememberCodexModel(model: string): void {
 export const codexEffort = (effort: NonNullable<Role["effort"]>): string =>
   effort === "max" ? "xhigh" : effort;
 
+function scopedPermissions(o: RunOptions, sandbox: Role["codexSandbox"]): string[] {
+  if (!o.brain || !sandbox || sandbox === "danger-full-access") return [];
+  const { root, writable, readOnly, private: hidden } = o.brain;
+  const writableNotes = sandbox === "workspace-write";
+  const filesystem = [
+    [root, "read"],
+    ...readOnly.map((dir) => [dir, "read"]),
+    ...writable.map((dir) => [dir, writableNotes ? "write" : "read"]),
+    ...hidden.map((dir) => [dir, "deny"]),
+  ].map(([dir, mode]) => `${JSON.stringify(dir)} = ${JSON.stringify(mode)}`);
+  return [
+    "-c", 'default_permissions="office-brain"',
+    "-c", `permissions.office-brain.extends="${writableNotes ? ":workspace" : ":read-only"}"`,
+    "-c", `permissions.office-brain.filesystem={ ${filesystem.join(", ")} }`,
+  ];
+}
+
 /**
  * The arguments of `codex exec`. A role with a writable job gets the workspace-write sandbox, because
  * `exec` runs read-only otherwise; Codex has no system-prompt flag, so the role's instructions go
@@ -87,15 +104,17 @@ export function codexHeadlessArgs(
     : o.role
     ? (o.role.codexSandbox ?? (o.role.readOnly ? "read-only" : "workspace-write"))
     : null;
+  const scope = scopedPermissions(o, sandbox ?? undefined);
   if (o.resumeId) {
     // `codex exec resume` takes neither -C nor -s (checked with --help); the process already runs in cwd.
-    if (sandbox) flags.push("-c", `sandbox_mode="${sandbox}"`);
+    if (sandbox && !scope.length) flags.push("-c", `sandbox_mode="${sandbox}"`);
   } else {
     flags.push("-C", o.cwd);
-    if (sandbox) flags.push("-s", sandbox);
+    if (sandbox && !scope.length) flags.push("-s", sandbox);
   }
+  flags.push(...scope);
   flags.push("--skip-git-repo-check", "-o", resultFile);
-  const instructions = o.role?.instructions.trim();
+  const instructions = [o.role?.instructions.trim(), o.brain?.instructions].filter(Boolean).join("\n\n");
   const prompt = instructions ? `${instructions}\n\n${o.prompt}` : o.prompt;
   const exec = o.role?.autonomy || o.permission?.kind === "readonly" ? ["-a", "never", "exec"] : ["exec"];
   return o.resumeId ? [...exec, "resume", ...flags, o.resumeId, prompt] : [...exec, ...flags, prompt];
@@ -148,13 +167,18 @@ export class CodexProvider implements Provider {
     const args: string[] = [];
     if (o.role?.model) args.push("-m", o.role.model);
     if (o.role?.effort) args.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
-    if (o.role?.codexSandbox) args.push("-s", o.role.codexSandbox);
+    const sandbox = o.role?.autonomy === "ask-first" ? "read-only" : o.role?.codexSandbox;
+    const scope = scopedPermissions(o, sandbox);
+    if (scope.length) args.push(...scope);
+    else if (sandbox) args.push("-s", sandbox);
     if (o.role?.autonomy) args.push("-a", {
-      "ask-first": "untrusted",
+      "ask-first": "on-request",
       "act-on-risk": "on-request",
       "full-auto": "never",
     }[o.role.autonomy]);
     for (const dir of o.addDirs ?? []) args.push("--add-dir", dir);
+    const instructions = [o.role?.instructions, o.brain?.instructions].filter(Boolean).join("\n\n");
+    if (instructions) args.push("-c", `developer_instructions=${JSON.stringify(instructions)}`);
     args.push("-C", o.cwd);
     return args;
   }
@@ -193,6 +217,7 @@ export class CodexProvider implements Provider {
         officeSessionId: o.officeSessionId,
         prompt: o.message ?? "",
         permission: o.permission,
+        ...(o.brain ? { brain: o.brain } : {}),
         role: { ...role, ...(o.model ? { model: o.model } : {}) },
         ...(o.resume && o.threadId ? { resumeId: o.threadId } : {}),
       },

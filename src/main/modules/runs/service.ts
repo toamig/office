@@ -12,7 +12,7 @@ import type { ProviderRegistry } from "../providers/registry";
 import type { AgentEvent, AgentRun, AgentRunResult, RunPermission } from "../providers/types";
 import type { PermissionBroker } from "./permissions";
 
-export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation";
+export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation" | "recorder";
 
 export interface RunRequest {
   kind: RunKind;
@@ -55,7 +55,7 @@ export interface RunServiceDeps {
 }
 
 /** Runs that only read: they get read tools and nothing ever asks. */
-const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary"];
+const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder"];
 
 /** Runs headless agent tasks and records each one: a database row plus events.jsonl and result.md. */
 export class RunService {
@@ -104,7 +104,7 @@ export class RunService {
       runDir: dir,
       ...(role ? { role } : {}),
       ...(req.resumeId ? { resumeId: req.resumeId } : {}),
-      ...(req.tools ? { tools: req.tools } : {}),
+      ...(req.tools === undefined ? {} : { tools: req.tools }),
     });
     this.active.set(id, run);
 

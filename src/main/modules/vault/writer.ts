@@ -80,8 +80,9 @@ export class VaultWriter {
     message: string,
     transform: (content: string) => string | null,
     initial?: () => string,
+    checkPath?: () => void,
   ): Promise<WriteResult> {
-    const next = this.chain.then(() => this.doEdit(file, message, transform, initial));
+    const next = this.chain.then(() => this.doEdit(file, message, transform, initial, checkPath));
     this.chain = next.catch(() => undefined);
     return next;
   }
@@ -124,6 +125,7 @@ export class VaultWriter {
     message: string,
     transform: (content: string) => string | null,
     initial?: () => string,
+    checkPath?: () => void,
   ): Promise<WriteResult> {
     if (/co-authored-by/i.test(message)) {
       throw new VaultWriteError(
@@ -131,6 +133,7 @@ export class VaultWriter {
         "Commit messages never carry a Co-Authored-By trailer",
       );
     }
+    checkPath?.();
     const dir = dirname(file);
     const top = await git(dir, ["rev-parse", "--show-toplevel"]);
     if (top.code !== 0) throw new VaultWriteError("no-repo", `${file} is not inside a git repo`);
@@ -139,7 +142,7 @@ export class VaultWriter {
     const rel = relative(repo, file).replace(/\\/g, "/");
     // An edit of the owner's own, not yet committed, is never mixed into an automatic commit.
     const dirty = await git(repo, ["status", "--porcelain", "--", rel]);
-    if (dirty.stdout.trim() !== "") {
+    if (dirty.code !== 0 || dirty.stdout.trim() !== "") {
       const why = `${rel} has changes that are not committed yet; commit or discard them first`;
       this.deps.onWarning({ kind: "write-failed", message: why });
       throw new VaultWriteError("dirty", why);
@@ -154,6 +157,7 @@ export class VaultWriter {
       }
     }
 
+    checkPath?.();
     let before: string;
     if (existsSync(file)) before = readFileSync(file, "utf8");
     else if (initial) before = initial();
@@ -176,6 +180,43 @@ export class VaultWriter {
       );
     }
 
+    return this.afterCommit(repo, hasUpstream);
+  }
+
+  /** Reverts a single-file commit previously made by this writer. */
+  revert(file: string, commit: string, checkPath: () => void): Promise<WriteResult> {
+    return this.exclusive(async () => {
+      checkPath();
+      if (!/^[0-9a-f]{40,64}$/.test(commit)) throw new Error("Invalid note commit.");
+      const top = await git(dirname(file), ["rev-parse", "--show-toplevel"]);
+      if (top.code !== 0) throw new VaultWriteError("no-repo", "The note repo is unavailable.");
+      const repo = top.stdout.trim();
+      const rel = relative(repo, file).replace(/\\/g, "/");
+      const dirty = await git(repo, ["status", "--porcelain"]);
+      if (dirty.code !== 0 || dirty.stdout.trim())
+        throw new VaultWriteError("dirty", "Commit or set aside local changes before undoing this save.");
+      if (await operationInProgress(repo))
+        throw new VaultWriteError("conflict", "Finish the current Git operation before undoing this save.");
+      const changed = await git(repo, ["diff-tree", "--no-commit-id", "--name-only", "-r", "-z", commit]);
+      if (changed.code !== 0 || changed.stdout !== `${rel}\0`)
+        throw new VaultWriteError("commit-failed", "The commit does not match this note.");
+      const upstream = (await git(repo, ["rev-parse", "--abbrev-ref", "@{u}"])).code === 0;
+      if (upstream) {
+        const problem = await updateFromUpstream(repo);
+        if (problem) throw new VaultWriteError(problem.code, problem.message);
+      }
+      checkPath();
+      const result = await git(repo, ["revert", "--no-edit", commit]);
+      if (result.code !== 0) {
+        await git(repo, ["revert", "--abort"]);
+        throw new VaultWriteError("conflict", firstLine(result.stderr || result.stdout));
+      }
+      return this.afterCommit(repo, upstream);
+    });
+  }
+
+  private async afterCommit(repo: string, hasUpstream: boolean): Promise<WriteResult> {
+    const sha = (await git(repo, ["rev-parse", "HEAD"])).stdout.trim();
     let pushed = false;
     let pushError: string | undefined;
     if (hasUpstream) {
@@ -191,7 +232,7 @@ export class VaultWriter {
     }
 
     const validateErrors = await this.validate();
-    return { committed: true, pushed, ...(pushError ? { pushError } : {}), validateErrors };
+    return { committed: true, pushed, ...(sha ? { commit: sha } : {}), ...(pushError ? { pushError } : {}), validateErrors };
   }
 
   private async validate(): Promise<string[]> {

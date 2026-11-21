@@ -30,7 +30,6 @@ import { readStatus } from "./modules/git/status";
 import { sendReviewToAgent } from "./modules/sessions/review";
 import { readVaultFile } from "./modules/ask/ask";
 import { readAudit } from "./modules/vault/audit";
-import { captureSession } from "./modules/sessions/capture";
 import {
   getDock,
   getLayout,
@@ -308,31 +307,23 @@ function registerSessionHandlers(ctx: AppContext): void {
     ctx.bus.emit("setup.changed", {});
     return result;
   });
-  ctx.ipc.handle("capture.run", (req) => captureSession(ctx, req.id));
-  ctx.ipc.handle("capture.commit", async (req) => {
+  ctx.ipc.handle("sessions.wrapUp", async (req) => {
     const session = ctx.sessions.get(req.id);
-    const kept = req.items.filter((i) => i.dest !== "drop" && i.text.trim());
-    if (kept.length > 0 && !session.projectId) {
-      throw new IpcFailure(
-        "no-project",
-        "This session is not tied to a project, so there is nowhere to save items",
-      );
-    }
-    const source = `from the ${session.title ?? session.provider} session`;
-    for (const item of kept) {
-      if (!session.projectId) break;
-      if (item.dest === "waiting") await ctx.ops.addWaiting(session.projectId, item.text, source);
-      else await ctx.ops.addTodo(session.projectId, item.text, source);
-    }
-    ctx.sessions.markCaptured(req.id);
-    // Left open, a captured session is archived by the auto-archive rule after the quiet days.
-    if (req.archive !== false) ctx.sessions.archive(req.id);
-    return { saved: kept.length };
+    if (session.incognito) throw new IpcFailure("incognito", "Close the incognito chat to erase it.");
+    await ctx.sessions.stop(req.id);
+    if (ctx.sessions.get(req.id).running) throw new IpcFailure("busy", "The session is still stopping.");
+    const result = await ctx.recorder.record(ctx.sessions.get(req.id));
+    if (!result.error) ctx.sessions.markCaptured(req.id);
+    ctx.sessions.archive(req.id);
+    return result;
   });
 }
 
 /** Ask the brain, the audit, the morning brief and Explore. */
 function registerBrainHandlers(ctx: AppContext): void {
+  ctx.ipc.handle("recorder.digest", () => ctx.recorder.digest());
+  ctx.ipc.handle("recorder.answer", (req) => ctx.recorder.answer(req.id, req.save));
+  ctx.ipc.handle("recorder.undo", (req) => ctx.recorder.undo(req.id));
   ctx.ipc.handle("ask.start", (req) => ({ runId: ctx.ask.start(req.question, req.projectId) }));
   ctx.ipc.handle("ask.result", (req) => ctx.ask.result(req.runId));
   ctx.ipc.handle("ask.cancel", (req) => ctx.ask.cancel(req.runId));
