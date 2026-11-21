@@ -291,7 +291,7 @@ export function migrateLegacyRoles(
   const matched: string[] = [];
   const kept: string[] = [];
   for (const [id, role] of Object.entries(roles)) {
-    if (role.permissionProfile) {
+    if (role.autonomy || role.permissionProfile) {
       out[id] = role;
       continue;
     }

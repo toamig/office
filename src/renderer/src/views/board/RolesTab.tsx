@@ -1,11 +1,12 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { allProfiles } from "@shared/permissions";
+import { AUTONOMY_LEVELS, DEFAULT_AUTONOMY, roleAutonomy, type AutonomyLevel } from "@shared/autonomy";
 import type { Role } from "@shared/types";
 import { effortsFor, modelFits } from "@shared/roles";
 import { useQuery } from "../../lib/hooks";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
+import { AutonomyPicker } from "../../components/AutonomyPicker";
 import {
   Banner,
   Button,
@@ -14,7 +15,6 @@ import {
   Dropdown,
   EmptyState,
   Input,
-  LinkButton,
   SegmentedControl,
   StatusBadge,
   SplitPane,
@@ -32,63 +32,63 @@ const EFFORT_LABELS: Record<string, string> = {
   max: "Max",
 };
 
-/** Starting points for a new role: what it is for, its standing instructions, and the profile it begins with. */
+/** Starting points for a new role's purpose, instructions and autonomy. */
 const TEMPLATES: Record<
   string,
-  { label: string; purpose: string; instructions: string; profile: string; model?: string }
+  { label: string; purpose: string; instructions: string; autonomy: AutonomyLevel; model?: string }
 > = {
   blank: {
     label: "Blank",
     purpose: "",
     instructions: "",
-    profile: "ask-first",
+    autonomy: DEFAULT_AUTONOMY,
   },
   planner: {
     label: "Planner",
     purpose: "Turns a task into a plan and changes nothing.",
     instructions: "Plan only. Write the plan to the file you are given. Do not edit code.",
-    profile: "plan-only",
+    autonomy: "ask-first",
     model: "opus",
   },
   builder: {
     label: "Builder",
     purpose: "Implements an approved plan and commits as it goes.",
     instructions: "Implement the approved plan exactly. Commit per step. Run the project's checks.",
-    profile: "builder",
+    autonomy: "act-on-risk",
     model: "sonnet",
   },
   reviewer: {
     label: "Reviewer",
     purpose: "Reads a change against its plan and lists problems.",
     instructions: "Review the diff against the plan. List problems by severity with file and line.",
-    profile: "reviewer",
+    autonomy: "ask-first",
   },
   tester: {
     label: "Tester",
     purpose: "Runs the checks and reports what fails.",
     instructions:
       "Run the project's tests and lint. Report each failure with the command that showed it.",
-    profile: "reviewer",
+    autonomy: "act-on-risk",
   },
   researcher: {
     label: "Researcher",
     purpose: "Looks things up and summarises them with sources.",
     instructions: "Research and summarise with sources. Do not edit files.",
-    profile: "read-only",
+    autonomy: "ask-first",
     model: "sonnet",
   },
   "docs-writer": {
     label: "Docs writer",
     purpose: "Writes and updates documentation.",
     instructions: "Write clear documentation for the change. Keep to the project's style.",
-    profile: "builder",
+    autonomy: "act-on-risk",
   },
   artist: {
     label: "Artist",
     purpose: "Makes art briefs and asset lists.",
     instructions:
       "Write an art brief for the request: what it is, sizes, style, and where files go.",
-    profile: "ask-first",
+    autonomy: "ask-first",
   },
 };
 
@@ -109,18 +109,17 @@ function RoleForm({
   role: Role;
   onSaved: () => void;
   onRemoved: () => void;
-  goTo: (tab: "pipelines" | "permissions") => void;
+  goTo: (tab: "pipelines") => void;
 }) {
   const navigate = useUi((s) => s.navigate);
   const providers = useQuery("providers.list");
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const [draft, setDraft] = useState<Role>(role);
-  const profiles = allProfiles(workspace.data?.workspace?.permissionProfiles);
   const models = providers.data?.find((p) => p.id === draft.provider)?.models ?? [];
   const known = Object.fromEntries((providers.data ?? []).map((p) => [p.id, p.models]));
   const fits = modelFits(draft.provider, draft.model, known);
   const efforts = effortsFor(draft.provider);
-  const profile = profiles.find((p) => p.id === draft.permissionProfile);
+  const autonomy = roleAutonomy(draft) ?? DEFAULT_AUTONOMY;
   const usedIn = Object.entries(workspace.data?.workspace?.pipelines ?? {}).flatMap(([pid, p]) =>
     p.stages.filter((s) => s.role === id).map((s) => ({ pid, name: p.name, stage: s.id })),
   );
@@ -143,7 +142,9 @@ function RoleForm({
           ...(draft.effort ? { effort: draft.effort } : {}),
           instructions: draft.instructions,
           ...(draft.purpose ? { purpose: draft.purpose } : {}),
-          permissionProfile: draft.permissionProfile ?? "ask-first",
+          ...(draft.autonomy || !draft.permissionProfile
+            ? { autonomy }
+            : { permissionProfile: draft.permissionProfile }),
           readOnly: false,
           allowedCommands: [],
         },
@@ -270,28 +271,11 @@ function RoleForm({
           How hard the model thinks. More effort is slower and costs more.
         </span>
       </div>
-      <label className="grid gap-1">
-        <span className="ui-label">Permission profile</span>
-        <div className="flex flex-wrap items-center gap-2">
-          <Dropdown
-            value={draft.permissionProfile ?? ""}
-            onChange={(e) => set("permissionProfile", e.target.value)}
-            data-testid="role-profile"
-          >
-            {profiles.map((p) => (
-              <option key={p.id} value={p.id}>
-                {p.name}
-              </option>
-            ))}
-          </Dropdown>
-          <LinkButton onClick={() => goTo("permissions")} data-testid="role-edit-profiles">
-            Edit profiles
-          </LinkButton>
-        </div>
-        <span className="ui-helper" data-testid="role-profile-sentence">
-          {profile?.description || "Pick what this role may do."}
-        </span>
-      </label>
+      <div className="grid gap-1">
+        <span className="ui-label">Autonomy</span>
+        <AutonomyPicker value={autonomy} onChange={(level) => set("autonomy", level)} />
+        <span className="ui-helper">{AUTONOMY_LEVELS[autonomy].description}</span>
+      </div>
       <Textarea
         label="Standing instructions"
         rows={5}
@@ -347,7 +331,7 @@ function NewRole({ onCreated, onClose }: { onCreated: (id: string) => void; onCl
           ...(t.model ? { model: t.model } : {}),
           instructions: t.instructions,
           ...(t.purpose ? { purpose: t.purpose } : {}),
-          permissionProfile: t.profile,
+          autonomy: t.autonomy,
           readOnly: false,
           allowedCommands: [],
         },
@@ -469,7 +453,7 @@ function Overrides({ roleIds }: { roleIds: string[] }) {
 }
 
 /** Roles: who does a stage, on which model and with which permissions; set once, overridden per project. */
-export function RolesTab({ goTo }: { goTo: (tab: "pipelines" | "permissions") => void }) {
+export function RolesTab({ goTo }: { goTo: (tab: "pipelines") => void }) {
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const [selected, setSelected] = useState("");
   const [creating, setCreating] = useState(false);

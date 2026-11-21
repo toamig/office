@@ -82,7 +82,9 @@ export function codexHeadlessArgs(
   const flags = ["--json"];
   if (o.role?.model) flags.push("-m", o.role.model);
   if (o.role?.effort) flags.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
-  const sandbox = o.role
+  const sandbox = o.permission?.kind === "readonly" || o.role?.autonomy === "ask-first"
+    ? "read-only"
+    : o.role
     ? (o.role.codexSandbox ?? (o.role.readOnly ? "read-only" : "workspace-write"))
     : null;
   if (o.resumeId) {
@@ -95,7 +97,8 @@ export function codexHeadlessArgs(
   flags.push("--skip-git-repo-check", "-o", resultFile);
   const instructions = o.role?.instructions.trim();
   const prompt = instructions ? `${instructions}\n\n${o.prompt}` : o.prompt;
-  return o.resumeId ? ["exec", "resume", ...flags, o.resumeId, prompt] : ["exec", ...flags, prompt];
+  const exec = o.role?.autonomy || o.permission?.kind === "readonly" ? ["-a", "never", "exec"] : ["exec"];
+  return o.resumeId ? [...exec, "resume", ...flags, o.resumeId, prompt] : [...exec, ...flags, prompt];
 }
 
 /** Codex through its official CLI (plan 7.3). */
@@ -141,12 +144,23 @@ export class CodexProvider implements Provider {
     return knownCodexModels();
   }
 
-  interactiveCommand(o: RunOptions): CommandSpec {
+  private interactiveArgs(o: RunOptions): string[] {
     const args: string[] = [];
     if (o.role?.model) args.push("-m", o.role.model);
     if (o.role?.effort) args.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
+    if (o.role?.codexSandbox) args.push("-s", o.role.codexSandbox);
+    if (o.role?.autonomy) args.push("-a", {
+      "ask-first": "untrusted",
+      "act-on-risk": "on-request",
+      "full-auto": "never",
+    }[o.role.autonomy]);
+    for (const dir of o.addDirs ?? []) args.push("--add-dir", dir);
     args.push("-C", o.cwd);
-    return this.command(args, o.env);
+    return args;
+  }
+
+  interactiveCommand(o: RunOptions): CommandSpec {
+    return this.command(this.interactiveArgs(o), o.env);
   }
 
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun {
@@ -178,6 +192,7 @@ export class CodexProvider implements Provider {
         cwd: o.cwd,
         officeSessionId: o.officeSessionId,
         prompt: o.message ?? "",
+        permission: o.permission,
         role: { ...role, ...(o.model ? { model: o.model } : {}) },
         ...(o.resume && o.threadId ? { resumeId: o.threadId } : {}),
       },
@@ -189,7 +204,7 @@ export class CodexProvider implements Provider {
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec {
     // Without a thread id yet, continue the most recent session of this folder.
     return this.command(
-      ["resume", ...(providerSessionId ? [providerSessionId] : ["--last"])],
+      [...this.interactiveArgs(o), "resume", ...(providerSessionId ? [providerSessionId] : ["--last"])],
       o.env,
     );
   }

@@ -10,6 +10,7 @@ import { PreferencesPanel } from "./setup/PreferencesPanel";
 import { ProjectsStep } from "./setup/ProjectsStep";
 import { ToolsPanel } from "./setup/ToolsPanel";
 import { WorkspaceStep } from "./setup/WorkspaceStep";
+import { PermissionsTab } from "./board/PermissionsTab";
 
 /** Setup: the workspace, the tools table, preferences and the inventory, as plain settings. */
 export function Setup() {
@@ -65,6 +66,14 @@ export function Setup() {
         <ModulesPanel />
         <AboutPanel />
         {w?.configured && <InventoryPanel />}
+        {w?.configured && (
+          <details className="span-all">
+            <summary className="ui-label cursor-pointer">Advanced</summary>
+            <Card title="Permission profiles">
+              <PermissionsTab />
+            </Card>
+          </details>
+        )}
       </div>
     </Page>
   );

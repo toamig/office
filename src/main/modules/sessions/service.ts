@@ -1,4 +1,11 @@
 import { randomUUID } from "node:crypto";
+import {
+  applyAutonomy,
+  DEFAULT_AUTONOMY,
+  effectiveAutonomy,
+  roleAutonomy,
+  type AutonomyLevel,
+} from "../../../shared/autonomy";
 import type {
   PtyHistory,
   SessionMode,
@@ -35,6 +42,7 @@ export interface SessionServiceDeps {
   logsDir: string;
   /** How a session opens when the caller does not say: the machine setting. Terminal when absent. */
   defaultMode?: () => SessionMode;
+  autonomySettings?: () => { autonomy: AutonomyLevel; confirmedFullAuto: boolean };
   /** Days a finished session may sit unused before it is asked about. Two when absent. */
   idleDays?: () => number;
   now?: () => Date;
@@ -48,6 +56,7 @@ interface DbSession {
   cwd: string;
   branch: string | null;
   role: string | null;
+  autonomy: AutonomyLevel | null;
   title: string | null;
   status: SessionStatus;
   interactive: number;
@@ -87,6 +96,7 @@ export class SessionService {
   /** Where terminal output goes (the renderer); set by the app shell. */
   sink: ((id: string, data: string, end: number) => void) | null = null;
   private readonly runtime = new Map<string, Runtime>();
+  private readonly autonomyChanges = new Set<string>();
   private timer: NodeJS.Timeout | undefined;
   /** The chat side of a session, set by the app: sending a message, stopping, and whether it is alive. */
   chat: {
@@ -133,6 +143,12 @@ export class SessionService {
   // ---------- queries ----------
 
   private row(r: DbSession): SessionRow {
+    const role = this.findRole(r.role, r.project_id);
+    const level =
+      !SESSION_LABELS.has(r.role ?? "") && r.provider !== "terminal" &&
+      (r.autonomy || r.mode === "chat" || r.conversation_started)
+        ? this.effectiveLevel(r.autonomy ?? roleAutonomy(role))
+        : undefined;
     return {
       id: r.id,
       provider: r.provider,
@@ -141,6 +157,7 @@ export class SessionService {
       cwd: r.cwd,
       branch: r.branch,
       role: r.role,
+      ...(level ? { autonomy: level } : {}),
       title: r.title,
       status: r.status,
       interactive: r.interactive === 1,
@@ -213,6 +230,55 @@ export class SessionService {
     return this.resolveRole(row.role, row.projectId ?? undefined);
   }
 
+  private findRole(id: string | null, projectId: string | null): Role | undefined {
+    if (!id || SESSION_LABELS.has(id)) return undefined;
+    const ws = this.deps.workspace();
+    const project = ws?.projects.find((p) => p.id === projectId);
+    return ws?.roles[project?.roles?.[id] ?? id];
+  }
+
+  private effectiveLevel(level?: AutonomyLevel): AutonomyLevel {
+    const settings = this.deps.autonomySettings?.();
+    return effectiveAutonomy(level ?? settings?.autonomy ?? DEFAULT_AUTONOMY, settings?.confirmedFullAuto === true);
+  }
+
+  private checkedLevel(level: AutonomyLevel): AutonomyLevel {
+    if (level !== this.effectiveLevel(level)) {
+      throw new IpcFailure("confirm-autonomy", "Confirm full auto before using it.");
+    }
+    return level;
+  }
+
+  private agentRole(provider: string, role: Role | undefined, level?: AutonomyLevel): Role {
+    const base = role ?? { provider, instructions: "", readOnly: false, allowedCommands: [] };
+    if (!level || (base.readOnly && !base.autonomy)) return base;
+    return applyAutonomy(base, level);
+  }
+
+  roleForAgent(row: SessionRow): Role {
+    return this.agentRole(row.provider, this.findRole(row.role, row.projectId), row.autonomy);
+  }
+
+  async setAutonomy(id: string, requested: AutonomyLevel): Promise<SessionRow> {
+    const row = this.get(id);
+    if (!row.autonomy) throw new IpcFailure("no-autonomy", "This session has no autonomy setting.");
+    const level = this.checkedLevel(requested);
+    if (row.autonomy === level) return row;
+    if (this.autonomyChanges.has(id) || row.status === "working" || row.status === "needs-you")
+      throw new IpcFailure("busy", "Stop the current turn before changing autonomy.");
+    this.autonomyChanges.add(id);
+    try {
+      if (row.running) await this.stop(id);
+      if (this.get(id).running)
+        throw new IpcFailure("busy", "The previous process is still stopping.");
+      this.deps.db.prepare("UPDATE sessions SET autonomy = ? WHERE id = ?").run(level, id);
+      this.emitStatus(id);
+      return row.mode === "terminal" && row.running ? this.resume(id) : this.get(id);
+    } finally {
+      this.autonomyChanges.delete(id);
+    }
+  }
+
   /** Resolves a role id, honouring a project's override (plan 5.2). */
   resolveRole(roleId: string, projectId?: string): Role {
     const ws = this.deps.workspace();
@@ -251,10 +317,15 @@ export class SessionService {
     const cwd = input.cwd ?? (input.projectId ? this.deps.projectPath(input.projectId) : undefined);
     if (!cwd) throw new IpcFailure("no-folder", "Pick a project or a folder to run in");
     const id = randomUUID();
+    const autonomy = extra.restricted
+      ? undefined
+      : input.autonomy
+        ? this.checkedLevel(input.autonomy)
+        : this.effectiveLevel(roleAutonomy(role));
     const spec = provider.interactiveCommand({
       cwd,
       officeSessionId: id,
-      ...(role ? { role } : {}),
+      role: this.agentRole(providerId, role, autonomy),
       ...(extra.addDirs ? { addDirs: extra.addDirs } : {}),
     });
     const title = input.title ?? (input.roleId ? `${input.roleId}` : provider.label);
@@ -268,6 +339,7 @@ export class SessionService {
         roleId: extra.roleLabel ?? input.roleId ?? null,
         title,
         incognito: extra.incognito === true,
+        ...(autonomy ? { autonomy } : {}),
       });
       void readStatus(cwd).then((status) => {
         if (status.ok) this.setBranch(id, status.status.branch);
@@ -291,6 +363,7 @@ export class SessionService {
       projectId: input.projectId ?? null,
       roleId: extra.roleLabel ?? input.roleId ?? null,
       title,
+      ...(autonomy ? { autonomy } : {}),
       ...(input.prompt ? { prompt: input.prompt } : {}),
     });
     // The branch the session works on, shown in the session list (the folder may be a worktree).
@@ -309,12 +382,13 @@ export class SessionService {
     roleId: string | null;
     title: string;
     incognito?: boolean;
+    autonomy?: AutonomyLevel;
   }): SessionRow {
     const now = nowIso();
     this.deps.db
       .prepare(
         `INSERT INTO sessions (id, provider, provider_session_id, project_id, cwd, branch, role, title, status,
-           interactive, created_at, updated_at, mode, incognito) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'idle', 1, ?, ?, 'chat', ?)`,
+           interactive, created_at, updated_at, mode, incognito, autonomy) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'idle', 1, ?, ?, 'chat', ?, ?)`,
       )
       .run(
         o.id,
@@ -327,6 +401,7 @@ export class SessionService {
         now,
         now,
         o.incognito ? 1 : 0,
+        o.autonomy ?? null,
       );
     this.deps.bus.emit("session.status", { id: o.id, status: "idle" }, o.projectId ?? undefined);
     return this.get(o.id);
@@ -380,13 +455,14 @@ export class SessionService {
     existing?: boolean;
     /** A new provider conversation begins with this process. */
     started?: boolean;
+    autonomy?: AutonomyLevel;
   }): SessionRow {
     const now = nowIso();
     if (!o.existing) {
       this.deps.db
         .prepare(
           `INSERT INTO sessions (id, provider, provider_session_id, project_id, cwd, branch, role, title, status,
-             interactive, created_at, updated_at, conversation_started) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'starting', 1, ?, ?, ?)`,
+             interactive, created_at, updated_at, conversation_started, autonomy) VALUES (?, ?, ?, ?, ?, NULL, ?, ?, 'starting', 1, ?, ?, ?, ?)`,
         )
         .run(
           o.id,
@@ -399,6 +475,7 @@ export class SessionService {
           now,
           now,
           o.started ? 1 : 0,
+          o.autonomy ?? null,
         );
     } else {
       this.deps.db
@@ -443,13 +520,10 @@ export class SessionService {
     const providerSessionId = row.providerSessionId ?? (ownId ? row.id : "");
     // A conversation that never ran (a chat with no message yet) is started, not resumed: --resume of an
     // unknown conversation fails, and --session-id of a known one does.
+    const options = { cwd: row.cwd, officeSessionId: id, role: this.roleForAgent(row) };
     const spec = row.conversationStarted
-      ? provider.resumeCommand(providerSessionId, { cwd: row.cwd, officeSessionId: id })
-      : provider.interactiveCommand({
-          cwd: row.cwd,
-          officeSessionId: id,
-          ...(this.roleOfSession(row) ? { role: this.roleOfSession(row) as Role } : {}),
-        });
+      ? provider.resumeCommand(providerSessionId, options)
+      : provider.interactiveCommand(options);
     if (!row.conversationStarted) this.markStarted(id);
     this.pty.release(id);
     return this.launch({

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AutonomyLevel } from "./autonomy";
 import { Workspace } from "./schemas";
 
 /** What the renderer learns about the app configuration. Never includes the relay token. */
@@ -594,8 +595,6 @@ export type ChatLine = z.infer<typeof ChatLine>;
 /** What the chat's header lets the owner choose. */
 export const ChatOptions = z.object({
   model: z.string().optional(),
-  /** Claude Code's permission mode; for Codex the sandbox is shown instead. */
-  permissionMode: z.string().optional(),
 });
 export type ChatOptions = z.infer<typeof ChatOptions>;
 
@@ -605,10 +604,7 @@ export const ChatState = z.object({
   kind: z.enum(["claude", "codex"]),
   /** True while a turn runs. */
   working: z.boolean(),
-  /** The sandbox of a Codex chat (shown in the header); empty for Claude Code. */
-  sandbox: z.string(),
   models: z.array(z.string()),
-  permissionModes: z.array(z.string()),
   options: ChatOptions,
 });
 export type ChatState = z.infer<typeof ChatState>;
@@ -621,6 +617,7 @@ export const SessionRow = z.object({
   cwd: z.string(),
   branch: z.string().nullable(),
   role: z.string().nullable(),
+  autonomy: AutonomyLevel.optional(),
   title: z.string().nullable(),
   status: SessionStatus,
   interactive: z.boolean(),
@@ -651,6 +648,7 @@ export const StartSession = z.object({
   /** Used when no role is given. */
   providerId: z.string().optional(),
   model: z.string().optional(),
+  autonomy: AutonomyLevel.optional(),
   projectId: z.string().optional(),
   /** Folder to run in; defaults to the project folder. */
   cwd: z.string().optional(),
@@ -1049,6 +1047,8 @@ export const AppSettings = z.object({
   inspectorHidden: z.record(z.string(), z.boolean()),
   panes: z.record(z.string(), z.number()),
   sessionMode: z.enum(["chat", "terminal"]),
+  autonomy: AutonomyLevel,
+  confirmedFullAuto: z.boolean(),
   sessionIdleDays: z.number(),
   sessionsMulti: z.boolean(),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
@@ -1073,6 +1073,8 @@ export const AppSettingsPatch = z.object({
   /** Divider positions to remember, by pane id; they are merged into the saved ones. */
   panes: z.record(z.string(), z.number()).optional(),
   sessionMode: z.enum(["chat", "terminal"]).optional(),
+  autonomy: AutonomyLevel.optional(),
+  confirmedFullAuto: z.literal(true).optional(),
   sessionIdleDays: z.number().int().min(1).max(60).optional(),
   sessionsMulti: z.boolean().optional(),
   quietHours: z

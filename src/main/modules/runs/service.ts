@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
+import { applyAutonomy, effectiveAutonomy } from "../../../shared/autonomy";
 import type { Role } from "../../../shared/types";
 import type { Bus } from "../../core/bus";
 import type { Db } from "../../core/db";
@@ -41,6 +42,7 @@ export interface RunServiceDeps {
   bus: Bus;
   providers: ProviderRegistry;
   runsDir: string;
+  fullAutoConfirmed?: () => boolean;
   /**
    * What a builder stage needs to ask the owner. Without it, a writable run gets only its allowed commands
    * and anything else is refused.
@@ -73,6 +75,10 @@ export class RunService {
     if (!provider) throw new IpcFailure("no-provider", `Unknown provider "${req.providerId}"`);
     const id = randomUUID();
     const dir = join(this.deps.runsDir, id);
+    const role = req.kind === "stage" && req.role?.autonomy
+      ? applyAutonomy(req.role, effectiveAutonomy(req.role.autonomy, this.deps.fullAutoConfirmed?.() === true))
+      : req.role;
+    const permission = this.permissionFor({ ...req, ...(role ? { role } : {}) }, id, dir);
     mkdirSync(dir, { recursive: true });
     this.deps.db
       .prepare(
@@ -91,12 +97,12 @@ export class RunService {
       );
 
     const run = provider.headless({
-      permission: this.permissionFor(req, id, dir),
+      permission,
       cwd: req.cwd,
       prompt: req.prompt,
       officeSessionId: id,
       runDir: dir,
-      ...(req.role ? { role: req.role } : {}),
+      ...(role ? { role } : {}),
       ...(req.resumeId ? { resumeId: req.resumeId } : {}),
       ...(req.tools ? { tools: req.tools } : {}),
     });
@@ -139,6 +145,7 @@ export class RunService {
       return { kind: "readonly" };
     }
     const permissions = this.deps.permissions;
+    if (req.kind === "stage" && req.role.autonomy === "full-auto") return { kind: "full" };
     if (req.kind === "stage" && permissions) {
       return { kind: "ask", mcpConfig: permissions.writeMcpConfig(id, dir) };
     }

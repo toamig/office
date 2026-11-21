@@ -1,4 +1,4 @@
-import { allProfiles } from "@shared/permissions";
+import { AUTONOMY_LEVELS } from "@shared/autonomy";
 import type { SessionRow } from "@shared/models";
 import { StatusChip } from "../../components/StatusChip";
 import { useQuery } from "../../lib/hooks";
@@ -24,9 +24,6 @@ export function AgentInspector({ session }: { session: SessionRow | undefined })
   }
   const project = projects.data?.find((p) => p.id === session.projectId)?.name;
   const role = session.role ? workspace.data?.workspace?.roles[session.role] : undefined;
-  const profile = allProfiles(workspace.data?.workspace?.permissionProfiles).find(
-    (p) => p.id === role?.permissionProfile,
-  );
   const waiting = (requests.data ?? []).filter((r) => r.runId === session.id);
   const changed = session.projectId && !status.error ? (status.data?.files ?? []) : [];
   const state = chat.data;
@@ -62,8 +59,12 @@ export function AgentInspector({ session }: { session: SessionRow | undefined })
               <dd>{role.effort}</dd>
             </>
           )}
-          <dt>Permissions</dt>
-          <dd>{profile?.name ?? "Ask first"}</dd>
+          {session.autonomy && (
+            <>
+              <dt>Autonomy</dt>
+              <dd>{AUTONOMY_LEVELS[session.autonomy].label}</dd>
+            </>
+          )}
           <dt>Started</dt>
           <dd>
             <Time iso={session.createdAt} />

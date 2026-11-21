@@ -30,11 +30,8 @@ export interface ChatServiceDeps {
   writeMcpConfig: (id: string, dir: string) => string;
 }
 
-/** Claude Code's permission modes a chat can use, as `claude --permission-mode` lists them (bypass is not offered here). */
 /** What a new saved chat is called until its first message names it. */
 export const NEW_CHAT = "New chat";
-
-export const PERMISSION_MODES = ["manual", "acceptEdits", "plan", "auto", "dontAsk"];
 
 /** How many times a start that the program refuses over the conversation flag is tried, flipping the flag each time. */
 const MAX_START_ATTEMPTS = 3;
@@ -216,27 +213,21 @@ export class ChatService {
     const row = this.session(id);
     const provider = this.deps.providers.get(row.provider);
     const kind = provider?.chatKind ?? "claude";
-    const role = row.role ? this.role(row) : undefined;
     return {
       mode: row.mode,
       kind,
       working: this.working(id),
-      sandbox:
-        kind === "codex"
-          ? (role?.codexSandbox ?? (role?.readOnly ? "read-only" : "workspace-write"))
-          : "",
       models: provider ? await provider.models() : [],
-      permissionModes: kind === "claude" ? PERMISSION_MODES : [],
       options: this.options(id),
     };
   }
 
-  private role(row: SessionRow) {
-    try {
-      return this.deps.sessions.roleOfSession(row);
-    } catch {
-      return undefined;
-    }
+  private permission(row: SessionRow, kind: "claude" | "codex"): RunPermission {
+    const role = this.deps.sessions.roleForAgent(row);
+    if (role.readOnly || this.restricted(row.id)) return { kind: "readonly" };
+    if (role.autonomy === "full-auto") return { kind: "full" };
+    if (kind === "codex") return { kind: "ask" };
+    return { kind: "ask", mcpConfig: this.deps.writeMcpConfig(row.id, this.dir(row.id)) };
   }
 
   // ---------- sending ----------
@@ -255,11 +246,6 @@ export class ChatService {
     this.deps.sessions.setStatus(id, "working");
 
     this.nameFromFirstMessage(row, text);
-    const role = this.role(row);
-    const permission: RunPermission =
-      role?.readOnly || this.restricted(id)
-        ? { kind: "readonly" }
-        : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
     const kind = provider.chatKind ?? "claude";
     if (kind === "claude") {
       let live = this.live.get(id);
@@ -274,8 +260,8 @@ export class ChatService {
       cwd: row.cwd,
       officeSessionId: id,
       resume: Boolean(threadId),
-      ...(role ? { role } : {}),
-      permission,
+      role: this.deps.sessions.roleForAgent(row),
+      permission: this.permission(row, kind),
       ...(picked.model ? { model: picked.model } : {}),
       message: text,
       ...(threadId ? { threadId } : {}),
@@ -309,25 +295,17 @@ export class ChatService {
     turn: NonNullable<Live["turn"]>,
   ): Live {
     const picked = this.options(id);
-    const role = this.role(row);
     const restricted = this.restricted(id);
     const incognito = this.secret.get(id)?.incognito === true;
-    const permission: RunPermission =
-      role?.readOnly || restricted
-        ? { kind: "readonly" }
-        : { kind: "ask", mcpConfig: this.deps.writeMcpConfig(id, this.dir(id)) };
     const spec = provider.chatCommand!({
       cwd: row.cwd,
       officeSessionId: id,
       resume: row.conversationStarted,
       ...(restricted ? { restricted: true } : {}),
       ...(incognito ? { incognito: true } : {}),
-      ...(role ? { role } : {}),
-      permission,
+      role: this.deps.sessions.roleForAgent(row),
+      permission: this.permission(row, "claude"),
       ...(picked.model ? { model: picked.model } : {}),
-      ...(picked.permissionMode
-        ? { permissionMode: picked.permissionMode === "default" ? "manual" : picked.permissionMode }
-        : {}),
       runDir: this.dir(id),
       addDirs: this.addDirs(id),
     });

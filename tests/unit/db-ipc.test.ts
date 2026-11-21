@@ -19,6 +19,9 @@ describe("database", () => {
     first.close();
     const second = openDb(path);
     expect(migrate(second)).toEqual([]);
+    expect(second.prepare("PRAGMA table_info(sessions)").all()).toContainEqual(
+      expect.objectContaining({ name: "autonomy", type: "TEXT" }),
+    );
     const tables = second
       .prepare("SELECT name FROM sqlite_master WHERE type='table'")
       .all()

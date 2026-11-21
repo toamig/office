@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AutonomyLevel, DEFAULT_AUTONOMY } from "./autonomy";
 
 /** Machine settings: local to one PC, never committed (plan 5.1). */
 export const MachineSettings = z.object({
@@ -39,6 +40,8 @@ export const MachineSettings = z.object({
   panes: z.record(z.string(), z.number()).default({}),
   /** How a new agent session opens: as a chat or in a terminal. */
   sessionMode: z.enum(["chat", "terminal"]).default("chat"),
+  autonomy: AutonomyLevel.default(DEFAULT_AUTONOMY),
+  confirmedFullAuto: z.boolean().default(false),
   /** Days a finished session may sit unused before Office asks whether it is still needed. */
   sessionIdleDays: z.number().int().min(1).default(2),
   /** Whether Sessions shows several sessions at once; off, it shows one at a time. */
@@ -89,6 +92,7 @@ export const Role = z.object({
   instructions: z.string().default(""),
   /** One line on what the role is for. */
   purpose: z.string().optional(),
+  autonomy: AutonomyLevel.optional(),
   /** The id of a permission profile (built in, or one of the workspace's own). */
   permissionProfile: z.string().optional(),
   /** The fields below are what roles had before profiles; a role that has none of its own gets a profile at load. */

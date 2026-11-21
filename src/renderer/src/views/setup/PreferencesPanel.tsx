@@ -4,6 +4,7 @@ import { Button, Card, SegmentedControl as Segmented, notifyDone, notifyError } 
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { PALETTES } from "@shared/theme";
+import { AutonomyPicker } from "../../components/AutonomyPicker";
 
 /** What a notification kind is called on screen, by the value the code uses. */
 const KINDS: Array<[string, string]> = [
@@ -127,6 +128,12 @@ export function PreferencesPanel() {
         )}
       </Card>
       <Card title="Sessions" testId="panel-sessions">
+        {s && (
+          <div className="mb-3 grid gap-1">
+            <span className="ui-label">Default autonomy</span>
+            <AutonomyPicker value={s.autonomy} label="Default autonomy" onChange={(autonomy) => set({ autonomy })} />
+          </div>
+        )}
         {s && (
           <div className="flex flex-wrap items-center gap-2">
             <span>Ask whether a session is still needed after</span>

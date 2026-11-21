@@ -220,6 +220,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     bus,
     providers,
     runsDir: runsDir(),
+    fullAutoConfirmed: () => box.current.confirmedFullAuto,
     permissions: {
       broker,
       writeMcpConfig: (runId, dir) => writePermissionMcpConfig(dir, runId, bridgeScript),
@@ -250,6 +251,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     projectPath: folderOf(projects),
     logsDir: sessionsDir(),
     defaultMode: () => box.current.sessionMode,
+    autonomySettings: () => box.current,
     idleDays: () => box.current.sessionIdleDays,
   });
   const chat = new ChatService({
@@ -442,6 +444,7 @@ function createFix(
     startSession: (input) =>
       agents.sessions.start({
         providerId: input.providerId,
+        autonomy: "ask-first",
         ...(input.projectId ? { projectId: input.projectId } : {}),
         cwd: input.cwd,
         title: input.title,

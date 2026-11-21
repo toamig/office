@@ -9,7 +9,7 @@ import type { Role } from "../../../shared/types";
  * - allowlist: the role's allowed commands run; anything else is refused and named in the run log.
  */
 export interface RunPermission {
-  kind: "readonly" | "ask" | "allowlist";
+  kind: "readonly" | "ask" | "allowlist" | "full";
   /** The MCP config that serves the permission tool (kind "ask" only). */
   mcpConfig?: string;
 }

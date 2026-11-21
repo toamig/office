@@ -58,6 +58,7 @@ export function permissionFlags(o: RunOptions): string[] {
   const allowed = o.role?.allowedCommands ?? [];
   const denied = disallowedTools(o.role?.deniedCommands ?? []);
   const kind = o.permission?.kind;
+  if (kind === "full") return ["--permission-prompts", "none"];
   if (kind === "readonly")
     return [...allowedTools(READ_ONLY_TOOLS), ...denied, "--permission-prompts", "none"];
   if (kind === "allowlist")
@@ -75,6 +76,12 @@ export function permissionFlags(o: RunOptions): string[] {
   }
   // No kind given: the older behaviour, read-only roles get read tools.
   return [...(o.role?.readOnly ? allowedTools(READ_ONLY_TOOLS) : []), ...denied];
+}
+
+function autonomyFlags(o: RunOptions): string[] {
+  if (o.role?.autonomy !== "ask-first") return [];
+  const settings = { permissions: { ask: ["Edit", "Write", "NotebookEdit", "Bash", "PowerShell"] } };
+  return ["--settings", JSON.stringify(settings)];
 }
 
 /** The arguments of `claude -p` for one headless run. */
@@ -158,12 +165,21 @@ export class ClaudeCodeProvider implements Provider {
     if (chosen) flags.push("--permission-mode", chosen);
     if (role?.instructions) flags.push("--append-system-prompt", role.instructions);
     for (const dir of o.addDirs ?? []) flags.push("--add-dir", dir);
-    return flags;
+    return [...flags, ...autonomyFlags(o)];
+  }
+
+  private terminalFlags(o: RunOptions): string[] {
+    if (!o.role?.autonomy) return this.roleFlags(o);
+    return [
+      ...this.roleFlags(o),
+      ...allowedTools(o.role?.allowedCommands ?? []),
+      ...disallowedTools(o.role?.deniedCommands ?? []),
+    ];
   }
 
   /** The Office session id is the Claude session id, so hook events map straight back (plan 7.2). */
   interactiveCommand(o: RunOptions): CommandSpec {
-    return this.command(["--session-id", o.officeSessionId, ...this.roleFlags(o)], o.env);
+    return this.command(["--session-id", o.officeSessionId, ...this.terminalFlags(o)], o.env);
   }
 
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun {
@@ -231,7 +247,7 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec {
-    return this.command(["--resume", providerSessionId], o.env);
+    return this.command(["--resume", providerSessionId, ...this.terminalFlags(o)], o.env);
   }
 
   inventory(projectPath?: string): Promise<Inventory> {

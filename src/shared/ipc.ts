@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { AutonomyLevel } from "./autonomy";
 import { Automation, PermissionProfile, Pipeline, Role } from "./schemas";
 import {
   AppSettings,
@@ -251,6 +252,7 @@ export const channels = {
     res: z.array(SessionRow),
   },
   "sessions.start": { req: StartSession, res: SessionRow },
+  "sessions.setAutonomy": { req: z.object({ id: z.string(), level: AutonomyLevel }), res: SessionRow },
   "sessions.startCommand": {
     req: z.object({
       title: z.string(),

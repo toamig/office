@@ -4,6 +4,7 @@ import { office } from "../../lib/ipc";
 import { useSessionActions } from "../../components/SessionActions";
 import { Button, Dropdown as Select } from "../../ui";
 import { StatusChip } from "../../components/StatusChip";
+import { AutonomyPicker } from "../../components/AutonomyPicker";
 
 /**
  * The strip above a session's terminal: its name (a picker when panes are split), status, branch and a Stop
@@ -50,6 +51,13 @@ export function PaneHeader({
         </span>
       )}
       <div className="flex-1" />
+      {session.autonomy && (
+        <AutonomyPicker
+          value={session.autonomy}
+          disabled={session.status === "working" || session.status === "needs-you"}
+          onChange={(level) => office.invoke("sessions.setAutonomy", { id: session.id, level }).then(onChanged)}
+        />
+      )}
       {session.provider !== "terminal" && session.mode === "terminal" && (
         <button
           className="chat-link"

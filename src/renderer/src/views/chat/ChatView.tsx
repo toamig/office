@@ -2,8 +2,9 @@ import { GitBranch, Square } from "lucide-react";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatState, SessionRow } from "@shared/models";
+import { AutonomyPicker } from "../../components/AutonomyPicker";
 import { PermissionRequests } from "../../components/PermissionRequests";
-import { Button, OverflowMenu, StatusBadge, notifyError } from "../../ui";
+import { Button, OverflowMenu, notifyError } from "../../ui";
 import { isChatSession } from "@shared/roles";
 import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
@@ -12,24 +13,8 @@ import { ChatMessage } from "./Messages";
 import { Dropdown as Select } from "../../ui";
 import { StatusChip } from "../../components/StatusChip";
 
-/** The Codex sandbox levels in words. */
-const SANDBOX_LABELS: Record<string, string> = {
-  "read-only": "read only",
-  "workspace-write": "can write to the workspace",
-  "danger-full-access": "full access",
-};
-
-/** The permission modes in words, as the header shows them. */
 /** Said once, where the terminal is offered: what it is for. */
 const TERMINAL_HINT = "For slash commands, logins and anything the chat does not show";
-
-const PERMISSION_LABELS: Record<string, string> = {
-  manual: "Ask first (default)",
-  dontAsk: "Allowed commands only",
-  acceptEdits: "Accept edits",
-  plan: "Plan only",
-  auto: "Auto",
-};
 
 /** The conversation of one chat session, built from its stored events and then from the live ones. */
 function useConversation(id: string): { conversation: Conversation; ready: boolean } {
@@ -82,7 +67,7 @@ export function ChatView({
   /** Buttons for the end of the header, from the view that owns the chat (Chat adds Close). */
   headerActions?: ReactNode;
 }) {
-  // A Chat is a plain conversation: no wrap up, no terminal, no permission modes (it cannot ask for anything).
+  // A Chat is a plain conversation: no wrap up, no terminal, no autonomy picker (it cannot ask for anything).
   const plain = isChatSession(session);
   const { conversation, ready } = useConversation(session.id);
   const [state, setState] = useState<ChatState | null>(null);
@@ -123,7 +108,7 @@ export function ChatView({
 
   const { wrapUp } = useSessionActions();
   const options = state?.options ?? {};
-  // A narrow panel keeps the title and the status; model, permissions and Open in terminal go in a menu.
+  // A narrow panel keeps the title and the status; model and Open in terminal go in a menu.
   const header = useRef<HTMLElement>(null);
   const [narrow, setNarrow] = useState(false);
   useEffect(() => {
@@ -158,14 +143,12 @@ export function ChatView({
             <Square size={12} /> Stop
           </button>
         )}
-        {state && state.kind === "codex" && (
-          <span data-testid="chat-sandbox">
-            <StatusBadge
-              status="info"
-              tone="attention"
-              label={`Sandbox: ${SANDBOX_LABELS[state.sandbox] ?? state.sandbox}`}
-            />
-          </span>
+        {!plain && session.autonomy && (
+          <AutonomyPicker
+            value={session.autonomy}
+            disabled={conversation.working}
+            onChange={(level) => office.invoke("sessions.setAutonomy", { id: session.id, level }).then(onChanged)}
+          />
         )}
         {!plain && (
           <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">
@@ -174,7 +157,7 @@ export function ChatView({
         )}
         {narrow && !plain ? (
           <OverflowMenu
-            label="Model, permissions and more"
+            label="Model and more"
             items={[
               ...(state?.kind === "claude"
                 ? [
@@ -186,18 +169,6 @@ export function ChatView({
                           office.invoke("chat.setOptions", {
                             id: session.id,
                             options: { model: m },
-                          }),
-                        );
-                      },
-                    })),
-                    ...state.permissionModes.map((m) => ({
-                      label: `Permissions: ${PERMISSION_LABELS[m] ?? m}${(options.permissionMode ?? "manual") === m ? " (current)" : ""}`,
-                      onSelect: () => {
-                        setState({ ...state, options: { ...options, permissionMode: m } });
-                        void run(() =>
-                          office.invoke("chat.setOptions", {
-                            id: session.id,
-                            options: { permissionMode: m },
                           }),
                         );
                       },
@@ -246,32 +217,6 @@ export function ChatView({
                     </option>
                   ))}
                 </Select>
-                {!plain && (
-                  <Select
-                    className="chat-select"
-                    aria-label="Permission mode"
-                    data-testid="chat-permission-mode"
-                    value={options.permissionMode ?? "manual"}
-                    onChange={(e) => {
-                      setState({
-                        ...state,
-                        options: { ...options, permissionMode: e.target.value },
-                      });
-                      void run(() =>
-                        office.invoke("chat.setOptions", {
-                          id: session.id,
-                          options: { permissionMode: e.target.value },
-                        }),
-                      );
-                    }}
-                  >
-                    {state.permissionModes.map((m) => (
-                      <option key={m} value={m}>
-                        {PERMISSION_LABELS[m] ?? m}
-                      </option>
-                    ))}
-                  </Select>
-                )}
               </>
             )}
             {!plain && (

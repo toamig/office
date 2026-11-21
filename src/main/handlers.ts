@@ -264,6 +264,7 @@ function registerSetupHandlers(ctx: AppContext): void {
 /** Agent sessions, their layout, hooks and end-of-session capture. */
 function registerSessionHandlers(ctx: AppContext): void {
   ctx.ipc.handle("sessions.list", (req) => ctx.sessions.list(req));
+  ctx.ipc.handle("sessions.setAutonomy", ({ id, level }) => ctx.sessions.setAutonomy(id, level));
   ctx.ipc.handle("sessions.start", (req) => {
     const row = ctx.sessions.start(req);
     // Codex has no command that lists models, so a model the owner typed is kept for the next time.
@@ -537,6 +538,8 @@ function registerConfigHandlers(ctx: AppContext): void {
       inspectorHidden: s.inspectorHidden,
       panes: s.panes,
       sessionMode: s.sessionMode,
+      autonomy: s.autonomy === "full-auto" && !s.confirmedFullAuto ? "act-on-risk" : s.autonomy,
+      confirmedFullAuto: s.confirmedFullAuto,
       sessionIdleDays: s.sessionIdleDays,
       sessionsMulti: s.sessionsMulti,
       quietHours: s.quietHours ?? null,
@@ -546,6 +549,8 @@ function registerConfigHandlers(ctx: AppContext): void {
   };
   ctx.ipc.handle("settings.get", () => appSettings());
   ctx.ipc.handle("settings.set", (req) => {
+    if (req.autonomy === "full-auto" && !req.confirmedFullAuto && !ctx.settings().confirmedFullAuto)
+      throw new IpcFailure("confirm-autonomy", "Confirm full auto before using it.");
     queueMicrotask(() => ctx.bus.emit("settings.changed", {}));
     const { quietHours, panes, inspectorHidden, ...rest } = req;
     ctx.patchSettings({
