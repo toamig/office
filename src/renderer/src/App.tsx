@@ -26,6 +26,7 @@ import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
 import { Tools } from "./views/Tools";
+import { Workflows } from "./views/Workflows";
 import { Banner, NotificationStack, notify } from "./ui";
 import { Welcome } from "./views/welcome/Welcome";
 
@@ -59,6 +60,7 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;
   if (view === "tools") return <Tools />;
+  if (view === "workflows") return <Workflows />;
   if (view === "gallery" && Gallery)
     return (
       <Suspense fallback={null}>

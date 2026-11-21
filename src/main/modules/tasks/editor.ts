@@ -216,6 +216,16 @@ export class WorkspaceEditor {
     });
   }
 
+  async setWorkflowEnabled(id: string, enabled: boolean): Promise<void> {
+    await this.edit(`Workspace: ${enabled ? "enable" : "disable"} workflow ${id}`, (json) => {
+      const workflows = workflowsFor(WorkspaceSchema.parse(json));
+      if (!workflows.some((workflow) => workflow.id === id))
+        throw new IpcFailure("not-found", "That workflow no longer exists.");
+      json["workflows"] = workflows.map((workflow) => workflow.id === id ? { ...workflow, enabled } : workflow);
+      delete json["automations"];
+    });
+  }
+
   /** Removes a role, unless a pipeline stage or a project override still uses it. */
   async removeRole(id: string): Promise<void> {
     await this.edit(`Workspace: remove role ${id}`, (json) => {

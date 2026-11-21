@@ -446,6 +446,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     neutralFolder: dataDir,
     defaultProvider: cheapestProvider,
     output: (root, workflow, text) => workflowResults.save(root, workflow, text),
+    changed: () => bus.emit("workflow.changed", {}),
   });
   const modules = new ModuleManager({
     dir: () => modulesDir(),

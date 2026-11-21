@@ -1,6 +1,7 @@
 import {
   Bot,
   Brain as BrainIcon,
+  CalendarClock,
   Compass,
   FolderKanban,
   GitBranch,
@@ -30,6 +31,7 @@ export const RAIL: Array<{ id: ViewId; icon: ComponentType<{ size?: number }> }>
   { id: "explore", icon: Compass },
   { id: "setup", icon: Settings },
   { id: "tools", icon: Wrench },
+  { id: "workflows", icon: CalendarClock },
 ];
 
 /** The sidebar: icons and labels, or icons only when collapsed. */

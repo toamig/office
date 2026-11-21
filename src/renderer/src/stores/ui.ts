@@ -13,6 +13,7 @@ export type ViewId =
   | "explore"
   | "setup"
   | "tools"
+  | "workflows"
   | "gallery";
 
 interface Place {

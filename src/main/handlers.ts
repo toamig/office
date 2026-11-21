@@ -519,6 +519,8 @@ function registerConfigHandlers(ctx: AppContext): void {
   );
   ctx.ipc.handle("workflows.list", () => ctx.scheduler.list());
   ctx.ipc.handle("workflows.save", (req) => ctx.editor.saveWorkflow(req));
+  ctx.ipc.handle("workflows.create", (req) => ctx.editor.saveWorkflow(req, { absent: true }));
+  ctx.ipc.handle("workflows.setEnabled", (req) => ctx.editor.setWorkflowEnabled(req.id, req.enabled));
   ctx.ipc.handle("workflows.remove", (req) => ctx.editor.removeWorkflow(req.id));
   ctx.ipc.handle("workflows.results", () => ctx.workflowResults.list());
   ctx.ipc.handle("workflows.dismiss", (req) => ctx.workflowResults.dismiss(req.id));

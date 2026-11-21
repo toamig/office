@@ -13,7 +13,7 @@ export interface Shortcut {
 /** Every shortcut Office has, in the order the sheet shows them. Nothing else is bound. */
 export const SHORTCUTS: Shortcut[] = [
   { keys: "Ctrl+K", label: "Jump to anything" },
-  ...RAIL.map((v, i) => ({ keys: `Ctrl+${i + 1}`, label: `Go to ${VIEW_LABELS[v.id]}` })),
+  ...RAIL.slice(0, 9).map((v, i) => ({ keys: `Ctrl+${i + 1}`, label: `Go to ${VIEW_LABELS[v.id]}` })),
   { keys: "Ctrl+B", label: "Show or hide the sidebar" },
   { keys: "Ctrl+Shift+B", label: "Show or hide the details panel" },
   { keys: "Ctrl+Shift+A", label: "Start a session" },

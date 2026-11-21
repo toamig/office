@@ -1,10 +1,6 @@
 import { useState } from "react";
-import { WorkflowOutput, WorkflowRead, type Workflow } from "@shared/workflow";
+import { WorkflowOutput, WorkflowRead, workflowOutputLabels, type Workflow } from "@shared/workflow";
 import { Button, Dialog, Dropdown, Input, Textarea } from "../../ui";
-
-export const OUTPUT_NAMES: Record<Workflow["output"], string> = {
-  "worth-a-look": "Worth a look", pending: "Needs you", note: "Brain note",
-};
 
 const schedules = {
   manual: { pattern: null, label: "On demand" },
@@ -12,9 +8,6 @@ const schedules = {
   weekly: { pattern: "0 8 * * 1", label: "Mondays at 08:00" },
   custom: { pattern: "", label: "Custom schedule" },
 } as const;
-
-export const scheduleLabel = (schedule: string | null) =>
-  Object.values(schedules).find((item) => item.pattern === schedule)?.label ?? schedule ?? "On demand";
 
 export function WorkflowForm({ workflow, projects, providers, onSave, onClose, busy }: {
   workflow: Workflow | null;
@@ -77,7 +70,7 @@ export function WorkflowForm({ workflow, projects, providers, onSave, onClose, b
         <label className="grid gap-1">
           <span className="ui-label">Send result to</span>
           <Dropdown aria-label="Send result to" value={draft.output} onChange={(event) => update({ output: WorkflowOutput.parse(event.target.value) })}>
-            {WorkflowOutput.options.map((output) => <option key={output} value={output}>{OUTPUT_NAMES[output]}</option>)}
+            {WorkflowOutput.options.map((output) => <option key={output} value={output}>{workflowOutputLabels[output]}</option>)}
           </Dropdown>
         </label>
         <details open={Boolean(draft.model || draft.provider)}>

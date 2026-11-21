@@ -48,6 +48,7 @@ const READS: Partial<Record<ViewId, Array<() => void>>> = {
     () => prefetch("modules.list"),
   ],
   tools: [() => prefetch("tools.list", {}), () => prefetch("projects.list")],
+  workflows: [() => prefetch("workflows.list"), () => prefetch("projects.list"), () => prefetch("providers.list")],
 };
 
 /** Starts the reads of one view. Cheap to call again: a key that has fresh data is not read twice. */

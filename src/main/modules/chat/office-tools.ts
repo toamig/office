@@ -132,7 +132,7 @@ export class OfficeTools {
     const projects = this.projects(session).map(({ id, name }) => ({ id, name }));
     const ids = new Set(projects.map((project) => project.id));
     return {
-      workflows: this.deps.scheduler.list().filter((workflow) => !workflow.projectId || ids.has(workflow.projectId)),
+      workflows: workflowsFor(this.deps.store.state.workspace).filter((workflow) => !workflow.projectId || ids.has(workflow.projectId)),
       projects,
       pipelines: this.pipelines(),
     };
@@ -183,7 +183,10 @@ export class OfficeTools {
       return {
         title: "Run workflow now", fields: [], guard,
         preview: workflowPreview(workflow, this.project(session, workflow.projectId)?.name),
-        run: async () => ({ runId: await this.deps.scheduler.fire(workflow.id), message: `Ran ${workflow.name}.` }),
+        run: async () => {
+          const runId = await this.deps.scheduler.fire(workflow.id);
+          return { runId, message: runId ? `Ran ${workflow.name}.` : `${workflow.name} is already running.` };
+        },
       };
     }
     const previous = call.name === "office_update_workflow" ? this.workflow(session, call.input.id) : undefined;

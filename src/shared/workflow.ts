@@ -18,10 +18,12 @@ export const Workflow = z.object({
 });
 export type Workflow = z.infer<typeof Workflow>;
 
+export const WorkflowRunStatus = z.enum(["running", "done", "failed", "cancelled"]);
 export const WorkflowView = Workflow.extend({
   valid: z.boolean(),
   lastFiredAt: z.string().nullable(),
   nextRun: z.string().nullable(),
+  lastRun: z.object({ status: WorkflowRunStatus, result: z.string().nullable() }).nullable(),
 });
 export type WorkflowView = z.infer<typeof WorkflowView>;
 
@@ -43,18 +45,39 @@ export const workflowReadLabels: Record<Workflow["read"], string> = {
 
 const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
+function weekdayName(value: string): string | undefined {
+  if (/^[0-7]$/.test(value)) return weekdays[Number(value) % 7];
+  return weekdays.find((day) => day.slice(0, 3).toLowerCase() === value.toLowerCase());
+}
+
+function describeWeekdays(pattern: string): string | undefined {
+  const parts = pattern.split(",").map((part) => {
+    const [first, last, extra] = part.split("-");
+    if (!first || extra !== undefined) return undefined;
+    const start = weekdayName(first);
+    const end = last === undefined ? undefined : weekdayName(last);
+    if (!start || (last !== undefined && !end)) return undefined;
+    return end ? `${start} through ${end}` : start;
+  });
+  return parts.every(Boolean) ? parts.join(", ") : undefined;
+}
+
 export function describeSchedule(schedule: string | null): string {
   if (!schedule) return "On demand";
-  const [minute, hour, day, month, weekday] = schedule.trim().split(/\s+/);
+  const fields = schedule.trim().split(/\s+/);
+  if (fields.length !== 5) return "Custom schedule";
+  const [minute, hour, day, month, weekday] = fields;
   if (schedule === "* * * * *") return "Every minute";
   if (minute && /^\*\/\d+$/.test(minute) && hour === "*" && day === "*" && month === "*" && weekday === "*")
     return `Every ${minute.slice(2)} minutes`;
+  if (minute && /^\d{1,2}$/.test(minute) && hour === "*" && day === "*" && month === "*" && weekday === "*")
+    return Number(minute) === 0 ? "Every hour" : `At minute ${Number(minute)} of every hour`;
   if (minute && hour && /^\d{1,2}$/.test(minute) && /^\d{1,2}$/.test(hour) && month === "*") {
     const time = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
     if (day === "*" && weekday === "*") return `Daily at ${time}`;
-    if (day === "*" && weekday && /^[0-7](?:,[0-7])*$/.test(weekday)) {
-      const days = weekday.split(",").map((value) => weekdays[Number(value) % 7]).join(", ");
-      return `Every ${days} at ${time}`;
+    if (day === "*" && weekday) {
+      const days = describeWeekdays(weekday);
+      if (days) return `Every ${days} at ${time}`;
     }
     if (day && /^\d{1,2}$/.test(day) && weekday === "*") return `Day ${day} of each month at ${time}`;
   }

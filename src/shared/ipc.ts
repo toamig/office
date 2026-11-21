@@ -496,6 +496,8 @@ export const channels = {
   },
   "workflows.list": { req: z.void(), res: z.array(WorkflowView) },
   "workflows.save": { req: Workflow, res: z.void() },
+  "workflows.create": { req: Workflow, res: z.void() },
+  "workflows.setEnabled": { req: z.object({ id: z.string(), enabled: z.boolean() }), res: z.void() },
   "workflows.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "workflows.runNow": { req: z.object({ id: z.string() }), res: z.void() },
   "workflows.results": { req: z.void(), res: z.array(WorkflowResult) },

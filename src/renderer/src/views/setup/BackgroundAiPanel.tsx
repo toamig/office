@@ -1,19 +1,16 @@
-import { Plus } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import type { AppSettingsPatch } from "@shared/models";
-import type { Workflow } from "@shared/workflow";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
-import { Button, Card, Group, Input, OverflowMenu, Time, notifyDone, notifyError } from "../../ui";
-import { OUTPUT_NAMES, WorkflowForm, scheduleLabel } from "./WorkflowForm";
+import { Card, Group, Input, notifyError } from "../../ui";
 
-function Job({ label, enabled, toggle, children }: {
-  label: string; enabled: boolean; toggle: (on: boolean) => void; children: ReactNode;
+function Job({ label, enabled, toggle, children, disabled }: {
+  label: string; enabled: boolean; toggle: (on: boolean) => void; children?: ReactNode; disabled?: boolean;
 }) {
   return (
     <div className="ui-line flex-wrap">
       <label className="flex min-w-36 items-center gap-2 font-medium">
-        <input type="checkbox" checked={enabled} onChange={(event) => toggle(event.target.checked)} />
+        <input type="checkbox" checked={enabled} disabled={disabled} onChange={(event) => toggle(event.target.checked)} />
         {label}
       </label>
       {children}
@@ -28,10 +25,7 @@ function ModelField({ job, model, save }: { job: string; model: string; save: (v
 
 export function BackgroundAiPanel() {
   const settings = useQuery("settings.get", undefined, ["settings.changed", "workspace.changed"]);
-  const workflows = useQuery("workflows.list", undefined, ["workspace.changed", "run.done", "workflow.changed"]);
-  const projects = useQuery("projects.list", undefined, ["workspace.changed"]);
-  const providers = useQuery("providers.list");
-  const [edit, setEdit] = useState<Workflow | null>();
+  const workflows = useQuery("workflows.list", undefined, ["workspace.changed"]);
   const [busy, setBusy] = useState<string>();
   const s = settings.data;
   const set = async (patch: AppSettingsPatch): Promise<void> => {
@@ -40,12 +34,12 @@ export function BackgroundAiPanel() {
       settings.reload();
     } catch (error) { notifyError(error, "Could not change Background AI", "background-ai"); }
   };
-  const act = async (id: string, work: () => Promise<void>): Promise<void> => {
+  const toggle = async (id: string, enabled: boolean): Promise<void> => {
     setBusy(id);
     try {
-      await work();
+      await office.invoke("workflows.setEnabled", { id, enabled });
       workflows.reload();
-    } catch (error) { notifyError(error, "Could not finish the workflow action", "workflow"); }
+    } catch (error) { notifyError(error, "Could not change the workflow switch", id); }
     finally { setBusy(undefined); }
   };
   return (
@@ -76,41 +70,12 @@ export function BackgroundAiPanel() {
           </Job>
         </>
       )}
-      <div className="mt-4 flex items-center justify-between">
-        <Group>Workflows</Group>
-        <Button size="sm" onClick={() => setEdit(null)}><Plus /> Add workflow</Button>
-      </div>
+      <Group>Workflows</Group>
       {workflows.error && <p className="ui-bad">{workflows.error}</p>}
       {workflows.data?.map((workflow) => (
-        <div className="ui-line flex-wrap" key={workflow.id}>
-          <input type="checkbox" checked={workflow.enabled} disabled={busy !== undefined}
-            aria-label={`Enable ${workflow.name}`} onChange={(event) => {
-              const enabled = event.target.checked;
-              void act(workflow.id, () => office.invoke("workflows.save", { ...workflow, enabled }));
-            }} />
-          <div className="ui-line-main">
-            <div>{workflow.name}</div>
-            <div className="ui-line-sub">{scheduleLabel(workflow.schedule)} · {workflow.model || "Cheapest available"} · {OUTPUT_NAMES[workflow.output]}</div>
-            {!workflow.valid && <div className="ui-bad">Invalid schedule</div>}
-            {workflow.lastFiredAt && <div className="ui-line-sub">Last run <Time iso={workflow.lastFiredAt} /></div>}
-          </div>
-          <Button size="sm" disabled={!workflow.enabled || busy !== undefined} onClick={() =>
-            void act(workflow.id, async () => {
-              await office.invoke("workflows.runNow", { id: workflow.id });
-              notifyDone("Workflow finished", undefined, workflow.id);
-            })}>{busy === workflow.id ? "Working..." : "Run now"}</Button>
-          <OverflowMenu label={`Actions for ${workflow.name}`} items={[
-            { label: "Edit", onSelect: () => setEdit(workflow) },
-            { label: "Remove", onSelect: () => void act(workflow.id, () => office.invoke("workflows.remove", { id: workflow.id })) },
-          ]} />
-        </div>
+        <Job key={workflow.id} label={workflow.name} enabled={workflow.enabled}
+          disabled={busy !== undefined} toggle={(enabled) => void toggle(workflow.id, enabled)} />
       ))}
-      {edit !== undefined && <WorkflowForm workflow={edit} projects={(projects.data ?? []).filter((project) => !project.archived)}
-        providers={providers.data ?? []} busy={busy !== undefined} onClose={() => setEdit(undefined)}
-        onSave={(workflow) => act(workflow.id, async () => {
-          await office.invoke("workflows.save", workflow);
-          setEdit(undefined);
-        })} />}
     </Card>
   );
 }
