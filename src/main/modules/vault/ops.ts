@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import type { WriteResult } from "../../../shared/models";
 import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
-import { brainOpenItems } from "../explore/files";
+import { starterNote } from "./note-layout";
 import { formatWaitingLine, parseWaitingLine, REMINDER_SOURCE, setTodoChecked } from "./openitems";
 import type { VaultService } from "./service";
 import { VaultWriteError, type VaultWriter } from "./writer";
@@ -35,7 +35,7 @@ export class VaultOps {
           break;
         }
       }
-      return brainOpenItems(name, domain);
+      return starterNote("waiting", name, domain);
     };
   }
 

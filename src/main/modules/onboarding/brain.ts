@@ -5,6 +5,7 @@ import { IpcFailure } from "../../core/ipc";
 import { writeTextFile } from "../../core/settings";
 import { git } from "../git/run";
 import { defaultWorkspace } from "../setup/workspace-setup";
+import { writeStarterBrain } from "../vault/starter-layout";
 
 export interface BrainResult {
   path: string;
@@ -49,6 +50,7 @@ export async function createBrain(
     throw new IpcFailure("no-template", "The brain template is missing from this install");
   mkdirSync(dir, { recursive: true });
   cpSync(templateDir, dir, { recursive: true });
+  writeStarterBrain(dir);
   writeTextFile(join(dir, BRAIN_CONFIG), `${JSON.stringify(defaultWorkspace(false), null, 2)}\n`);
   const steps: Array<[string, string[]]> = [
     ["git init", ["init", "-q", "-b", "main"]],

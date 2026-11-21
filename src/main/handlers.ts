@@ -623,6 +623,15 @@ function registerVaultHandlers(ctx: AppContext): void {
   ctx.ipc.handle("vault.addNote", (req) => ctx.ops.addNote(req.projectId, req.text));
   // The last result of the background check, with its time: opening a screen never runs the checks.
   ctx.ipc.handle("vault.health", () => ctx.health.view());
+  ctx.ipc.handle("vault.validate", async () => {
+    await ctx.health.refresh();
+    return ctx.health.view();
+  });
+  ctx.ipc.handle("vault.reindex", async () => {
+    const count = await ctx.folderTools.reindex();
+    await ctx.health.refresh();
+    return { count };
+  });
   ctx.ipc.handle("health.changes", (req) => ctx.healthActions.changes(req.folder));
   ctx.ipc.handle("health.commit", async (req) => ({
     hash: await ctx.healthActions.commit(req.folder, req.message),

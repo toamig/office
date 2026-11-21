@@ -10,6 +10,7 @@ import { projectFolder } from "../../core/util";
 import { folderName, slugify } from "../explore/files";
 import { git } from "../git/run";
 import type { VaultWriter } from "../vault/writer";
+import { updateStarterRouter, writeProjectLayout } from "../vault/starter-layout";
 import { createBrain, type BrainResult } from "./brain";
 import {
   defaultTarget,
@@ -68,12 +69,6 @@ export interface AddReport {
 
 const firstLine = (text: string): string => text.trim().split(/\r?\n/)[0] ?? "";
 
-const overviewText = (name: string, where: string, remote: string | null): string =>
-  `# ${name}\n\nWhat this project is, in a sentence or two.\n\n**Code:** ${where}${remote ? ` (${remote})` : ""}\n`;
-
-const openItemsText = (name: string, heading: string): string =>
-  `# ${name}: open items\n\n## ${heading}\n\n## Open items\n`;
-
 /** Adding projects by scanning, notes for each, the agent pointer, and removing a project from Office. */
 export class OnboardingService {
   constructor(private readonly deps: OnboardingDeps) {}
@@ -129,8 +124,8 @@ export class OnboardingService {
           ? this.kind() === "brain-hub"
             ? item.hub === "repo"
               ? "a new notes repo in the brain hub (private, on GitHub)"
-              : `Overview and OpenItems in ${item.hubFolder ?? "a notes repo"}`
-            : `Projects/${folderName(item.name)}/Overview.md and OpenItems.md`
+              : `the project notes in ${item.hubFolder ?? "a notes repo"}`
+            : `Projects/${folderName(item.name)}/Overview.md, the project notes and their router`
           : item.notes === "link"
             ? `uses the notes in ${item.linkFolder ?? "the brain"}`
             : "no notes";
@@ -169,6 +164,7 @@ export class OnboardingService {
     const remote =
       (await git(item.path, ["config", "--get", "remote.origin.url"])).stdout.trim() || null;
     const where = `\`${basename(item.path)}\``;
+    const overview = `**Code:** ${where}${remote ? ` (${remote})` : ""}`;
 
     // A new notes repo registers itself in the hub on the writer's queue, so it is made before this item takes the queue.
     const newRepo =
@@ -178,6 +174,7 @@ export class OnboardingService {
 
     return this.deps.writer.exclusive(async () => {
       let vault: string | undefined;
+      let rootRouter = false;
       // The repo that holds the notes when it is not the workspace repo (a notes repo inside a hub).
       let notesRepoDir: string | null = null;
       if (item.notes === "link") {
@@ -188,9 +185,8 @@ export class OnboardingService {
         const dir = join(root, vault);
         if (existsSync(join(dir, "Overview.md")))
           throw new IpcFailure("notes-exist", `${vault} already has notes; link them instead`);
-        mkdirSync(dir, { recursive: true });
-        writeTextFile(join(dir, "Overview.md"), overviewText(item.name, where, remote));
-        writeTextFile(join(dir, "OpenItems.md"), openItemsText(item.name, heading));
+        writeProjectLayout(root, vault, item.name, item.domain, { overview, waitingHeading: heading });
+        rootRouter = await updateStarterRouter(root, [...ws.projects.flatMap((project) => project.vault ? [project.vault] : []), vault]);
       } else if (item.notes === "new" && this.kind() === "brain-hub") {
         if (newRepo) {
           vault = newRepo;
@@ -199,10 +195,7 @@ export class OnboardingService {
           if (!repo || !existsSync(join(root, repo, ".git")))
             throw new IpcFailure("no-notes-repo", "Pick the notes repo to put the notes in");
           vault = `${repo}/${folderName(item.name)}`;
-          const dir = join(root, vault);
-          mkdirSync(dir, { recursive: true });
-          writeTextFile(join(dir, "Overview.md"), overviewText(item.name, where, remote));
-          writeTextFile(join(dir, "OpenItems.md"), openItemsText(item.name, heading));
+          writeProjectLayout(root, vault, item.name, item.domain, { overview, waitingHeading: heading, hub: true });
           notesRepoDir = join(root, repo);
         }
       }
@@ -236,6 +229,7 @@ export class OnboardingService {
       // One commit per project: the workspace entry, and the notes when they live in the same repo.
       const top = (await git(dirname(file), ["rev-parse", "--show-toplevel"])).stdout.trim();
       const paths = [relative(top, file).replaceAll("\\", "/")];
+      if (rootRouter) paths.push(relative(top, join(root, "_index.md")).replaceAll("\\", "/"));
       if (vault && !notesRepoDir && item.notes === "new" && this.kind() === "folder")
         paths.push(relative(top, join(root, vault)).replaceAll("\\", "/"));
       await this.commit(top, paths, `Add project ${item.name}`);

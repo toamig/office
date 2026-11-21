@@ -85,12 +85,37 @@ function QuickNote() {
 
 function BrainHealth() {
   const health = useQuery("vault.health", undefined, ["vault.health"]);
+  const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
+  const [checking, setChecking] = useState(false);
   const audit = useQuery("vault.audit", undefined, ["vault.changed"]);
   const validate = health.data?.validate;
   const attention = (health.data?.repos ?? []).filter((r) => r.attention);
   const problems = validate?.problems ?? [];
+  const check = async (reindex: boolean): Promise<void> => {
+    setChecking(true);
+    try {
+      if (reindex) {
+        const { count } = await office.invoke("vault.reindex");
+        notifyDone(count ? `Updated ${count} ${count === 1 ? "router" : "routers"}` : "Routers are up to date");
+      } else {
+        await office.invoke("vault.validate");
+      }
+      health.reload();
+    } catch (error) {
+      notifyError(error, reindex ? "Could not reindex Brain" : "Could not validate Brain", "brain-health");
+    } finally {
+      setChecking(false);
+    }
+  };
   return (
-    <Card title="Brain health" testId="panel-brain-health">
+    <Card title="Brain health" testId="panel-brain-health" action={
+      <div className="flex gap-2">
+        <Button size="sm" disabled={checking} onClick={() => void check(false)}>Validate</Button>
+        {workspace.data?.workspace?.vault.kind === "folder" && (
+          <Button size="sm" disabled={checking} onClick={() => void check(true)}>Reindex</Button>
+        )}
+      </div>
+    }>
       {validate && !validate.ran && (
         <EmptyState title="Brain tools not available">
           The brain tools are not available in this workspace.

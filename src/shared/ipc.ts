@@ -527,6 +527,8 @@ export const channels = {
     res: z.void(),
   },
   "vault.health": { req: z.void(), res: HealthView },
+  "vault.validate": { req: z.void(), res: HealthView },
+  "vault.reindex": { req: z.void(), res: z.object({ count: z.number() }) },
   /** What is uncommitted in one of the brain's repos ("." is the hub), with each file's changes. */
   "health.changes": { req: z.object({ folder: z.string() }), res: DiffResult },
   "health.commit": {

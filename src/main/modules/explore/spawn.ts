@@ -9,15 +9,13 @@ import { git } from "../git/run";
 import type { RunService } from "../runs/service";
 import type { SessionService } from "../sessions/service";
 import { updateFromUpstream, type VaultWriter } from "../vault/writer";
+import { projectNoteNames, updateStarterRouter, writeProjectLayout } from "../vault/starter-layout";
 import {
   addHubRow,
   addIgnoreLine,
   addRepoEntry,
   agentsText,
-  brainIndex,
   brainJson,
-  brainOpenItems,
-  brainOverview,
   claudeText,
   folderName,
   gitattributesText,
@@ -76,10 +74,11 @@ function resolveInput(deps: SpawnDeps, input: SpawnInput): Resolved {
       "Creating a public repo needs its own explicit confirmation",
     );
   }
-  const vaultFolder = folderName(input.name);
+  const vaultName = folderName(input.name);
+  const vaultFolder = ws.vault.kind === "folder" ? `Projects/${vaultName}` : vaultName;
   // Checked here, before anything is created, so a taken name never leaves an orphan GitHub repo behind.
   const vaultDir = join(deps.workspaceRoot(), vaultFolder);
-  if (ws.vault.kind === "brain-hub" && existsSync(vaultDir) && readdirSync(vaultDir).length > 0) {
+  if (ws.vault.kind !== "none" && existsSync(vaultDir) && readdirSync(vaultDir).length > 0) {
     throw new IpcFailure(
       "vault-folder-exists",
       `The brain already has a folder called ${vaultFolder}. Pick another name.`,
@@ -122,7 +121,7 @@ export function planSpawn(deps: SpawnDeps, input: SpawnInput): SpawnStep[] {
   if (r.hub) {
     steps.push(
       step("brain-repo", "Create the brain repo", [
-        `${r.vaultFolder}/: brain.json, _index.md, Overview.md, OpenItems.md, .gitattributes`,
+        `${r.vaultFolder}/: brain.json, _index.md and ${projectNoteNames.join(", ")}`,
         "git init -b main, commit",
         `gh repo create <you>/brain-${r.slug} --private`,
         `git remote add origin git@github.com:<you>/brain-${r.slug}.git, git push`,
@@ -227,17 +226,9 @@ async function stepBrainRepo(c: Ctx): Promise<string> {
   if (existsSync(dir) && readdirSync(dir).length > 0)
     throw new Error(`${dir} already exists in the vault`);
   mkdirSync(dir, { recursive: true });
-  const files: Array<[string, string]> = [
-    ["brain.json", brainJson(r.slug, r.vaultFolder, r.description)],
-    ["_index.md", brainIndex(r.input.name, r.input.domain, r.description)],
-    [
-      "Overview.md",
-      brainOverview(r.input.name, r.vaultFolder, r.input.domain, r.input.stack, r.input.visibility),
-    ],
-    ["OpenItems.md", brainOpenItems(r.input.name, r.input.domain)],
-    [".gitattributes", gitattributesText()],
-  ];
-  for (const [name, text] of files) writeTextFile(join(dir, name), text);
+  writeTextFile(join(dir, "brain.json"), brainJson(r.slug, r.vaultFolder, r.description));
+  writeTextFile(join(dir, ".gitattributes"), gitattributesText());
+  writeProjectLayout(c.deps.workspaceRoot(), r.vaultFolder, r.input.name, r.input.domain, { hub: true, overview: projectOverview(r) });
   await must("git init", git(dir, ["init", "-q", "-b", "main"]));
   await must("git add", git(dir, ["add", "-A"]));
   await must("git commit", git(dir, ["commit", "-q", "-m", `${r.input.name}: start the notes`]));
@@ -253,6 +244,10 @@ async function stepBrainRepo(c: Ctx): Promise<string> {
   );
   await must("git push", git(dir, ["push", "-q", "-u", "origin", "main"], { timeoutMs: 120_000 }));
   return `brain-${r.slug}`;
+}
+
+function projectOverview(r: Resolved): string {
+  return `**Stack:** ${r.input.stack || "To be decided"}\n**Code repo:** ${r.input.visibility}, on GitHub\n\nSee [[${r.vaultFolder}/OpenItems]].`;
 }
 
 async function editHubFile(c: Ctx, name: string, edit: (text: string) => string): Promise<void> {
@@ -385,22 +380,17 @@ async function stepNotes(c: Ctx): Promise<string> {
   const { r, deps } = c;
   const dir = join(deps.workspaceRoot(), r.vaultFolder);
   if (r.vaultKind === "folder") {
-    mkdirSync(dir, { recursive: true });
-    for (const [name, text] of [
-      [
-        "Overview.md",
-        brainOverview(
-          r.input.name,
-          r.vaultFolder,
-          r.input.domain,
-          r.input.stack,
-          r.input.visibility,
-        ),
-      ],
-      ["OpenItems.md", brainOpenItems(r.input.name, r.input.domain)],
-    ] as const) {
-      if (!existsSync(join(dir, name))) writeTextFile(join(dir, name), text);
-    }
+    await deps.writer.exclusive(async () => {
+      const root = deps.workspaceRoot();
+      writeProjectLayout(root, r.vaultFolder, r.input.name, r.input.domain, { overview: projectOverview(r) });
+      const folders = deps.workspace()?.projects.flatMap((project) => project.vault ? [project.vault] : []) ?? [];
+      const rootChanged = await updateStarterRouter(root, [...folders, r.vaultFolder]);
+      const paths = [r.vaultFolder, ...(rootChanged ? ["_index.md"] : [])];
+      await must("git add", git(root, ["add", "--", ...paths]));
+      await must("git commit", git(root, ["commit", "-m", `${r.input.name}: start the notes`, "--", ...paths]));
+      if ((await git(root, ["rev-parse", "--abbrev-ref", "@{u}"])).code === 0)
+        await git(root, ["push", "--quiet"], { timeoutMs: 60_000 });
+    });
   }
   if (!r.input.exploreSessionId) return "template notes only";
   const session = deps.sessions.get(r.input.exploreSessionId);

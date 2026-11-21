@@ -23,6 +23,7 @@ interface RecorderDeps {
   settings: () => { enabled: boolean; learning: boolean; idleMinutes: number };
   complete: (session: SessionRow, prompt: string) => Promise<string>;
   changed: () => void;
+  afterSave?: (root: string) => Promise<void>;
 }
 
 type Proposal = Pick<Entry, "destination" | "text"> & {
@@ -143,6 +144,7 @@ export class Recorder {
         proposed += batch.length;
       }
     }
+    if (saved) await this.deps.afterSave?.(root);
     if (entries.length) this.deps.changed();
     return { saved, proposed };
   }
@@ -209,7 +211,7 @@ export class Recorder {
       .run(save ? "writing" : "dismissed", id);
     if (!claimed.changes) return;
     try {
-      if (save) await this.save([row]);
+      if (save && await this.save([row])) await this.deps.afterSave?.(row.workspace);
     } catch (error) {
       db.prepare("UPDATE recorder_proposals SET state = 'ask' WHERE id = ?").run(id);
       throw error;
@@ -222,7 +224,7 @@ export class Recorder {
       id: randomUUID(), workspace: this.deps.root(), project_id: projectId,
       destination: "journal", text: text.replace(/\s+/g, " ").trim(), created_at: nowIso(),
     };
-    await this.save([proposal]);
+    if (await this.save([proposal])) await this.deps.afterSave?.(proposal.workspace);
     this.deps.changed();
   }
 
@@ -253,6 +255,7 @@ export class Recorder {
         throw new Error("The note's destination changed.");
     });
     db.prepare("UPDATE recorder_saves SET undone_at = ? WHERE id = ?").run(nowIso(), id);
+    await this.deps.afterSave?.(root);
     this.deps.changed();
   }
 }

@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { describe, expect, it } from "vitest";
 import { createBrain } from "../../src/main/modules/onboarding/brain";
+import { folderRouterEdits, replaceGenerated, validateFolderBrain } from "../../src/main/modules/vault/folder-brain";
 import {
   defaultTarget,
   hasPointer,
@@ -113,6 +114,9 @@ describe("a new brain", () => {
         "AGENTS.md",
         "Projects/README.md",
         "Office/workspace.json",
+        "_index.md",
+        "Shared/OwnerProfile.md",
+        "General/Journal.md",
       ]),
     );
     expect(sh(dir, "log", "--format=%s").trim()).toBe("Start the brain");
@@ -121,6 +125,7 @@ describe("a new brain", () => {
     expect(loaded.ok && loaded.workspace.projects).toEqual([]);
     expect(loaded.ok && loaded.workspace.vault.kind).toBe("folder");
     expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Waiting on you");
+    expect(validateFolderBrain(dir, []).ok).toBe(true);
   });
 
   it("refuses a folder that has files in it", async () => {
@@ -174,6 +179,11 @@ describe("adding projects", () => {
       "Add project Alpha",
     ]);
     expect(existsSync(join(brain, "Projects", "Alpha", "OpenItems.md"))).toBe(true);
+    for (const name of ["Decisions", "Architecture", "Contracts", "Design", "Audience", "References", "Journal", "Lessons"])
+      expect(existsSync(join(brain, "Projects", "Alpha", `${name}.md`))).toBe(true);
+    expect(readFileSync(join(brain, "_index.md"), "utf8")).toContain("[[Projects/Alpha/_index]]");
+    expect(readFileSync(join(brain, "Projects", "Alpha", "_index.md"), "utf8")).toContain("[[Projects/Alpha/Contracts]]");
+    expect(validateFolderBrain(brain, []).ok).toBe(true);
     expect(readFileSync(join(brain, "Projects", "Alpha", "OpenItems.md"), "utf8")).toContain(
       "## Waiting on you",
     );
@@ -183,6 +193,17 @@ describe("adding projects", () => {
       ["beta", "Beta", undefined, undefined],
     ]);
     expect(sh(brain, "status", "--porcelain").trim()).toBe("");
+  });
+
+  it("regenerates only router content and checks link targets and headings", async () => {
+    const { brain } = await setup();
+    const router = join(brain, "_index.md");
+    writeFileSync(router, readFileSync(router, "utf8").replace("# Brain", "# My Brain\n\nMy note."));
+    const journal = join(brain, "General", "Journal.md");
+    writeFileSync(journal, readFileSync(journal, "utf8") + "\n[[General/References#Missing]]\n");
+    const index = folderRouterEdits(brain, []).find((item) => item.path === "_index.md")!;
+    expect(replaceGenerated(index.before, index.generated)).toContain("# My Brain\n\nMy note.");
+    expect(validateFolderBrain(brain, []).errors).toContain("General/Journal.md: Missing heading [[General/References.md#Missing]]");
   });
 
   it("links notes that exist, removes a project from Office only, and handles the pointer", async () => {

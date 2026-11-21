@@ -2,7 +2,7 @@ import type { HealthView } from "../../../shared/models";
 
 export interface HealthDeps {
   root: () => string;
-  /** The kind of vault the workspace uses; only a brain hub has anything to validate. */
+  /** The kind of vault the workspace uses. */
   kind: () => string | undefined;
   warnings: () => HealthView["warnings"];
   validate: (root: string) => Promise<HealthView["validate"]>;
@@ -67,13 +67,14 @@ export class HealthService {
 
   private async check(): Promise<void> {
     const root = this.deps.root();
-    if (!root || this.deps.kind() !== "brain-hub") {
+    const kind = this.deps.kind();
+    if (!root || (kind !== "brain-hub" && kind !== "folder")) {
       this.validate = NOT_RUN;
       this.repos = [];
     } else {
       const [validate, repos] = await Promise.all([
         this.deps.validate(root),
-        this.deps.repos(root),
+        kind === "brain-hub" ? this.deps.repos(root) : Promise.resolve([]),
       ]);
       this.validate = validate;
       this.repos = repos;

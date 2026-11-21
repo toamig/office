@@ -26,7 +26,7 @@ export function starterNote(destination: NoteDestination, project?: string, doma
     ...(project ? { project } : {}),
     summary: note.summary,
     tags: [],
-    answers: [note.summary, `What should I look up under ${title}?`],
+    answers: [`What should I know about ${title.toLowerCase()}?`, `Where are the ${title.toLowerCase()} notes?`],
     authority: "own",
   });
   return `---\n${frontmatter}---\n\n# ${title}\n\n## ${note.heading}\n`;

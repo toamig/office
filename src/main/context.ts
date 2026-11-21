@@ -57,6 +57,7 @@ import { VaultService } from "./modules/vault/service";
 import { VaultWriter } from "./modules/vault/writer";
 import { brainScope } from "./modules/vault/scope";
 import { Recorder } from "./modules/vault/recorder";
+import { FolderTools } from "./modules/vault/folder-tools";
 
 /** Everything the main process shares: settings, workspace, database, bus and the IPC registry. */
 export interface AppContext {
@@ -102,6 +103,7 @@ export interface AppContext {
   health: HealthService;
   /** The fixes the brain's health offers: commit, discard, pull and push. */
   healthActions: HealthActions;
+  folderTools: FolderTools;
   /** The last look at the command-line tools, refreshed in the background. */
   toolsMonitor: ToolsMonitor;
   toolConfig: ToolConfigService;
@@ -136,6 +138,7 @@ interface Notes {
   warnings: AppContext["warnings"];
   health: HealthService;
   healthActions: HealthActions;
+  folderTools: FolderTools;
   writer: VaultWriter;
   ops: VaultOps;
   projects: ProjectService;
@@ -176,6 +179,12 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     },
   });
   const ops = new VaultOps({ vault, writer, workspace: () => store.state.workspace });
+  const folderTools = new FolderTools({
+    root: () => box.current.workspaceRoot,
+    enabled: () => store.state.workspace?.vault.kind === "folder",
+    folders: () => store.state.workspace?.projects.flatMap((p) => p.vault ? [p.vault] : []) ?? [],
+    writer,
+  });
   const projects = new ProjectService({
     bus,
     projects: () => store.state.workspace?.projects ?? [],
@@ -187,7 +196,7 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     root: () => box.current.workspaceRoot,
     kind: () => store.state.workspace?.vault.kind,
     warnings: () => warnings,
-    validate: runValidate,
+    validate: async (root) => folderTools.enabled() ? folderTools.validate(root) : runValidate(root),
     repos: readHubStatus,
     onChange: () => bus.emit("vault.health", {}),
   });
@@ -195,7 +204,7 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     root: () => box.current.workspaceRoot,
     changed: () => void health.refresh(),
   });
-  return { vault, warnings, health, healthActions, writer, ops, projects };
+  return { vault, warnings, health, healthActions, folderTools, writer, ops, projects };
 }
 
 /** The absolute folder of a project, or undefined when it is unknown. */
@@ -287,6 +296,16 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
       learning: box.current.learningEnabled,
       idleMinutes: box.current.recorderIdleMinutes,
     }),
+    afterSave: async (root) => {
+      if (root !== box.current.workspaceRoot || !notes.folderTools.enabled()) return;
+      try {
+        await notes.folderTools.reindex();
+      } catch (error) {
+        notes.warnings.unshift({ at: new Date().toISOString(), message: (error as Error).message });
+        notes.warnings.length = Math.min(notes.warnings.length, 20);
+      }
+      await notes.health.refresh();
+    },
     complete: async (session, prompt) => {
       const providerId = session.provider;
       const handle = runs.start({
@@ -719,6 +738,7 @@ export async function createContext(
     ...orch,
     projects: notes.projects,
     vault: notes.vault,
+    folderTools: notes.folderTools,
     ops: notes.ops,
     warnings: notes.warnings,
     health: notes.health,

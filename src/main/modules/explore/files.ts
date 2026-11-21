@@ -87,8 +87,6 @@ export const claudeText = (): string => "@AGENTS.md\n";
 
 // ---------- brain repo ----------
 
-const q = (text: string): string => `"${text.replace(/\\/g, "\\\\").replace(/"/g, '\\"')}"`;
-
 export function brainJson(slug: string, folder: string, description: string): string {
   return `${JSON.stringify(
     {
@@ -100,73 +98,6 @@ export function brainJson(slug: string, folder: string, description: string): st
     null,
     2,
   )}\n`;
-}
-
-export function brainIndex(name: string, domain: string, description: string): string {
-  return `---
-type: index
-domain: ${domain}
-project: ${name}
-summary: ${q(`Router for the ${name} notes: where the overview and open items are.`)}
-tags: [routing]
-answers:
-  - ${q(`Where are the notes for ${name}?`)}
-authority: own
----
-
-# ${name}: Knowledge Vault
-
-${description}
-
-<!-- BEGIN GENERATED -->
-<!-- END GENERATED -->
-`;
-}
-
-export function brainOverview(
-  name: string,
-  folder: string,
-  domain: string,
-  stack: string,
-  visibility: string,
-): string {
-  return `---
-type: overview
-domain: ${domain}
-project: ${name}
-summary: ${q(`What ${name} is, what it is built on, and where its code lives.`)}
-tags: [roadmap]
-answers:
-  - ${q(`What is ${name} and what is it built on?`)}
-authority: own
----
-
-# ${name}: Overview
-
-**Stack:** ${stack || "to be decided"}
-**Code repo:** ${visibility}, on GitHub
-
-## See Also
-- [[${folder}/OpenItems]]
-`;
-}
-
-export function brainOpenItems(name: string, domain: string): string {
-  return `---
-type: openitems
-domain: ${domain}
-project: ${name}
-summary: ${q(`What is left to do for ${name}, and what waits on the owner.`)}
-tags: [open-items]
-answers:
-  - ${q(`What is left to do for ${name}?`)}
-authority: own
----
-
-# ${name}: open items
-
-## Waiting on you
-`;
 }
 
 // ---------- hub registration ----------
