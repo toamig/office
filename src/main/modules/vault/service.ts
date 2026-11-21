@@ -1,10 +1,10 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
-import { join } from "node:path";
 import chokidar, { type FSWatcher } from "chokidar";
 import type { OpenItemsView, WaitingEntry } from "../../../shared/models";
 import type { Project, Workspace } from "../../../shared/types";
 import type { Bus } from "../../core/bus";
-import { parseOpenItems } from "./openitems";
+import { parseOpenItems, waitingIsDue } from "./openitems";
+import { notesPath } from "./scope";
 
 export interface VaultServiceDeps {
   bus: Bus;
@@ -33,7 +33,7 @@ export class VaultService {
     const ws = this.deps.workspace();
     const project = this.project(projectId);
     if (!ws || !project || ws.vault.kind === "none" || project.vault === undefined) return null;
-    return join(this.deps.workspaceRoot(), project.vault, ws.vault.openItemsFile);
+    return notesPath(this.deps.workspaceRoot(), `${project.vault}/${ws.vault.openItemsFile}`);
   }
 
   read(projectId: string): OpenItemsView {
@@ -58,7 +58,7 @@ export class VaultService {
   }
 
   waitingCount(projectId: string): number {
-    return this.read(projectId).waiting.length;
+    return this.read(projectId).waiting.filter((item) => waitingIsDue(item)).length;
   }
 
   /** Every waiting item of every non-archived project, newest first. */
@@ -67,6 +67,7 @@ export class VaultService {
     for (const project of this.deps.workspace()?.projects ?? []) {
       if (project.archived) continue;
       for (const item of this.read(project.id).waiting) {
+        if (!waitingIsDue(item)) continue;
         entries.push({ ...item, projectId: project.id, projectName: project.name });
       }
     }

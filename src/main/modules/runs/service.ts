@@ -12,7 +12,7 @@ import type { ProviderRegistry } from "../providers/registry";
 import type { AgentEvent, AgentRun, AgentRunResult, RunPermission } from "../providers/types";
 import type { PermissionBroker } from "./permissions";
 
-export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation" | "recorder";
+export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation" | "recorder" | "route";
 
 export interface RunRequest {
   kind: RunKind;
@@ -55,7 +55,7 @@ export interface RunServiceDeps {
 }
 
 /** Runs that only read: they get read tools and nothing ever asks. */
-const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder"];
+const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route"];
 
 /** Runs headless agent tasks and records each one: a database row plus events.jsonl and result.md. */
 export class RunService {

@@ -30,17 +30,18 @@ describe("the exact flags of a Chat", () => {
       "--session-id",
       "chat-1",
       "--tools",
-      "Read,Grep,Glob,WebSearch,WebFetch",
+      "Read,Grep,Glob,WebSearch,WebFetch,Agent",
       "--allowedTools",
-      "Read,Grep,Glob,WebSearch,WebFetch",
+      "Read,Grep,Glob,WebSearch,WebFetch,Agent",
       "--permission-mode",
       "dontAsk",
+      "--strict-mcp-config",
       "--add-dir",
       "C:/brain",
     ]);
-    expect(CHAT_TOOLS).toBe("Read,Grep,Glob,WebSearch,WebFetch");
+    expect(CHAT_TOOLS).toBe("Read,Grep,Glob,WebSearch,WebFetch,Agent");
     // Nothing that runs a command or edits a file is ever offered, and no approval tool is attached.
-    expect(args.join(" ")).not.toMatch(/Bash|Edit|Write|mcp|permission-prompt/);
+    expect(args.join(" ")).not.toMatch(/Bash|Edit|Write|permission-prompt/);
   });
 
   it("a saved chat resumes its conversation; an incognito chat never does and keeps nothing", () => {

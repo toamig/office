@@ -31,7 +31,7 @@ export class ExploreService {
   constructor(private readonly deps: ExploreDeps) {}
 
   /** A chat session in its own folder, with the brain added for reading. */
-  start(providerId = "claude-code", incognito = false): SessionRow {
+  start(providerId = "claude-code", incognito = false, projectId?: string): SessionRow {
     const id = randomUUID();
     const dir = incognito
       ? mkdtempSync(join(tmpdir(), "office-chat-"))
@@ -44,6 +44,7 @@ export class ExploreService {
         cwd: dir,
         title: incognito ? "Incognito chat" : NEW_CHAT,
         mode: "chat",
+        ...(projectId && !incognito ? { projectId } : {}),
       },
       {
         ...(root ? { addDirs: [root] } : {}),

@@ -14,6 +14,7 @@ import {
   TaskDetail,
   TaskView,
   RecordedNote,
+  RequestResult,
   DiffResult,
   FixEntry,
   FixSubject,
@@ -302,6 +303,10 @@ export const channels = {
   },
   "sessions.wrapUp": { req: z.object({ id: z.string() }), res: WrapUpResult },
   "recorder.digest": { req: z.void(), res: z.array(RecordedNote) },
+  "requests.route": {
+    req: z.object({ request: z.string().trim().min(1).max(6000), projectId: z.string().optional() }),
+    res: RequestResult,
+  },
   "recorder.answer": { req: z.object({ id: z.string(), save: z.boolean() }), res: z.void() },
   "recorder.undo": { req: z.object({ id: z.string() }), res: z.void() },
   "ask.start": {

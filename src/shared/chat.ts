@@ -13,6 +13,7 @@ export type ChatItem =
       output: string;
     }
   | { kind: "error"; message: string }
+  | { kind: "subagent"; id: string; task: string; progress: string; verdict: string; status: "working" | "done" | "error" }
   | { kind: "turn"; ok: boolean; durationMs: number | null; error: string | undefined }
   | { kind: "stopped" };
 
@@ -32,6 +33,8 @@ function settle(items: ChatItem[], toolStatus: "done" | "error"): ChatItem[] {
   return items.map((item) => {
     if (item.kind === "assistant" && item.streaming) return { ...item, streaming: false };
     if (item.kind === "tool" && item.status === "running") return { ...item, status: toolStatus };
+    if (item.kind === "subagent" && item.status === "working" && toolStatus === "error")
+      return { ...item, status: "error" };
     return item;
   });
 }
@@ -120,6 +123,22 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
             : i,
         ),
       };
+    case "subagent": {
+      const previous = items.find(
+        (item): item is Extract<ChatItem, { kind: "subagent" }> =>
+          item.kind === "subagent" && item.id === event.id,
+      );
+      const item: ChatItem = {
+        kind: "subagent", id: event.id, task: event.task || previous?.task || "Subagent",
+        progress: event.progress || previous?.progress || "",
+        verdict: event.verdict || previous?.verdict || "",
+        status: previous?.status === "done" && event.status === "working" ? "done" : event.status,
+      };
+      return {
+        ...state,
+        items: previous ? items.map((entry) => entry === previous ? item : entry) : [...items, item],
+      };
+    }
     case "result":
       return {
         items: [

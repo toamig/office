@@ -14,7 +14,7 @@ import type {
 } from "./types";
 
 /** The only tools a Chat may use: read the brain and the web, nothing that runs or edits. */
-export const CHAT_TOOLS = "Read,Grep,Glob,WebSearch,WebFetch";
+export const CHAT_TOOLS = "Read,Grep,Glob,WebSearch,WebFetch,Agent";
 
 /**
  * The flags of a Chat: `--tools` limits what exists, `--allowedTools` lets those run without asking, and
@@ -30,6 +30,7 @@ export function chatToolFlags(addDirs: string[], model?: string): string[] {
     CHAT_TOOLS,
     "--permission-mode",
     "dontAsk",
+    "--strict-mcp-config",
     ...addDirs.flatMap((dir) => ["--add-dir", dir]),
   ];
 }

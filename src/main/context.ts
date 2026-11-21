@@ -4,7 +4,7 @@ import type { SetupState, SyncReport, WorkspaceView } from "../shared/models";
 import type { MachineSettings } from "../shared/types";
 import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
-import { run } from "./core/exec";
+import { resolveTool, run } from "./core/exec";
 import { IpcRegistry } from "./core/ipc";
 import { NtfyChannel } from "./core/channels/ntfy";
 import { ModuleManager } from "./core/modules";
@@ -38,6 +38,7 @@ import { HooksManager } from "./modules/setup/install-hooks";
 import { BriefService } from "./modules/brief/brief";
 import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
+import { RequestRouter } from "./modules/ask/router";
 import { ChatService } from "./modules/chat/service";
 import { RunService } from "./modules/runs/service";
 import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
@@ -69,6 +70,7 @@ export interface AppContext {
   sessions: SessionService;
   runs: RunService;
   ask: AskService;
+  requestRouter: RequestRouter;
   explore: ExploreService;
   brief: BriefService;
   recorder: Recorder;
@@ -583,7 +585,10 @@ function createLifecycle(
     };
     archive();
     archiveTimer = setInterval(archive, 3_600_000);
-    const due = (): void => void brief.runIfDue().catch(() => undefined);
+    const due = (): void => {
+      pending.changed();
+      void brief.runIfDue().catch(() => undefined);
+    };
     due();
     briefTimer = setInterval(due, 60_000);
   };
@@ -609,6 +614,36 @@ export async function createContext(
   const agents = createAgents(base, notes, relayScript);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
+  const requestProvider = () => resolveTool("claude") ? "claude-code"
+    : resolveTool("fake-claude") ? "fake"
+    : resolveTool("codex") ? "codex" : "claude-code";
+  const requestRouter = new RequestRouter({
+    workspace: () => store.state.workspace,
+    enabled: () => box.current.requestRouterEnabled,
+    complete: async (prompt) => {
+      const provider = requestProvider();
+      const run = agents.runs.start({
+        kind: "route", providerId: provider, cwd: dataDir(), prompt, tools: "",
+        role: { provider, model: provider === "codex" ? "gpt-5.4-mini" : "haiku", instructions: "", readOnly: true, allowedCommands: [] },
+      });
+      const result = await run.result;
+      if (!result.ok) throw new Error(result.error || "The request could not be routed.");
+      return result.resultText;
+    },
+    chat: (request, projectId) => {
+      const session = agents.explore.start(requestProvider(), false, projectId);
+      agents.chat.send(session.id, request);
+      return session.id;
+    },
+    session: (project, title, prompt) => agents.sessions.start({
+      projectId: project.id, title, prompt, mode: "chat", providerId: requestProvider(),
+    }).id,
+    reminder: async (projectId, date, text) => {
+      await notes.ops.addReminder(projectId, date, text);
+      bus.emit("vault.changed", {});
+    },
+    note: (projectId, text) => agents.recorder.saveNote(projectId, text),
+  });
   const onboarding = new OnboardingService({
     workspace: () => store.state.workspace,
     workspaceRoot: () => box.current.workspaceRoot,
@@ -669,6 +704,7 @@ export async function createContext(
     notifier,
     ntfy,
     ...agents,
+    requestRouter,
     permissions: agents.broker,
     pending,
     fix,

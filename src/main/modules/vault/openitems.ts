@@ -1,7 +1,13 @@
 import type { TodoGroup, WaitingItem } from "../../../shared/models";
+import { localDate } from "../brief/brief";
 
 const ITEM_RE = /^- \[ \] (\d{4}-\d{2}-\d{2}) (.+?)(?: \(([^()]*)\))?\s*$/;
 const H2_RE = /^## (.+?)\s*$/;
+export const REMINDER_SOURCE = "Office reminder";
+
+export function waitingIsDue(item: WaitingItem, now = new Date()): boolean {
+  return item.source !== REMINDER_SOURCE || item.date <= localDate(now);
+}
 
 /** Splits a "Waiting on you" line into date, text and optional source; null if it does not match. */
 export function parseWaitingLine(

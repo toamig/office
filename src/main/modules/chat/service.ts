@@ -261,6 +261,7 @@ export class ChatService {
       cwd: row.cwd,
       officeSessionId: id,
       resume: Boolean(threadId),
+      ...(this.restricted(id) ? { restricted: true } : {}),
       role: this.deps.sessions.roleForAgent(row),
       permission: this.permission(row, kind),
       ...(brain ? { brain } : {}),

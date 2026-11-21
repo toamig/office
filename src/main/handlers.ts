@@ -321,6 +321,7 @@ function registerSessionHandlers(ctx: AppContext): void {
 
 /** Ask the brain, the audit, the morning brief and Explore. */
 function registerBrainHandlers(ctx: AppContext): void {
+  ctx.ipc.handle("requests.route", (req) => ctx.requestRouter.route(req.request, req.projectId));
   ctx.ipc.handle("recorder.digest", () => ctx.recorder.digest());
   ctx.ipc.handle("recorder.answer", (req) => ctx.recorder.answer(req.id, req.save));
   ctx.ipc.handle("recorder.undo", (req) => ctx.recorder.undo(req.id));

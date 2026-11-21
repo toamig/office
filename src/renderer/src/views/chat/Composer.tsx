@@ -2,6 +2,18 @@ import { ArrowUp, Square } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import type { ChatImage } from "@shared/models";
 import { office } from "../../lib/ipc";
+import { OverflowMenu } from "../../ui";
+
+const PRESETS = [
+  {
+    label: "Research",
+    prompt: "Research this with several read-only subagents. Give each a distinct angle, check their sources, then combine the findings and cite the evidence. Topic\n",
+  },
+  {
+    label: "Debate",
+    prompt: "Have two subagents argue opposing sides, then a third judge weigh the evidence and give a verdict. Question\n",
+  },
+];
 
 /** The text typed after the last @ before the caret, when that @ starts a word. */
 function mentionAt(value: string, caret: number): { from: number; query: string } | null {
@@ -123,6 +135,20 @@ export function Composer({
         </div>
       )}
       <div className="composer-box">
+        <OverflowMenu
+          label="Prompt presets"
+          items={PRESETS.map((preset) => ({
+            label: preset.label,
+            onSelect: () => {
+              const next = preset.prompt + text;
+              setText(next);
+              requestAnimationFrame(() => {
+                area.current?.focus();
+                area.current?.setSelectionRange(next.length, next.length);
+              });
+            },
+          }))}
+        />
         <textarea
           ref={area}
           value={text}

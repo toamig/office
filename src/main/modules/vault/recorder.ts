@@ -217,6 +217,15 @@ export class Recorder {
     this.deps.changed();
   }
 
+  async saveNote(projectId: string | null, text: string): Promise<void> {
+    const proposal: Proposal = {
+      id: randomUUID(), workspace: this.deps.root(), project_id: projectId,
+      destination: "journal", text: text.replace(/\s+/g, " ").trim(), created_at: nowIso(),
+    };
+    await this.save([proposal]);
+    this.deps.changed();
+  }
+
   markBrief(): void {
     const { db } = this.deps;
     const root = this.deps.root();

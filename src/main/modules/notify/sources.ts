@@ -72,7 +72,7 @@ export class WaitingWatcher {
     const out = new Map<string, Set<string>>();
     for (const p of this.projects()) {
       if (p.archived) continue;
-      out.set(p.id, new Set(this.vault.read(p.id).waiting.map((w) => w.raw)));
+      out.set(p.id, new Set(this.vault.read(p.id).waiting.filter((w) => waitingIsDue(w)).map((w) => w.raw)));
     }
     return out;
   }
@@ -84,7 +84,7 @@ export class WaitingWatcher {
       for (const p of this.projects()) {
         const before = this.seen.get(p.id) ?? new Set<string>();
         for (const w of this.vault.read(p.id).waiting) {
-          if (before.has(w.raw) || p.archived) continue;
+          if (before.has(w.raw) || p.archived || !waitingIsDue(w)) continue;
           this.notifier.notify({
             kind: "vault.waiting-new",
             projectId: p.id,
@@ -99,3 +99,4 @@ export class WaitingWatcher {
     this.primed = true;
   }
 }
+import { waitingIsDue } from "../vault/openitems";

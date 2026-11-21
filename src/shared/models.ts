@@ -229,6 +229,9 @@ export const NotificationLink = z.object({
 });
 export type NotificationLink = z.infer<typeof NotificationLink>;
 
+export const RequestResult = z.object({ message: z.string(), link: NotificationLink });
+export type RequestResult = z.infer<typeof RequestResult>;
+
 export const NotificationRow = z.object({
   id: z.string(),
   kind: z.string(),
@@ -591,6 +594,14 @@ export const ChatEvent = z.discriminatedUnion("t", [
     toolUseId: z.string(),
     output: z.string(),
     isError: z.boolean().default(false),
+  }),
+  z.object({
+    t: z.literal("subagent"),
+    id: z.string(),
+    task: z.string().optional(),
+    progress: z.string().optional(),
+    verdict: z.string().optional(),
+    status: z.enum(["working", "done", "error"]),
   }),
   /** The end of a turn. */
   z.object({

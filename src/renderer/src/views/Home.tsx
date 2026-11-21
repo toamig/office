@@ -12,6 +12,7 @@ import { PermissionRequests } from "../components/PermissionRequests";
 import { usePending } from "../lib/pending";
 import { LiveAgentsPanel, TodayPanel } from "./home/LiveAndToday";
 import { SavedNotes } from "./home/SavedNotes";
+import { RequestComposer } from "./home/RequestComposer";
 
 /** Home shows the first few; Needs you shows them all. */
 const SHOWN = 8;
@@ -195,6 +196,7 @@ function HealthPanel() {
 export function Home() {
   return (
     <Page title="Home" subtitle="What needs you, what is running and what changed." testId="home">
+      <RequestComposer />
       <BriefPanel />
       <div className="home-grid">
         <NeedsYouPanel />

@@ -2,6 +2,8 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { SearchItem } from "@shared/models";
 import { office } from "../lib/ipc";
 import { useUi, type ViewId } from "../stores/ui";
+import { openRequest, sendRequest } from "../lib/request";
+import { Button, notify, notifyError } from "../ui";
 
 /** Subsequence fuzzy score: higher is better, -1 means no match. */
 export function fuzzyScore(query: string, text: string): number {
@@ -55,6 +57,8 @@ function SwitcherPanel() {
   const [items, setItems] = useState<SearchItem[]>([]);
   const [query, setQuery] = useState("");
   const [index, setIndex] = useState(0);
+  const [selected, setSelected] = useState(false);
+  const [busy, setBusy] = useState(false);
   const input = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -77,6 +81,21 @@ function SwitcherPanel() {
     setSwitcherOpen(false);
     navigate(item.link.view as ViewId, item.link.params ?? {});
   };
+  const ask = async (): Promise<void> => {
+    if (!query.trim() || busy) return;
+    setBusy(true);
+    try {
+      const result = await sendRequest(query.trim());
+      setSwitcherOpen(false);
+      notify({ tone: "success", title: result.message, subject: "request", action: {
+        label: "Open", run: () => openRequest(result),
+      } });
+    } catch (error) {
+      notifyError(error, "Office could not act on that request", "request");
+    } finally {
+      setBusy(false);
+    }
+  };
   return (
     <div className="ui-scrim" data-align="top" onClick={() => setSwitcherOpen(false)}>
       <div
@@ -90,23 +109,39 @@ function SwitcherPanel() {
         <input
           ref={input}
           value={query}
-          placeholder="Jump to a project, note, branch, worktree or session"
+          placeholder="Ask Office or jump to something"
           aria-label="Quick switcher"
           onChange={(e) => {
             setQuery(e.target.value);
             setIndex(0);
+            setSelected(false);
           }}
           onKeyDown={(e) => {
             if (e.key === "ArrowDown") {
               e.preventDefault();
+              setSelected(true);
               setIndex((i) => Math.min(i + 1, results.length - 1));
             } else if (e.key === "ArrowUp") {
               e.preventDefault();
+              setSelected(true);
               setIndex((i) => Math.max(i - 1, 0));
-            } else if (e.key === "Enter" && results[index]) open(results[index].item);
+            } else if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+              e.preventDefault();
+              const item = results[index]?.item;
+              if (!e.shiftKey && item && (selected || !query.trim() || item.label.toLowerCase() === query.trim().toLowerCase()))
+                open(item);
+              else void ask();
+            }
           }}
           className="ui-switcher-input"
         />
+        {query.trim() && (
+          <div className="p-2">
+            <Button size="sm" disabled={busy} onClick={() => void ask()}>
+              {busy ? "Working..." : "Ask Office"}
+            </Button>
+          </div>
+        )}
         <ul className="m-0 max-h-80 list-none overflow-auto p-1">
           {results.length === 0 && (
             <li className="ui-muted p-3">Nothing matches. Try a project name.</li>

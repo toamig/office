@@ -3,6 +3,8 @@ import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { openDb } from "../../src/main/core/db";
 import { Recorder } from "../../src/main/modules/vault/recorder";
+import { formatWaitingLine, parseOpenItems, REMINDER_SOURCE, waitingIsDue } from "../../src/main/modules/vault/openitems";
+import { reminderDate } from "../../src/main/modules/ask/router";
 import { recordTarget } from "../../src/main/modules/vault/recording-plan";
 import { brainScope, notesPath } from "../../src/main/modules/vault/scope";
 import { VaultWriter } from "../../src/main/modules/vault/writer";
@@ -36,6 +38,15 @@ const message = (text: string) => JSON.stringify({
 }) + "\n";
 
 describe("brain recorder", () => {
+  it("validates reminder dates and holds scheduled items until the due day", () => {
+    expect(() => reminderDate("2026-02-29")).toThrow(/invalid/);
+    const date = reminderDate("2026-11-22");
+    const line = formatWaitingLine(date, "Review the draft", REMINDER_SOURCE);
+    const item = parseOpenItems(`## Waiting on you\n\n${line}\n`).waiting[0]!;
+    expect(waitingIsDue(item, new Date(2026, 10, 21, 23, 59))).toBe(false);
+    expect(waitingIsDue(item, new Date(2026, 10, 22))).toBe(true);
+  });
+
   it("routes only to the project's notes, keeps private notes out of other context, and rejects traversal", () => {
     write(root, "Projects/Alpha/Overview.md", "---\nsummary: Alpha summary\n---\nAlpha");
     write(root, "Projects/Beta/brain.json", '{"private":true}');

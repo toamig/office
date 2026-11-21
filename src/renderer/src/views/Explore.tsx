@@ -29,6 +29,9 @@ export const INCOGNITO_NOTE = "Incognito. Nothing is kept when you close it.";
  * is never listed. One action turns a chat into a project.
  */
 export function Explore() {
+  const linkedChat = useUi((state) => state.params["chat"]);
+  const visit = useUi((state) => state.visits);
+  const [applied, setApplied] = useState(-1);
   const sessions = useQuery("explore.list", undefined, ["session.status"]);
   const providers = useQuery("providers.list");
   const [active, setActive] = useState<string | null>(null);
@@ -40,6 +43,10 @@ export function Explore() {
   const [name, setName] = useState("");
   const [keeping, setKeeping] = useState(false);
   const [closing, setClosing] = useState<SessionRow | null>(null);
+  if (applied !== visit) {
+    setApplied(visit);
+    if (linkedChat) setActive(linkedChat);
+  }
 
   const saved = sessions.data ?? [];
   const all = [...secret, ...saved];

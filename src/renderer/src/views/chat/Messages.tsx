@@ -50,6 +50,17 @@ export function ChatMessage({ item }: { item: ChatItem }) {
       );
     case "tool":
       return <ToolCard tool={item} />;
+    case "subagent":
+      return (
+        <div className="tool-card" data-testid="subagent-card">
+          <div className="tool-head">
+            <span className="tool-name">{item.task}</span>
+            <span className="ui-muted">{item.status === "working" ? "Working" : item.status === "done" ? "Done" : "Failed"}</span>
+          </div>
+          {item.progress && item.status === "working" && <p className="ui-muted px-3">{item.progress}</p>}
+          {item.verdict && <div className="px-3"><Markdown>{item.verdict}</Markdown></div>}
+        </div>
+      );
     case "error":
       return (
         <div className="chat-error text-selectable" data-testid="chat-error">

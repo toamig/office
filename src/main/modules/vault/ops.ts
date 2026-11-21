@@ -4,7 +4,7 @@ import type { WriteResult } from "../../../shared/models";
 import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
 import { brainOpenItems } from "../explore/files";
-import { parseWaitingLine, setTodoChecked } from "./openitems";
+import { formatWaitingLine, parseWaitingLine, REMINDER_SOURCE, setTodoChecked } from "./openitems";
 import type { VaultService } from "./service";
 import { VaultWriteError, type VaultWriter } from "./writer";
 
@@ -94,6 +94,14 @@ export class VaultOps {
         this.starter(file, name),
       ),
     );
+  }
+
+  addReminder(projectId: string, date: string, text: string): Promise<WriteResult> {
+    const { file, name, heading } = this.target(projectId);
+    return this.guard(this.deps.writer.addToSection(
+      file, heading, formatWaitingLine(date, text, REMINDER_SOURCE),
+      `${name}: set a reminder`, this.starter(file, name),
+    ));
   }
 
   /** A quick note is raw material: a dated bullet under "Notes to file" (plan section 8). */

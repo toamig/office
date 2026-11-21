@@ -223,6 +223,9 @@ export class CodexProvider implements Provider {
       },
       join(o.runDir, "turn-result.md"),
     );
+    if (o.restricted || o.permission.kind === "readonly") {
+      args.unshift("-c", "features.apps=false", "-c", "features.plugins=false");
+    }
     return this.command(args);
   }
 

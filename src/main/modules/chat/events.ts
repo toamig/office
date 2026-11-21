@@ -32,14 +32,30 @@ function resultText(content: unknown): string {
  */
 export class ClaudeChatParser {
   private messageId = "";
+  private readonly subagents = new Set<string>();
 
   parse(line: string): ChatEvent[] {
     const message = asJson(line);
     if (!message) return [];
     const type = str(message["type"]);
+    const parent = str(message["parent_tool_use_id"]);
+    if (parent) return this.subagentMessage(parent, type, message);
     if (type === "stream_event") return this.partial(obj(message["event"]));
     if (type === "assistant") return this.assistant(obj(message["message"]));
     if (type === "user") return this.toolResults(obj(message["message"]));
+    if (type === "system") {
+      const id = str(message["tool_use_id"]);
+      const subtype = str(message["subtype"]);
+      if (id && subtype.startsWith("task_")) {
+        const summary = str(message["summary"]) || str(message["description"]);
+        const status = str(message["status"]);
+        return [{
+          t: "subagent", id,
+          ...(subtype === "task_notification" ? { verdict: summary } : { progress: summary }),
+          status: status === "failed" || status === "stopped" ? "error" : subtype === "task_notification" ? "done" : "working",
+        }];
+      }
+    }
     if (type === "result") {
       const failed = message["is_error"] === true;
       return [
@@ -53,6 +69,15 @@ export class ClaudeChatParser {
     }
     if (type === "error") return [{ t: "error", message: str(message["message"]) || line }];
     return [];
+  }
+
+  private subagentMessage(id: string, type: string, message: Json): ChatEvent[] {
+    this.subagents.add(id);
+    if (type !== "assistant") return [];
+    const blocks = obj(message["message"])["content"];
+    if (!Array.isArray(blocks)) return [];
+    const text = blocks.map(obj).map((block) => str(block["text"]) || str(block["name"])).filter(Boolean).join("\n");
+    return text ? [{ t: "subagent", id, status: "working", progress: text.slice(0, 600) }] : [];
   }
 
   private partial(event: Json): ChatEvent[] {
@@ -84,11 +109,22 @@ export class ClaudeChatParser {
       else if (block["type"] === "thinking" && str(block["thinking"]))
         thoughts.push(str(block["thinking"]));
       else if (block["type"] === "tool_use") {
+        const name = str(block["name"]);
+        const toolId = str(block["id"]);
+        const input = obj(block["input"]);
+        if (name === "Agent" || name === "Task") {
+          this.subagents.add(toolId);
+          tools.push({
+            t: "subagent", id: toolId, status: "working",
+            task: str(input["description"]) || str(input["prompt"]).slice(0, 240) || "Subagent",
+          });
+          continue;
+        }
         tools.push({
           t: "tool-use",
-          id: str(block["id"]),
-          name: str(block["name"]),
-          input: obj(block["input"]),
+          id: toolId,
+          name,
+          input,
         });
       }
     }
@@ -110,9 +146,17 @@ export class ClaudeChatParser {
     const events: ChatEvent[] = [];
     for (const block of content as Json[]) {
       if (block["type"] !== "tool_result") continue;
+      const id = str(block["tool_use_id"]);
+      if (this.subagents.has(id)) {
+        events.push({
+          t: "subagent", id, status: block["is_error"] === true ? "error" : "done",
+          verdict: resultText(block["content"]),
+        });
+        continue;
+      }
       events.push({
         t: "tool-result",
-        toolUseId: str(block["tool_use_id"]),
+        toolUseId: id,
         output: resultText(block["content"]),
         isError: block["is_error"] === true,
       });
@@ -144,10 +188,24 @@ export class CodexChatParser {
     if (type === "turn.completed") {
       return [{ t: "result", ok: !this.failed, durationMs: Date.now() - this.started }];
     }
-    if (type !== "item.completed") return [];
     const item = obj(event["item"]);
     const id = str(item["id"]) || `i${Date.now()}`;
     const kind = str(item["type"]);
+    if (kind === "collab_tool_call") {
+      const receivers = Array.isArray(item["receiver_thread_ids"]) ? item["receiver_thread_ids"].map(str).filter(Boolean) : [];
+      return receivers.map((thread): ChatEvent => {
+        const state = obj(obj(item["agents_states"])[thread]);
+        const status = str(state["status"]);
+        const text = str(state["message"]);
+        return {
+          t: "subagent", id: thread,
+          ...(str(item["prompt"]) ? { task: str(item["prompt"]).slice(0, 240) } : {}),
+          ...(text ? { verdict: text } : {}),
+          status: status === "completed" ? "done" : ["failed", "errored", "shutdown"].includes(status) ? "error" : "working",
+        };
+      });
+    }
+    if (type !== "item.completed") return [];
     if (kind === "agent_message")
       return [{ t: "assistant", id, text: str(item["text"]), thinking: "" }];
     if (kind === "reasoning")
