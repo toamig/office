@@ -27,11 +27,25 @@ export const WorkflowView = Workflow.extend({
 });
 export type WorkflowView = z.infer<typeof WorkflowView>;
 
-export const WorkflowResult = z.object({
+const itemText = (max: number) => z.string().trim().min(1).max(max);
+export const WorkflowItem = z.strictObject({
+  title: itemText(160),
+  why: itemText(480).refine((text) => text.split(/\r\n|\r|\n/).length <= 2, "Use at most two lines"),
+  projectIds: z.array(itemText(128)).max(10),
+  sources: z.array(itemText(600)).min(1).max(8),
+  firstStep: itemText(600),
+});
+export type WorkflowItem = z.infer<typeof WorkflowItem>;
+
+export const WorkflowResult = WorkflowItem.extend({
   id: z.string(),
-  title: z.string(),
-  detail: z.string(),
-  projectId: z.string().nullable(),
+  workflowId: z.string(),
+  workflowName: z.string(),
+  runId: z.string(),
+  createdAt: z.string(),
+  why: z.string(),
+  sources: z.array(z.string()),
+  firstStep: z.string(),
 });
 export type WorkflowResult = z.infer<typeof WorkflowResult>;
 

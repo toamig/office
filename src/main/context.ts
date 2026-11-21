@@ -43,6 +43,7 @@ import { ChatService } from "./modules/chat/service";
 import { OfficeTools } from "./modules/chat/office-tools";
 import { RunService } from "./modules/runs/service";
 import { WorkflowResults } from "./modules/runs/workflow-results";
+import { workflowDiscussion } from "./modules/runs/workflow-discussion";
 import { ConversationBridge, writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
@@ -435,6 +436,22 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     root: () => box.current.workspaceRoot,
     changed: () => bus.emit("workflow.changed", {}),
     saveNote: (projectId, text) => agents.recorder.saveNote(projectId, text),
+    chatAvailable: (id) => {
+      const session = agents.sessions.find(id);
+      return !!session && !session.archivedAt && (!session.brainRoot || session.brainRoot === box.current.workspaceRoot);
+    },
+    startDiscussion: (item, sourceProject) => {
+      const { projectId, prompt } = workflowDiscussion(item, store.state.workspace, box.current.workspaceRoot, sourceProject);
+      const session = agents.explore.start(cheapestProvider(), false, projectId);
+      agents.sessions.rename(session.id, item.title);
+      try {
+        agents.chat.send(session.id, prompt);
+      } catch (error) {
+        agents.sessions.archive(session.id);
+        throw error;
+      }
+      return session.id;
+    },
   });
   const scheduler = new Scheduler({
     db,
@@ -445,7 +462,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     root: () => box.current.workspaceRoot,
     neutralFolder: dataDir,
     defaultProvider: cheapestProvider,
-    output: (root, workflow, text) => workflowResults.save(root, workflow, text),
+    output: (root, workflow, result) => workflowResults.save(root, workflow, result),
     changed: () => bus.emit("workflow.changed", {}),
   });
   const modules = new ModuleManager({
@@ -661,6 +678,7 @@ export async function createContext(
   const officeTools = new OfficeTools({
     bus, store, settings: () => box.current, sessions: agents.sessions, explore: agents.explore,
     recorder: agents.recorder, ops: notes.ops, scheduler: orch.scheduler, editor: orch.editor, tasks: orch.tasks,
+    workflowResults: orch.workflowResults,
   });
   agents.relay.officeTools = {
     authorized: (id, header) => agents.conversationBridge.valid(id, header),

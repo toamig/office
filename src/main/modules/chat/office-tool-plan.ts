@@ -30,7 +30,7 @@ const labels: Record<string, string> = {
   output: "Result goes to", provider: "Agent tool", read: "May read", enabled: "Enabled",
   visibility: "Visibility", license: "License", stack: "Stack", domain: "Domain", group: "Group",
   firstMessage: "First message", goal: "Goal", text: "Text", date: "Due date", title: "Title",
-  description: "Description", pipeline: "Pipeline", fanout: "Builders",
+  description: "Description", pipeline: "Pipeline", fanout: "Builders", decision: "Decision",
 };
 
 function choices<T extends string>(options: Record<T, string>): Array<{ label: string; value: string }> {
@@ -47,6 +47,7 @@ const keysByTool: Partial<Record<OfficeTool, string[]>> = {
   office_save_note: ["projectId", "text"],
   office_add_waiting: ["projectId", "text"],
   office_create_task: ["projectId", "pipeline", "title", "description", "fanout"],
+  office_resolve_item: ["decision"],
 };
 
 export function toolFields(
@@ -66,7 +67,7 @@ export function toolFields(
     const value = input[key] as Field["value"];
     return {
       key, label: labels[key] ?? key, value,
-      kind: ["prompt", "text", "description", "firstMessage"].includes(key) ? "multiline"
+      kind: ["prompt", "text", "description", "firstMessage", "decision"].includes(key) ? "multiline"
         : key === "enabled" ? "boolean" : key === "fanout" ? "number" : "text",
       ...(options[key] ? { options: options[key] } : {}),
       ...(["schedule", "projectId"].includes(key) && call.name.includes("workflow") ? { nullable: true } : {}),

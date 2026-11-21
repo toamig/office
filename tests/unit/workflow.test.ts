@@ -58,7 +58,12 @@ describe("workflow migration and safety", () => {
   it("skips scheduled slots while off and stores bounded results in the correct workspace", async () => {
     let time = new Date("2026-11-21T09:00:00Z");
     let active = false;
-    const result = Promise.resolve({ ok: true, resultText: JSON.stringify({ ideas: Array.from({ length: 6 }, (_, i) => ({ title: `Idea ${i}` })) }) });
+    const result = Promise.resolve({ ok: true, resultText: JSON.stringify({
+      items: Array.from({ length: 5 }, (_, i) => ({
+        title: `Idea ${i}`, why: "A fixture improvement", projectIds: ["alpha"],
+        sources: ["Projects/Alpha/Overview.md"], firstStep: "Review the overview",
+      })),
+    }) });
     const start = vi.fn(() => ({ id: "fixture-run", result }));
     const notifier = { notify: vi.fn() } as unknown as Notifier;
     const outputs = new WorkflowResults({ db, root: () => root, changed: vi.fn(), saveNote: vi.fn() });
@@ -79,7 +84,7 @@ describe("workflow migration and safety", () => {
     await scheduler.fire("ideas");
     const ideas = outputs.list();
     expect(ideas).toHaveLength(5);
-    expect(ideas[0]?.projectId).toBe("alpha");
+    expect(ideas[0]?.projectIds).toEqual(["alpha"]);
     outputs.dismiss(ideas[0]!.id);
     expect(outputs.list()).toHaveLength(4);
   });

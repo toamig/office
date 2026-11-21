@@ -11,7 +11,7 @@ import { readNote } from "../notes/notes";
 import { privateNotes } from "../vault/scope";
 import { fieldsPreview, officeCatalog, parseOfficeCall, toolFields, workflowPreview, type OfficeCall } from "./office-tool-plan";
 
-type Deps = Pick<AppContext, "bus" | "sessions" | "settings" | "store" | "scheduler" | "editor" | "explore" | "recorder" | "ops" | "tasks">;
+type Deps = Pick<AppContext, "bus" | "sessions" | "settings" | "store" | "scheduler" | "editor" | "explore" | "recorder" | "ops" | "tasks" | "workflowResults">;
 type Output = Record<string, unknown>;
 type Mutation = {
   title: string;
@@ -31,6 +31,7 @@ type Waiting = {
 };
 
 const message = (error: unknown) => error instanceof Error ? error.message : String(error);
+const discussionActions = new Set(["office_create_task", "office_start_session", "office_save_note"]);
 
 export class OfficeTools {
   private readonly waiting = new Map<string, Waiting>();
@@ -55,7 +56,8 @@ export class OfficeTools {
       if (call.name === "office_list_workflows") return this.catalog(session);
       if (call.name === "office_open") return this.open(session, call.input);
       const mutation = this.plan(session, call);
-      if (session.autonomy === "full-auto" && !mutation.public) return await mutation.run();
+      if (session.autonomy === "full-auto" && !mutation.public)
+        return await this.apply(id, this.deps.settings().workspaceRoot, call, mutation);
       return await this.confirm(id, call, mutation, signal);
     } catch (error) {
       return { error: message(error) };
@@ -105,11 +107,17 @@ export class OfficeTools {
     this.waiting.delete(id);
     this.deps.bus.emit("office.confirmation", { sessionId });
     try {
-      waiting.finish(await mutation.run());
+      waiting.finish(await this.apply(sessionId, waiting.root, waiting.call, mutation));
     } catch (error) {
       waiting.finish({ error: message(error) });
       throw error;
     }
+  }
+
+  private async apply(sessionId: string, root: string, call: OfficeCall, mutation: Mutation): Promise<Output> {
+    const result = await mutation.run();
+    if (discussionActions.has(call.name)) this.deps.workflowResults.resolveDiscussion(sessionId, root);
+    return result;
   }
 
   private projects(session: SessionRow): Project[] {
@@ -220,6 +228,19 @@ export class OfficeTools {
   private plan(session: SessionRow, call: OfficeCall): Mutation {
     if (call.name === "office_create_workflow" || call.name === "office_update_workflow" || call.name === "office_run_workflow")
       return this.workflowPlan(session, call);
+    if (call.name === "office_resolve_item") {
+      if (!this.deps.workflowResults.isDiscussion(session.id))
+        throw new Error("There is no active Worth a look item for this conversation.");
+      const root = this.deps.settings().workspaceRoot;
+      return {
+        title: "Close this Worth a look item",
+        fields: toolFields(call, [], call.input, []),
+        run: async () => {
+          this.deps.workflowResults.resolveDiscussion(session.id, root);
+          return { message: "Closed the item." };
+        },
+      };
+    }
     const { name, input } = call;
     const project = "projectId" in input || name !== "office_create_project"
       ? this.project(session, ("projectId" in input ? input.projectId : undefined) ?? session.projectId,

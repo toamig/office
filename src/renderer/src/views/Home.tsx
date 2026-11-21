@@ -199,8 +199,10 @@ export function Home() {
   return (
     <Page title="Home" subtitle="What needs you, what is running and what changed." testId="home">
       <RequestComposer />
-      <BriefPanel />
-      <WorthALook />
+      <div className="home-brief-grid">
+        <BriefPanel />
+        <WorthALook />
+      </div>
       <div className="home-grid">
         <NeedsYouPanel />
         <LiveAgentsPanel />

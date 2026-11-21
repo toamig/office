@@ -7,6 +7,7 @@ import { Banner, Button, Card, Dialog, EmptyState, OverflowMenu, Page, Time, not
 import { WorkflowForm } from "./workflows/WorkflowForm";
 
 const runLabels = { running: "Running", done: "Completed", failed: "Failed", cancelled: "Cancelled" };
+const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 function WorkflowTimes({ workflow }: { workflow: WorkflowView }) {
   const schedule = describeSchedule(workflow.schedule);
@@ -16,7 +17,8 @@ function WorkflowTimes({ workflow }: { workflow: WorkflowView }) {
     <dd>{workflow.valid ? <span title={workflow.schedule ?? undefined}>{schedule}</span>
       : <span className="ui-bad" title={workflow.schedule ?? undefined}>Invalid schedule</span>}</dd>
     <dt className="ui-muted">Next run</dt>
-    <dd>{workflow.nextRun ? <Time iso={workflow.nextRun} /> : workflow.enabled ? "None scheduled" : "Off"}</dd>
+    <dd>{workflow.nextRun ? <time dateTime={workflow.nextRun}>{dateTime.format(new Date(workflow.nextRun))}</time>
+      : workflow.enabled ? "None scheduled" : "Off"}</dd>
     <dt className="ui-muted">Last run</dt>
     <dd>{workflow.lastFiredAt ? <Time iso={workflow.lastFiredAt} /> : "Never"}</dd>
     {last && <>

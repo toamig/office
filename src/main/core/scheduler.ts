@@ -2,12 +2,19 @@ import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readSync } from "node:fs";
 import { join } from "node:path";
 import { Cron } from "croner";
-import { WorkflowRunStatus, workflowsFor, type Workflow, type WorkflowView } from "../../shared/workflow";
+import { WorkflowRunStatus, workflowsFor, type Workflow, type WorkflowItem, type WorkflowView } from "../../shared/workflow";
 import type { Workspace } from "../../shared/types";
 import type { Db } from "./db";
 import type { Notifier } from "./notifier";
 import type { RunRequest, RunService } from "../modules/runs/service";
 import { brainScope, type BrainScope } from "../modules/vault/scope";
+import { parseWorkflowItems, workflowItemProjects, WORKFLOW_ITEM_FORMAT } from "../modules/runs/workflow-items";
+
+export interface WorkflowOutputRun {
+  id: string;
+  text: string;
+  items?: WorkflowItem[] | null;
+}
 
 export interface SchedulerDeps {
   db: Db;
@@ -18,7 +25,7 @@ export interface SchedulerDeps {
   neutralFolder: () => string;
   projectPath: (projectId: string) => string | undefined;
   defaultProvider: () => string;
-  output: (root: string, workflow: Workflow, text: string) => Promise<void>;
+  output: (root: string, workflow: Workflow, run: WorkflowOutputRun) => Promise<void>;
   changed?: () => void;
   now?: () => Date;
 }
@@ -66,6 +73,7 @@ export function workflowRequest(
   project: string | undefined,
   neutralFolder: string,
   provider: string,
+  projects = workflowItemProjects(ws, root, workflow.projectId),
 ): RunRequest {
   if (workflow.projectId && !project) throw new Error("The workflow project is unavailable on this machine.");
   const canReadProject = workflow.read === "project" || workflow.read === "both";
@@ -86,7 +94,7 @@ export function workflowRequest(
     instructions: "Read only files in this project.", restrictedRead: true,
   } : undefined;
   const output = workflow.output === "worth-a-look"
-    ? 'Return JSON {"ideas":[{"title":"Short idea","detail":"What makes it useful and where to begin"}]}. Return up to five ideas.'
+    ? `${WORKFLOW_ITEM_FORMAT}\nAvailable projects: ${JSON.stringify(projects.map(({ id, name }) => ({ id, name })))}`
     : "Return the result as concise Markdown.";
   return {
     kind: "workflow",
@@ -189,15 +197,22 @@ export class Scheduler {
       logId = this.mark(root, id, at, "running");
       this.deps.changed?.();
       const project = workflow.projectId ? this.deps.projectPath(workflow.projectId) : undefined;
+      const projects = workflowItemProjects(ws, root, workflow.projectId);
       const request = workflowRequest(workflow, ws, root, project, this.deps.neutralFolder(),
-        workflow.provider || this.deps.defaultProvider());
+        workflow.provider || this.deps.defaultProvider(), projects);
       const handle = this.deps.runs.start(request);
       this.deps.db.prepare("UPDATE automations_log SET run_id = ? WHERE id = ?").run(handle.id, logId);
       const result = await handle.result;
       cancelled = result.error === "cancelled";
       if (!result.ok) throw new Error(result.error ?? "The agent run failed.");
-      if (this.deps.root() === root) await this.deps.output(root, workflow, result.resultText);
-      this.finish(logId, "done", result.resultText);
+      const output: WorkflowOutputRun = { id: handle.id, text: result.resultText };
+      if (workflow.output === "worth-a-look" && this.deps.root() === root)
+        await this.collectItems(output, request, new Set(projects.map((entry) => entry.id)));
+      if (this.deps.root() === root) await this.deps.output(root, workflow, output);
+      const summary = output.items
+        ? output.items.map((item) => item.title).join("\n") || "No items suggested."
+        : output.text;
+      this.finish(logId, "done", summary);
       return handle.id;
     } catch (error) {
       const description = error instanceof Error ? error.message : String(error);
@@ -213,6 +228,23 @@ export class Scheduler {
     } finally {
       this.inFlight.delete(key);
       this.deps.changed?.();
+    }
+  }
+
+  private async collectItems(output: WorkflowOutputRun, request: RunRequest, projects: ReadonlySet<string>): Promise<void> {
+    output.items = parseWorkflowItems(output.text, projects);
+    if (output.items !== null) return;
+    try {
+      const retry = await this.deps.runs.start({
+        ...request,
+        prompt: `${request.prompt}\n\nThe first response did not match the required shape. Check the JSON, required fields and project IDs before replying.`,
+      }).result;
+      if (retry.ok) {
+        output.text = retry.resultText.trim() ? retry.resultText : output.text;
+        output.items = parseWorkflowItems(retry.resultText, projects);
+      }
+    } catch {
+      // The first reply is still available as a plain item.
     }
   }
 

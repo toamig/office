@@ -55,6 +55,10 @@ export const officeTools = {
     description: "Create a Board task and start its configured pipeline.",
     input: CreateTask.omit({ projectId: true }).extend(project).strict(),
   },
+  office_resolve_item: {
+    description: "Close this Worth a look discussion after the owner explicitly decides it is complete. Only for chats opened with Discuss.",
+    input: z.strictObject({ decision: z.string().trim().min(1).max(600) }),
+  },
   office_open: {
     description: "Open an Office view, project, Board task, or project note.",
     input: z.strictObject({

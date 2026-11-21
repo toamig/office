@@ -712,7 +712,21 @@
   font-size: var(--text-xs);
 }
 
-/* Home: one, two or three columns by the width of the content, not of the window. */
+.home-brief-grid {
+  display: grid;
+  align-items: start;
+  gap: var(--space-4);
+}
+.home-brief-grid > * {
+  min-width: 0;
+}
+@container main (min-width: 1100px) {
+  .home-brief-grid:has(> :nth-child(2)) {
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  }
+}
+
+/* Home: one, two or three columns by the width of the content. */
 .home-grid {
   columns: 1;
   column-gap: var(--space-4);
