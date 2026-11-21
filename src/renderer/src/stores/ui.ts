@@ -12,6 +12,7 @@ export type ViewId =
   | "inbox"
   | "explore"
   | "setup"
+  | "tools"
   | "gallery";
 
 interface Place {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
+import { ToolEdit, ToolEditPreview, ToolEntry } from "./tool-config";
 import { Automation, PermissionProfile, Pipeline, Role } from "./schemas";
 import {
   AppSettings,
@@ -244,6 +245,12 @@ export const channels = {
     req: z.object({ projectId: z.string().optional() }),
     res: z.array(Inventory),
   },
+  "tools.list": {
+    req: z.object({ projectId: z.string().optional() }),
+    res: z.array(ToolEntry),
+  },
+  "tools.preview": { req: ToolEdit, res: ToolEditPreview },
+  "tools.apply": { req: z.object({ id: z.string() }), res: z.void() },
   "setup.pickFolder": {
     req: z.object({ title: z.string().optional() }),
     res: z.string().nullable(),

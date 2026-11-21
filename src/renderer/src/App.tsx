@@ -25,6 +25,7 @@ import { Inbox } from "./views/Inbox";
 import { ProjectPage } from "./views/ProjectPage";
 import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
+import { Tools } from "./views/Tools";
 import { Banner, NotificationStack, notify } from "./ui";
 import { Welcome } from "./views/welcome/Welcome";
 
@@ -57,6 +58,7 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "brain") return <Brain />;
   if (view === "explore") return <Explore />;
   if (view === "inbox") return <Inbox />;
+  if (view === "tools") return <Tools />;
   if (view === "gallery" && Gallery)
     return (
       <Suspense fallback={null}>
@@ -101,7 +103,7 @@ export default function App() {
         notify({
           tone: "info",
           title: `Your ${m.total} ${m.total === 1 ? "role now uses" : "roles now use"} profiles`,
-          detail: `${m.matched} match built-ins, ${m.kept} keep their own settings. See Board, Permissions.`,
+          detail: `${m.matched} match built-ins, ${m.kept} keep their own settings. See Setup, Advanced.`,
           subject: "profiles-migrated",
         });
       }),

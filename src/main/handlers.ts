@@ -205,6 +205,12 @@ function registerSetupHandlers(ctx: AppContext): void {
     },
   );
   ctx.ipc.handle("setup.inventory", (req) => inventory.get(req.projectId));
+  ctx.ipc.handle("tools.list", (req) => ctx.toolConfig.list(req.projectId));
+  ctx.ipc.handle("tools.preview", (req) => ctx.toolConfig.preview(req));
+  ctx.ipc.handle("tools.apply", (req) => {
+    ctx.toolConfig.apply(req.id);
+    ctx.bus.emit("setup.changed", {});
+  });
 
   const toolActions = {
     providers: ctx.providers,

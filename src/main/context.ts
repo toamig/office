@@ -51,6 +51,7 @@ import { OnboardingService } from "./modules/onboarding/service";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 import { detectTools } from "./modules/setup/detect";
 import { ToolsMonitor } from "./modules/setup/tools-monitor";
+import { ToolConfigService } from "./modules/setup/tool-config";
 import { computeSetupState } from "./modules/setup/state";
 import { VaultService } from "./modules/vault/service";
 import { VaultWriter } from "./modules/vault/writer";
@@ -103,6 +104,7 @@ export interface AppContext {
   healthActions: HealthActions;
   /** The last look at the command-line tools, refreshed in the background. */
   toolsMonitor: ToolsMonitor;
+  toolConfig: ToolConfigService;
   /** Where the welcome flow stands. */
   setupState: () => SetupState;
   /** Sync all repos and raise notifications for what needs the owner. */
@@ -657,6 +659,11 @@ export async function createContext(
     notesRepo: (name, domain, stack) => agents.explore.notesRepo(name, domain, stack),
   });
   const toolsMonitor = new ToolsMonitor(detectTools, () => bus.emit("setup.changed", {}));
+  const toolConfig = new ToolConfigService({
+    home: userHome,
+    backups: () => join(dataDir(), "tool-backups"),
+    project: folderOf(notes.projects),
+  });
   const setupState = (tools: ToolsMonitor["current"] = toolsMonitor.current): SetupState => {
     const s = box.current;
     const hooks = agents.hooks.status();
@@ -704,6 +711,7 @@ export async function createContext(
     notifier,
     ntfy,
     ...agents,
+    toolConfig,
     requestRouter,
     permissions: agents.broker,
     pending,

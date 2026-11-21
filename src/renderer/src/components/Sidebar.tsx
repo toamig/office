@@ -9,6 +9,7 @@ import {
   KanbanSquare,
   Palette,
   Settings,
+  Wrench,
 } from "lucide-react";
 import { useState, type ComponentType, type KeyboardEvent, type PointerEvent } from "react";
 import { usePending } from "../lib/pending";
@@ -28,6 +29,7 @@ export const RAIL: Array<{ id: ViewId; icon: ComponentType<{ size?: number }> }>
   { id: "inbox", icon: InboxIcon },
   { id: "explore", icon: Compass },
   { id: "setup", icon: Settings },
+  { id: "tools", icon: Wrench },
 ];
 
 /** The sidebar: icons and labels, or icons only when collapsed. */

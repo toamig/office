@@ -20,6 +20,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "setup.state",
   "setup.inspect",
   "setup.inventory",
+  "tools.list",
   "providers.list",
   "sessions.list",
   "sessions.get",
@@ -68,6 +69,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
  * as events), so they do not make the screens ask again.
  */
 const QUIET_PREFIXES = [
+  "tools.preview",
   "onboarding.scan",
   "onboarding.plan",
   "pointer.preview",

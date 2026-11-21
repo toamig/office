@@ -4,7 +4,6 @@ import { Button, Card, LinkButton, Page } from "../ui";
 import { AboutPanel } from "./setup/AboutPanel";
 import { AutomationsPanel } from "./setup/AutomationsPanel";
 import { HooksPanel } from "./setup/HooksPanel";
-import { InventoryPanel } from "./setup/InventoryPanel";
 import { ModulesPanel } from "./setup/ModulesPanel";
 import { PreferencesPanel } from "./setup/PreferencesPanel";
 import { ProjectsStep } from "./setup/ProjectsStep";
@@ -65,7 +64,6 @@ export function Setup() {
         {w?.configured && <AutomationsPanel />}
         <ModulesPanel />
         <AboutPanel />
-        {w?.configured && <InventoryPanel />}
         {w?.configured && (
           <details className="span-all">
             <summary className="ui-label cursor-pointer">Advanced</summary>
