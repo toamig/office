@@ -13,7 +13,8 @@ import {
   Workspace as WorkspaceSchema,
 } from "../../../shared/schemas";
 import type { z } from "zod";
-import type { Automation, PermissionProfile, Role, Workspace } from "../../../shared/types";
+import type { PermissionProfile, Role, Workspace } from "../../../shared/types";
+import { workflowsFor, type Workflow } from "../../../shared/workflow";
 import { validCron } from "../../core/scheduler";
 import { IpcFailure } from "../../core/ipc";
 import type { VaultWriter } from "../vault/writer";
@@ -187,26 +188,25 @@ export class WorkspaceEditor {
     });
   }
 
-  /** Adds or replaces an automation (a scheduled prompt on a project). */
-  async saveAutomation(automation: Automation): Promise<void> {
-    if (!ID_RE.test(automation.id))
-      throw new IpcFailure("bad-id", "An automation id uses lowercase letters, digits and dashes");
-    if (!validCron(automation.cron))
-      throw new IpcFailure("bad-cron", `"${automation.cron}" is not a valid cron expression`);
-    await this.edit(`Workspace: automation ${automation.id}`, (json) => {
-      const list = ((json["automations"] ??= []) as Array<{ id?: string }>).filter(
-        (a) => a.id !== automation.id,
-      );
-      list.push(automation as unknown as { id?: string });
-      json["automations"] = list;
+  async saveWorkflow(workflow: Workflow): Promise<void> {
+    if (workflow.schedule && !validCron(workflow.schedule))
+      throw new IpcFailure("bad-cron", `"${workflow.schedule}" is not a valid cron expression`);
+    await this.edit(`Workspace: workflow ${workflow.id}`, (json) => {
+      const workspace = WorkspaceSchema.parse(json);
+      if (workflow.projectId && !workspace.projects.some((project) => project.id === workflow.projectId))
+        throw new IpcFailure("not-found", "Choose a project in this workspace.");
+      if (!workflow.projectId && (workflow.read === "project" || workflow.read === "both"))
+        throw new IpcFailure("invalid", "Choose a project before allowing project files.");
+      const list = workflowsFor(workspace).filter((item) => item.id !== workflow.id);
+      json["workflows"] = [...list, workflow];
+      delete json["automations"];
     });
   }
 
-  async removeAutomation(id: string): Promise<void> {
-    await this.edit(`Workspace: remove automation ${id}`, (json) => {
-      json["automations"] = ((json["automations"] ?? []) as Array<{ id?: string }>).filter(
-        (a) => a.id !== id,
-      );
+  async removeWorkflow(id: string): Promise<void> {
+    await this.edit(`Workspace: remove workflow ${id}`, (json) => {
+      json["workflows"] = workflowsFor(WorkspaceSchema.parse(json)).filter((workflow) => workflow.id !== id);
+      delete json["automations"];
     });
   }
 

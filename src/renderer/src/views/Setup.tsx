@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useQuery } from "../lib/hooks";
 import { Button, Card, LinkButton, Page } from "../ui";
 import { AboutPanel } from "./setup/AboutPanel";
-import { AutomationsPanel } from "./setup/AutomationsPanel";
+import { BackgroundAiPanel } from "./setup/BackgroundAiPanel";
 import { HooksPanel } from "./setup/HooksPanel";
 import { ModulesPanel } from "./setup/ModulesPanel";
 import { PreferencesPanel } from "./setup/PreferencesPanel";
@@ -61,7 +61,7 @@ export function Setup() {
         <ToolsPanel />
         <HooksPanel />
         <PreferencesPanel />
-        {w?.configured && <AutomationsPanel />}
+        {w?.configured && <BackgroundAiPanel />}
         <ModulesPanel />
         <AboutPanel />
         {w?.configured && (

@@ -515,13 +515,13 @@ function registerConfigHandlers(ctx: AppContext): void {
   ctx.ipc.handle("roles.setOverride", (req) =>
     ctx.editor.setOverride(req.projectId, req.role, req.target),
   );
-  ctx.ipc.handle("automations.list", () => ctx.scheduler.list());
-  ctx.ipc.handle("automations.save", (req) => ctx.editor.saveAutomation(req));
-  ctx.ipc.handle("automations.remove", (req) => ctx.editor.removeAutomation(req.id));
-  ctx.ipc.handle("automations.runNow", async (req) => {
-    const automation = ctx.store.state.workspace?.automations.find((a) => a.id === req.id);
-    if (!automation) throw new IpcFailure("not-found", `No automation ${req.id}`);
-    void ctx.scheduler.fire(automation);
+  ctx.ipc.handle("workflows.list", () => ctx.scheduler.list());
+  ctx.ipc.handle("workflows.save", (req) => ctx.editor.saveWorkflow(req));
+  ctx.ipc.handle("workflows.remove", (req) => ctx.editor.removeWorkflow(req.id));
+  ctx.ipc.handle("workflows.results", () => ctx.workflowResults.list());
+  ctx.ipc.handle("workflows.dismiss", (req) => ctx.workflowResults.dismiss(req.id));
+  ctx.ipc.handle("workflows.runNow", async (req) => {
+    await ctx.scheduler.fire(req.id);
   });
   const appSettings = (): AppSettings => {
     const s = ctx.settings();
@@ -538,6 +538,15 @@ function registerConfigHandlers(ctx: AppContext): void {
       sessionMode: s.sessionMode,
       autonomy: s.autonomy === "full-auto" && !s.confirmedFullAuto ? "act-on-risk" : s.autonomy,
       confirmedFullAuto: s.confirmedFullAuto,
+      briefEnabled: s.briefEnabled,
+      briefModel: s.briefModel,
+      briefTime: s.briefTime ?? ctx.store.state.workspace?.briefTime ?? "08:00",
+      recorderEnabled: s.recorderEnabled,
+      recorderModel: s.recorderModel,
+      recorderIdleMinutes: s.recorderIdleMinutes,
+      learningEnabled: s.learningEnabled,
+      requestRouterEnabled: s.requestRouterEnabled,
+      requestRouterModel: s.requestRouterModel,
       sessionIdleDays: s.sessionIdleDays,
       sessionsMulti: s.sessionsMulti,
       quietHours: s.quietHours ?? null,
@@ -559,6 +568,7 @@ function registerConfigHandlers(ctx: AppContext): void {
         : { inspectorHidden: { ...ctx.settings().inspectorHidden, ...inspectorHidden } }),
       ...(quietHours === undefined ? {} : { quietHours: quietHours ?? undefined }),
     });
+    if (req.briefEnabled === false) void ctx.brief.run().catch(() => undefined);
     return appSettings();
   });
   ctx.ipc.handle("notifications.setRules", (req) => ctx.editor.setNotifications(req));

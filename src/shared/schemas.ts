@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AutonomyLevel, DEFAULT_AUTONOMY } from "./autonomy";
+import { Workflow } from "./workflow";
 
 /** Machine settings: local to one PC, never committed (plan 5.1). */
 export const MachineSettings = z.object({
@@ -46,6 +47,11 @@ export const MachineSettings = z.object({
   learningEnabled: z.boolean().default(true),
   recorderIdleMinutes: z.number().int().positive().default(10),
   requestRouterEnabled: z.boolean().default(true),
+  requestRouterModel: z.string().default(""),
+  recorderModel: z.string().default(""),
+  briefEnabled: z.boolean().default(true),
+  briefModel: z.string().default(""),
+  briefTime: z.string().optional(),
   /** Days a finished session may sit unused before Office asks whether it is still needed. */
   sessionIdleDays: z.number().int().min(1).default(2),
   /** Whether Sessions shows several sessions at once; off, it shows one at a time. */
@@ -146,6 +152,7 @@ export const Workspace = z.object({
     ntfyTopicUrl: z.url().optional(),
   }),
   automations: z.array(Automation).default([]),
+  workflows: z.array(Workflow).optional(),
   archiveAfterDays: z.number().int().default(7),
   briefTime: z.string().default("08:00"),
 });

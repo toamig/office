@@ -10,6 +10,7 @@ export interface BrainScope {
   writable: string[];
   readOnly: string[];
   private: string[];
+  restrictedRead?: boolean;
 }
 
 /** Returns a path below the root. Rejects traversal and junctions on every existing component. */

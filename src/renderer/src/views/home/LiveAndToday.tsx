@@ -1,4 +1,3 @@
-import type { AutomationView } from "@shared/models";
 import { StatusChip } from "../../components/StatusChip";
 import { useQuery } from "../../lib/hooks";
 import { useUi } from "../../stores/ui";
@@ -56,23 +55,23 @@ const sameDay = (iso: string | null, now: Date): boolean => {
 const clock = (iso: string): string =>
   new Date(iso).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-/** Automations that ran or are due today. */
+/** Workflows that ran or are due today. */
 export function TodayPanel() {
-  const automations = useQuery("automations.list", undefined, ["run.done"]);
+  const workflows = useQuery("workflows.list", undefined, ["run.done", "workspace.changed"]);
   const now = new Date();
-  const mine = (automations.data ?? []).filter((a: AutomationView) => a.enabled && a.valid);
+  const mine = (workflows.data ?? []).filter((workflow) => workflow.enabled && workflow.valid);
   const ranToday = mine.filter((a) => sameDay(a.lastFiredAt, now));
   const dueToday = mine.filter((a) => sameDay(a.nextRun, now));
   return (
     <Card title="Today" testId="panel-today">
       {ranToday.length === 0 && dueToday.length === 0 && (
-        <EmptyState title="Nothing due today">No automations are scheduled for today.</EmptyState>
+        <EmptyState title="Nothing due today">No workflows are scheduled for today.</EmptyState>
       )}
       {ranToday.map((a) => (
         <div key={`ran-${a.id}`} className="ui-line" data-testid="today-ran">
           <StatusBadge status="done" label="Ran" />
           <div className="ui-line-main">
-            {a.project}: {a.prompt.slice(0, 60)}
+            {a.name}
             <div className="ui-line-sub num">{clock(a.lastFiredAt as string)}</div>
           </div>
         </div>
@@ -81,7 +80,7 @@ export function TodayPanel() {
         <div key={`due-${a.id}`} className="ui-line" data-testid="today-due">
           <StatusBadge status="waiting" label="Due" tone="neutral" />
           <div className="ui-line-main">
-            {a.project}: {a.prompt.slice(0, 60)}
+            {a.name}
             <div className="ui-line-sub num">{clock(a.nextRun as string)}</div>
           </div>
         </div>

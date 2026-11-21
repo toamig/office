@@ -17,6 +17,7 @@ const KIND_LABEL: Record<PendingItem["kind"], string> = {
   "review-requested": "Review",
   waiting: "For you",
   "save-proposal": "Brain",
+  workflow: "Workflow",
 };
 
 /** The pending items that are something broken, which a session can fix (a question or a review is the owner's to answer). */
@@ -43,6 +44,10 @@ export function useOpenPending(): (item: PendingItem) => void {
 /** Ignores an item until the state behind it changes. */
 export async function dismissPending(item: PendingItem): Promise<void> {
   try {
+    if (item.workflowResultId) {
+      await office.invoke("workflows.dismiss", { id: item.workflowResultId });
+      return;
+    }
     await office.invoke("pending.dismiss", { key: item.key, fingerprint: item.fingerprint });
   } catch (err) {
     notifyError(err, "Could not hide that item", "pending");

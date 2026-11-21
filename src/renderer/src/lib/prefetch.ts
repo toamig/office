@@ -15,7 +15,8 @@ const READS: Partial<Record<ViewId, Array<() => void>>> = {
     () => prefetch("sessions.list", {}),
     () => prefetch("pending.list"),
     () => prefetch("tasks.list", {}),
-    () => prefetch("automations.list"),
+    () => prefetch("workflows.list"),
+    () => prefetch("workflows.results"),
     () => prefetch("permissions.list"),
   ],
   projects: [() => prefetch("projects.list")],
@@ -43,10 +44,10 @@ const READS: Partial<Record<ViewId, Array<() => void>>> = {
     () => prefetch("hooks.status"),
     () => prefetch("settings.get"),
     () => prefetch("projects.list"),
-    () => prefetch("automations.list"),
+    () => prefetch("workflows.list"),
     () => prefetch("modules.list"),
-    () => prefetch("setup.inventory", {}),
   ],
+  tools: [() => prefetch("tools.list", {}), () => prefetch("projects.list")],
 };
 
 /** Starts the reads of one view. Cheap to call again: a key that has fresh data is not read twice. */

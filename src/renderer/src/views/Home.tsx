@@ -13,6 +13,7 @@ import { usePending } from "../lib/pending";
 import { LiveAgentsPanel, TodayPanel } from "./home/LiveAndToday";
 import { SavedNotes } from "./home/SavedNotes";
 import { RequestComposer } from "./home/RequestComposer";
+import { WorthALook } from "./home/WorthALook";
 
 /** Home shows the first few; Needs you shows them all. */
 const SHOWN = 8;
@@ -43,7 +44,8 @@ function NeedsYouPanel() {
 /** The brief: three to five plain lines at the top of Home, each leading to its place, and the facts behind them. */
 function BriefPanel() {
   const navigate = useUi((s) => s.navigate);
-  const brief = useQuery("brief.latest", undefined, ["brief.changed"]);
+  const brief = useQuery("brief.latest", undefined, ["brief.changed", "settings.changed"]);
+  const settings = useQuery("settings.get", undefined, ["settings.changed"]);
   const [busy, setBusy] = useState(false);
   const [details, setDetails] = useState(false);
   const write = async (): Promise<void> => {
@@ -74,7 +76,7 @@ function BriefPanel() {
           onClick={() => void write()}
           data-testid="brief-run"
         >
-          {busy ? "Writing..." : "Write it now"}
+          {busy ? "Refreshing..." : settings.data?.briefEnabled === false ? "Refresh facts" : "Write it now"}
         </Button>
       }
     >
@@ -198,6 +200,7 @@ export function Home() {
     <Page title="Home" subtitle="What needs you, what is running and what changed." testId="home">
       <RequestComposer />
       <BriefPanel />
+      <WorthALook />
       <div className="home-grid">
         <NeedsYouPanel />
         <LiveAgentsPanel />

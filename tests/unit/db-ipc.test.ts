@@ -35,6 +35,7 @@ describe("database", () => {
       "briefs",
       "layouts",
       "automations_log",
+      "workflow_results",
     ]) {
       expect(tables).toContain(t);
     }

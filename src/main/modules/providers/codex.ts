@@ -74,16 +74,17 @@ function scopedPermissions(o: RunOptions, sandbox: Role["codexSandbox"]): string
   if (!o.brain || !sandbox || sandbox === "danger-full-access") return [];
   const { root, writable, readOnly, private: hidden } = o.brain;
   const writableNotes = sandbox === "workspace-write";
-  const filesystem = [
+  const filesystem = new Map([
+    ...(o.brain.restrictedRead ? [[":root", "deny"], [":minimal", "read"], [o.cwd, "read"]] : []),
     [root, "read"],
     ...readOnly.map((dir) => [dir, "read"]),
     ...writable.map((dir) => [dir, writableNotes ? "write" : "read"]),
     ...hidden.map((dir) => [dir, "deny"]),
-  ].map(([dir, mode]) => `${JSON.stringify(dir)} = ${JSON.stringify(mode)}`);
+  ] as [string, string][]);
   return [
     "-c", 'default_permissions="office-brain"',
     "-c", `permissions.office-brain.extends="${writableNotes ? ":workspace" : ":read-only"}"`,
-    "-c", `permissions.office-brain.filesystem={ ${filesystem.join(", ")} }`,
+    "-c", `permissions.office-brain.filesystem={ ${[...filesystem].map(([dir, mode]) => `${JSON.stringify(dir)} = ${JSON.stringify(mode)}`).join(", ")} }`,
   ];
 }
 
@@ -113,6 +114,10 @@ export function codexHeadlessArgs(
     if (sandbox && !scope.length) flags.push("-s", sandbox);
   }
   flags.push(...scope);
+  if (o.tools !== undefined) {
+    flags.push("-c", "features.apps=false", "-c", "features.plugins=false");
+    if (!o.tools) flags.push("-c", "features.shell_tool=false");
+  }
   flags.push("--skip-git-repo-check", "-o", resultFile);
   const instructions = [o.role?.instructions.trim(), o.brain?.instructions].filter(Boolean).join("\n\n");
   const prompt = instructions ? `${instructions}\n\n${o.prompt}` : o.prompt;

@@ -7,6 +7,7 @@ import type { Notifier } from "../../core/notifier";
 import { projectFolder } from "../../core/util";
 import { git } from "../git/run";
 import type { RunService } from "../runs/service";
+import { cheapestModel } from "../../core/scheduler";
 
 const MARKER = "__run__";
 /** The row that holds the brief's lines; the other rows of a date are the facts of one project each. */
@@ -29,6 +30,8 @@ export interface BriefDeps {
   projectPaths?: () => Record<string, string>;
   workspaceRoot: () => string;
   now?: () => Date;
+  settings?: () => { enabled: boolean; model: string; time?: string | undefined };
+  defaultProvider?: () => string;
   /** Called when a brief was written, so a view showing it can read it again. */
   written?: () => void;
 }
@@ -67,10 +70,7 @@ export const BRIEF_MAX_LINES = 5;
 export const BRIEF_MAX_CHARS = 140;
 
 /** The only tools the brief's run has: it reads nothing, because every fact is in the prompt. */
-export const BRIEF_TOOLS = "Read,Grep,Glob";
-
-/** The cheapest model of the tool. */
-export const BRIEF_MODEL = "haiku";
+export const BRIEF_TOOLS = "";
 
 /** The facts as the prompt gives them, and the format the answer must take. */
 export function buildBriefPrompt(activities: Activity[], needsYou: string[] = []): string {
@@ -211,17 +211,17 @@ export class BriefService {
     let lines: string[] = [];
     if (activities.length + needsYou.length === 0) {
       lines = ["Nothing changed since you last looked, and nothing needs you."];
-    } else {
+    } else if (this.deps.settings?.().enabled !== false) {
       // The run may only read, with nothing allowed to run, on the cheapest model; every fact is in its prompt.
       const role = ws.roles["brief"];
-      const provider = role?.provider ?? "claude-code";
+      const provider = role?.provider ?? this.deps.defaultProvider?.() ?? "claude-code";
       try {
         const handle = this.deps.runs.start({
           kind: "brief",
           providerId: provider,
           role: {
             provider,
-            model: BRIEF_MODEL,
+            model: this.deps.settings?.().model || cheapestModel(provider),
             instructions: "",
             readOnly: true,
             allowedCommands: [],
@@ -235,8 +235,8 @@ export class BriefService {
       } catch {
         /* the plain lines below are used */
       }
-      if (lines.length === 0) lines = plainBrief(activities, needsYou);
     }
+    if (lines.length === 0) lines = plainBrief(activities, needsYou);
     const projects = ws.projects;
     const stored: BriefLine[] = lines.map((text) => ({ text, link: linkForLine(text, projects) }));
     const insert = this.deps.db.prepare(
@@ -263,7 +263,7 @@ export class BriefService {
     const ws = this.deps.workspace();
     if (!ws) return false;
     const now = this.now();
-    if (!briefDue(now, ws.briefTime)) return false;
+    if (!briefDue(now, this.deps.settings?.().time || ws.briefTime)) return false;
     const done = this.deps.db
       .prepare("SELECT 1 FROM briefs WHERE date = ? AND project_id = ?")
       .get(localDate(now), MARKER);
@@ -298,6 +298,11 @@ export class BriefService {
         projectName: projects.find((p) => p.id === r.project_id)?.name ?? r.project_id,
         markdown: r.markdown,
       });
+    }
+    if (this.deps.settings?.().enabled === false) {
+      const activity = projects.filter((project) => items.some((item) => item.projectId === project.id))
+        .map((project) => ({ project, commits: [], notes: [], sessions: [], runs: [] }));
+      lines = plainBrief(activity, this.needsYou()).map((text) => ({ text, link: linkForLine(text, projects) }));
     }
     return { date: row.date, lines, items };
   }

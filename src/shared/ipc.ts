@@ -1,12 +1,12 @@
 import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
 import { ToolEdit, ToolEditPreview, ToolEntry } from "./tool-config";
-import { Automation, PermissionProfile, Pipeline, Role } from "./schemas";
+import { Workflow, WorkflowResult, WorkflowView } from "./workflow";
+import { PermissionProfile, Pipeline, Role } from "./schemas";
 import {
   AppSettings,
   AppSettingsPatch,
   AskResult,
-  AutomationView,
   BranchCompare,
   BranchList,
   AuditEntry,
@@ -97,6 +97,7 @@ export const eventTypes = [
   "settings.changed",
   "profiles.migrated",
   "recorder.changed",
+  "workflow.changed",
   "app.history",
   "app.terminal-action",
   "chat.event",
@@ -484,10 +485,12 @@ export const channels = {
     req: z.object({ projectId: z.string(), role: z.string(), target: z.string().nullable() }),
     res: z.void(),
   },
-  "automations.list": { req: z.void(), res: z.array(AutomationView) },
-  "automations.save": { req: Automation, res: z.void() },
-  "automations.remove": { req: z.object({ id: z.string() }), res: z.void() },
-  "automations.runNow": { req: z.object({ id: z.string() }), res: z.void() },
+  "workflows.list": { req: z.void(), res: z.array(WorkflowView) },
+  "workflows.save": { req: Workflow, res: z.void() },
+  "workflows.remove": { req: z.object({ id: z.string() }), res: z.void() },
+  "workflows.runNow": { req: z.object({ id: z.string() }), res: z.void() },
+  "workflows.results": { req: z.void(), res: z.array(WorkflowResult) },
+  "workflows.dismiss": { req: z.object({ id: z.string() }), res: z.void() },
   "settings.get": { req: z.void(), res: AppSettings },
   "settings.set": { req: AppSettingsPatch, res: AppSettings },
   "notifications.setRules": { req: NotificationRules, res: z.void() },

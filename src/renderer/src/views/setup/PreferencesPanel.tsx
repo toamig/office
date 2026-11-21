@@ -20,7 +20,7 @@ const KINDS: Array<[string, string]> = [
   ["vault.write-failed", "A note could not be written"],
   ["task.gate", "A task waits for approval"],
   ["task.done", "A task finished"],
-  ["automation.done", "An automation ran"],
+  ["automation.done", "A workflow ran"],
   ["brief.ready", "The morning brief is ready"],
   ["permission.request", "An agent asks permission"],
 ];

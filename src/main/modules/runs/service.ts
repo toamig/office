@@ -11,8 +11,9 @@ import { nowIso } from "../../core/util";
 import type { ProviderRegistry } from "../providers/registry";
 import type { AgentEvent, AgentRun, AgentRunResult, RunPermission } from "../providers/types";
 import type { PermissionBroker } from "./permissions";
+import type { BrainScope } from "../vault/scope";
 
-export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation" | "recorder" | "route";
+export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation" | "recorder" | "route" | "workflow";
 
 export interface RunRequest {
   kind: RunKind;
@@ -23,6 +24,8 @@ export interface RunRequest {
   resumeId?: string;
   /** Only these tools exist for the run, and nothing else may run ("Read,Grep,Glob"). */
   tools?: string;
+  brain?: BrainScope;
+  addDirs?: string[];
   projectId?: string;
   taskId?: string;
   /** Called for each normalised event while the run is going (the Ask panel streams from this). */
@@ -55,7 +58,7 @@ export interface RunServiceDeps {
 }
 
 /** Runs that only read: they get read tools and nothing ever asks. */
-const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route"];
+const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route", "workflow"];
 
 /** Runs headless agent tasks and records each one: a database row plus events.jsonl and result.md. */
 export class RunService {
@@ -105,6 +108,8 @@ export class RunService {
       ...(role ? { role } : {}),
       ...(req.resumeId ? { resumeId: req.resumeId } : {}),
       ...(req.tools === undefined ? {} : { tools: req.tools }),
+      ...(req.brain ? { brain: req.brain } : {}),
+      ...(req.addDirs ? { addDirs: req.addDirs } : {}),
     });
     this.active.set(id, run);
 

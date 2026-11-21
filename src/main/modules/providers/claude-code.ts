@@ -91,8 +91,8 @@ function sessionSettings(o: Pick<RunOptions, "brain" | "role">): string[] {
     ...[...o.brain.readOnly, ...o.brain.private].map((dir) => `Edit(${claudePath(dir)}/**)`),
     ...["_index.md", "brain.repos.json"].map((file) => `Edit(${claudePath(`${o.brain!.root}/${file}`)})`),
   ] : [];
-  if (!ask.length && !denied.length) return [];
-  const settings = { permissions: { ask, deny: denied } };
+  if (!ask.length && !denied.length && !o.brain?.restrictedRead) return [];
+  const settings = { permissions: { ask, deny: denied, ...(o.brain?.restrictedRead ? { blockReadsOutsideWorkingDirectories: true } : {}) } };
   return ["--settings", JSON.stringify(settings)];
 }
 
@@ -109,6 +109,7 @@ export function claudeHeadlessArgs(
     "--verbose",
     ...roleFlags,
     ...(o.tools === undefined ? [] : ["--tools", o.tools]),
+    ...(o.tools === undefined ? [] : ["--strict-mcp-config"]),
   ];
   if (o.resumeId) args.push("--resume", o.resumeId);
   args.push(...permissionFlags(o));

@@ -9,7 +9,7 @@ import { IpcRegistry } from "./core/ipc";
 import { NtfyChannel } from "./core/channels/ntfy";
 import { ModuleManager } from "./core/modules";
 import { Notifier } from "./core/notifier";
-import { Scheduler } from "./core/scheduler";
+import { cheapestModel, Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
 import {
   claudeSettingsPath,
@@ -41,6 +41,7 @@ import { AskService } from "./modules/ask/ask";
 import { RequestRouter } from "./modules/ask/router";
 import { ChatService } from "./modules/chat/service";
 import { RunService } from "./modules/runs/service";
+import { WorkflowResults } from "./modules/runs/workflow-results";
 import { writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
 import { SessionService } from "./modules/sessions/service";
@@ -80,6 +81,7 @@ export interface AppContext {
   editor: WorkspaceEditor;
   tasks: TaskEngine;
   scheduler: Scheduler;
+  workflowResults: WorkflowResults;
   modules: ModuleManager;
   ntfy: NtfyChannel;
   relay: RelayServer;
@@ -215,6 +217,10 @@ const folderOf =
     return project ? projects.absPath(project) : undefined;
   };
 
+const cheapestProvider = () => resolveTool("claude") ? "claude-code"
+  : resolveTool("fake-claude") ? "fake"
+  : resolveTool("codex") ? "codex" : "claude-code";
+
 /** Agents: providers, headless runs, interactive sessions, hooks, Ask, the brief and Explore. */
 function createAgents(base: Base, notes: Notes, relayScript: string) {
   const { box, bus, db, store, notifier } = base;
@@ -256,6 +262,8 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
     projectsRoot: () => box.current.projectsRoot,
     projectPaths: () => box.current.projectPaths,
     workspaceRoot: () => box.current.workspaceRoot,
+    settings: () => ({ enabled: box.current.briefEnabled, model: box.current.briefModel, time: box.current.briefTime }),
+    defaultProvider: cheapestProvider,
     written: () => {
       recorder.markBrief();
       bus.emit("brief.changed", {});
@@ -313,7 +321,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string) {
         ...(session.projectId ? { projectId: session.projectId } : {}),
         role: {
           provider: providerId,
-          model: providerId === "codex" ? "gpt-5.4-mini" : "haiku",
+          model: box.current.recorderModel || cheapestModel(providerId),
           instructions: "", readOnly: true, allowedCommands: [],
         },
       });
@@ -417,13 +425,22 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
       await ops.addTodo(projectId, text, undefined, "Implementation notes");
     },
   });
+  const workflowResults = new WorkflowResults({
+    db,
+    root: () => box.current.workspaceRoot,
+    changed: () => bus.emit("workflow.changed", {}),
+    saveNote: (projectId, text) => agents.recorder.saveNote(projectId, text),
+  });
   const scheduler = new Scheduler({
     db,
     runs,
     notifier,
     workspace: () => store.state.workspace,
     projectPath: folderOf(projects),
-    resolveRole,
+    root: () => box.current.workspaceRoot,
+    neutralFolder: dataDir,
+    defaultProvider: cheapestProvider,
+    output: (root, workflow, text) => workflowResults.save(root, workflow, text),
   });
   const modules = new ModuleManager({
     dir: () => modulesDir(),
@@ -441,7 +458,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     log: (m) => console.log(m),
   });
   agents.permissionHook.listeners.push((runId, waiting) => tasks.permissionWaiting(runId, waiting));
-  return { editor, tasks, scheduler, modules };
+  return { editor, tasks, scheduler, modules, workflowResults };
 }
 
 type Orchestration = ReturnType<typeof createOrchestration>;
@@ -635,29 +652,26 @@ export async function createContext(
   const agents = createAgents(base, notes, relayScript);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
-  const requestProvider = () => resolveTool("claude") ? "claude-code"
-    : resolveTool("fake-claude") ? "fake"
-    : resolveTool("codex") ? "codex" : "claude-code";
   const requestRouter = new RequestRouter({
     workspace: () => store.state.workspace,
     enabled: () => box.current.requestRouterEnabled,
     complete: async (prompt) => {
-      const provider = requestProvider();
+      const provider = cheapestProvider();
       const run = agents.runs.start({
         kind: "route", providerId: provider, cwd: dataDir(), prompt, tools: "",
-        role: { provider, model: provider === "codex" ? "gpt-5.4-mini" : "haiku", instructions: "", readOnly: true, allowedCommands: [] },
+        role: { provider, model: box.current.requestRouterModel || cheapestModel(provider), instructions: "", readOnly: true, allowedCommands: [] },
       });
       const result = await run.result;
       if (!result.ok) throw new Error(result.error || "The request could not be routed.");
       return result.resultText;
     },
     chat: (request, projectId) => {
-      const session = agents.explore.start(requestProvider(), false, projectId);
+      const session = agents.explore.start(cheapestProvider(), false, projectId);
       agents.chat.send(session.id, request);
       return session.id;
     },
     session: (project, title, prompt) => agents.sessions.start({
-      projectId: project.id, title, prompt, mode: "chat", providerId: requestProvider(),
+      projectId: project.id, title, prompt, mode: "chat", providerId: cheapestProvider(),
     }).id,
     reminder: async (projectId, date, text) => {
       await notes.ops.addReminder(projectId, date, text);
@@ -709,7 +723,7 @@ export async function createContext(
       projects: () => notes.projects.list(),
       waiting: () => notes.vault.allWaiting(),
       github: () => agents.github.pendingState(),
-      proposals: () => agents.recorder.pending(),
+      proposals: () => [...agents.recorder.pending(), ...orch.workflowResults.pending()],
     },
   });
   const fix = createFix(base, notes, agents, orch, pending);

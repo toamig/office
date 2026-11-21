@@ -75,7 +75,7 @@
     "urgent": ["agent.needs-you", "git.conflict", "ci.failed", "task.gate"],
     "mutedProjects": []
   },
-  "automations": [],
+  "workflows": [],
   "archiveAfterDays": 7,
   "briefTime": "08:00"
 }

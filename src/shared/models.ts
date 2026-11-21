@@ -262,6 +262,7 @@ export const PendingItem = z.object({
     "review-requested",
     "waiting",
     "save-proposal",
+    "workflow",
   ]),
   /** danger (red) for something broken, attention (amber) for something that waits for an answer. */
   severity: z.enum(["danger", "attention"]),
@@ -275,6 +276,7 @@ export const PendingItem = z.object({
   /** For a waiting line: what ticking it off needs. */
   waitingRaw: z.string().optional(),
   proposalId: z.string().optional(),
+  workflowResultId: z.string().optional(),
 });
 export type PendingItem = z.infer<typeof PendingItem>;
 
@@ -1031,20 +1033,6 @@ export const CreateTask = z.object({
 });
 export type CreateTask = z.infer<typeof CreateTask>;
 
-export const AutomationView = z.object({
-  id: z.string(),
-  cron: z.string(),
-  project: z.string(),
-  role: z.string(),
-  prompt: z.string(),
-  enabled: z.boolean(),
-  /** False when the cron expression cannot be parsed. */
-  valid: z.boolean(),
-  lastFiredAt: z.string().nullable(),
-  nextRun: z.string().nullable(),
-});
-export type AutomationView = z.infer<typeof AutomationView>;
-
 export const AppSettings = z.object({
   theme: z.enum(["system", "light", "dark"]),
   accent: z.string(),
@@ -1058,6 +1046,15 @@ export const AppSettings = z.object({
   sessionMode: z.enum(["chat", "terminal"]),
   autonomy: AutonomyLevel,
   confirmedFullAuto: z.boolean(),
+  briefEnabled: z.boolean(),
+  briefModel: z.string(),
+  briefTime: z.string(),
+  recorderEnabled: z.boolean(),
+  recorderModel: z.string(),
+  recorderIdleMinutes: z.number(),
+  learningEnabled: z.boolean(),
+  requestRouterEnabled: z.boolean(),
+  requestRouterModel: z.string(),
   sessionIdleDays: z.number(),
   sessionsMulti: z.boolean(),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
@@ -1084,6 +1081,15 @@ export const AppSettingsPatch = z.object({
   sessionMode: z.enum(["chat", "terminal"]).optional(),
   autonomy: AutonomyLevel.optional(),
   confirmedFullAuto: z.literal(true).optional(),
+  briefEnabled: z.boolean().optional(),
+  briefModel: z.string().max(120).optional(),
+  briefTime: z.string().regex(/^(?:[01]\d|2[0-3]):[0-5]\d$/).optional(),
+  recorderEnabled: z.boolean().optional(),
+  recorderModel: z.string().max(120).optional(),
+  recorderIdleMinutes: z.number().int().min(1).max(120).optional(),
+  learningEnabled: z.boolean().optional(),
+  requestRouterEnabled: z.boolean().optional(),
+  requestRouterModel: z.string().max(120).optional(),
   sessionIdleDays: z.number().int().min(1).max(60).optional(),
   sessionsMulti: z.boolean().optional(),
   quietHours: z
