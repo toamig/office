@@ -6,6 +6,7 @@ import { writeTextFile } from "../../core/settings";
 import { git } from "../git/run";
 import { defaultWorkspace } from "../setup/workspace-setup";
 import { writeStarterBrain } from "../vault/starter-layout";
+import { StarterPack } from "../vault/starter-pack";
 
 export interface BrainResult {
   path: string;
@@ -62,6 +63,7 @@ export async function createBrain(
     if (out.code !== 0)
       throw new IpcFailure("git-failed", `${label} failed: ${firstLine(out.stderr || out.stdout)}`);
   }
+  if (existsSync(join(templateDir, "Rules/rules.json"))) new StarterPack(dir, templateDir, true).trackCreation();
   const result: BrainResult = {
     path: dir,
     configPath: BRAIN_CONFIG,

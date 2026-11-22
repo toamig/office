@@ -1,0 +1,17 @@
+{
+  "name": "Office starter rules",
+  "source": "office-starter@1",
+  "read": "Rules/AGENTS.md",
+  "write": "Rules/Authoring.md",
+  "placement": "Rules/Authoring.md#Where a new fact goes",
+  "templates": "Rules/Templates.md",
+  "load": [{ "file": "Rules/Core.md" }],
+  "tools": {
+    "validate": "node Rules/tools/brain.mjs validate",
+    "reindex": "node Rules/tools/brain.mjs reindex",
+    "reindexCheck": "node Rules/tools/brain.mjs reindex --check"
+  },
+  "checks": { "staged": ["utf8-no-bom", "lf"], "commitMsg": [] },
+  "domains": ["meta"],
+  "tags": ["architecture", "decisions", "encoding", "open-items", "routing", "testing"]
+}

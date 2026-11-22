@@ -18,6 +18,7 @@ const KIND_LABEL: Record<PendingItem["kind"], string> = {
   waiting: "For you",
   "save-proposal": "Brain",
   workflow: "Workflow",
+  "rule-update": "Rules",
 };
 
 /** The pending items that are something broken, which a session can fix (a question or a review is the owner's to answer). */

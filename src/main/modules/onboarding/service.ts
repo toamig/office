@@ -11,6 +11,8 @@ import { folderName, slugify } from "../explore/files";
 import { git } from "../git/run";
 import type { VaultWriter } from "../vault/writer";
 import { updateStarterRouter, writeProjectLayout } from "../vault/starter-layout";
+import { detectRuleDomain, registerStarterDomain } from "../vault/starter-pack";
+import { readRulePack } from "../vault/rule-pack";
 import { createBrain, type BrainResult } from "./brain";
 import {
   defaultTarget,
@@ -175,6 +177,7 @@ export class OnboardingService {
     return this.deps.writer.exclusive(async () => {
       let vault: string | undefined;
       let rootRouter = false;
+      let rulesChanged = false;
       // The repo that holds the notes when it is not the workspace repo (a notes repo inside a hub).
       let notesRepoDir: string | null = null;
       if (item.notes === "link") {
@@ -185,7 +188,10 @@ export class OnboardingService {
         const dir = join(root, vault);
         if (existsSync(join(dir, "Overview.md")))
           throw new IpcFailure("notes-exist", `${vault} already has notes; link them instead`);
-        writeProjectLayout(root, vault, item.name, item.domain, { overview, waitingHeading: heading });
+        const domain = detectRuleDomain(item.path) ?? item.domain;
+        const starter = readRulePack(root)?.source.startsWith("office-starter@");
+        rulesChanged = starter ? registerStarterDomain(root, domain) : false;
+        writeProjectLayout(root, vault, item.name, starter ? domain : item.domain, { overview, waitingHeading: heading });
         rootRouter = await updateStarterRouter(root, [...ws.projects.flatMap((project) => project.vault ? [project.vault] : []), vault]);
       } else if (item.notes === "new" && this.kind() === "brain-hub") {
         if (newRepo) {
@@ -230,6 +236,7 @@ export class OnboardingService {
       const top = (await git(dirname(file), ["rev-parse", "--show-toplevel"])).stdout.trim();
       const paths = [relative(top, file).replaceAll("\\", "/")];
       if (rootRouter) paths.push(relative(top, join(root, "_index.md")).replaceAll("\\", "/"));
+      if (rulesChanged) paths.push(relative(top, join(root, "Rules/rules.json")).replaceAll("\\", "/"));
       if (vault && !notesRepoDir && item.notes === "new" && this.kind() === "folder")
         paths.push(relative(top, join(root, vault)).replaceAll("\\", "/"));
       await this.commit(top, paths, `Add project ${item.name}`);

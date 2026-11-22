@@ -6,6 +6,7 @@ import type { HealthView } from "../../../shared/models";
 import { stripFrontmatter } from "../notes/notes";
 import { parseValidate } from "./health";
 import { notesPath, privateNotes, readText } from "./scope";
+import { readRulePack } from "./rule-pack";
 
 const BEGIN = "<!-- BEGIN GENERATED -->";
 const END = "<!-- END GENERATED -->";
@@ -14,7 +15,7 @@ const DOMAINS = ["ue5", "saas", "webgames", "mobile", "meta"] as const;
 const Metadata = z.object({
   type: z.enum(["contract", "reference", "patterns", "architecture", "overview", "openitems", "decisions",
     "conventions", "shared", "index", "spec", "roadmap", "design", "brand"]),
-  domain: z.enum(DOMAINS),
+  domain: z.string().min(1),
   project: z.string().min(1).optional(),
   summary: z.string().trim().min(1).max(160),
   answers: z.array(z.string().trim().min(1)).min(1).max(5),
@@ -58,14 +59,15 @@ function notePaths(root: string, folders: string[]): string[] {
     seen.add(folder);
     for (const entry of entries(root, folder)) {
       const path = posix.join(folder, entry.name);
-      if (entry.name.startsWith(".") || entry.isSymbolicLink()) continue;
+      if (entry.name.startsWith(".") || entry.name === "node_modules" || entry.name === "Archive" || entry.isSymbolicLink()) continue;
       if (recurse && entry.isDirectory()) visit(path, true);
-      if (entry.isFile() && entry.name.toLowerCase().endsWith(".md") && !IGNORED.has(entry.name.toLowerCase()))
+      if (entry.isFile() && entry.name.toLowerCase().endsWith(".md") &&
+          (!IGNORED.has(entry.name.toLowerCase()) || readText(notesPath(root, path)).startsWith("---")))
         files.add(path);
     }
   };
   visit("", false);
-  for (const folder of ["Projects", "Shared", "General", ...folders]) {
+  for (const folder of ["Projects", "Shared", "General", "Rules", ...folders]) {
     if (notesPath(root, folder)) visit(folder.replaceAll("\\", "/"), true);
   }
   return [...files].sort((a, b) => a.localeCompare(b, "en"));
@@ -88,8 +90,13 @@ function badLinks(root: string, note: Note): string[] {
 
 export function validateFolderBrain(root: string, folders: string[]): HealthView["validate"] {
   const notes = notePaths(root, folders).map((file) => readNote(root, file));
+  const packs = readRulePack(root);
+  const domains = new Set(packs?.domains ?? DOMAINS);
+  const tags = packs?.tags ? new Set(packs.tags) : undefined;
   const errors = notes.flatMap((note) => {
     const issues = note.error ? [note.error] : badLinks(root, note);
+    if (note.metadata && !domains.has(note.metadata.domain)) issues.push(`Unknown domain ${note.metadata.domain}`);
+    if (tags) for (const tag of note.metadata?.tags ?? []) if (!tags.has(tag)) issues.push(`Unknown tag ${tag}`);
     if (note.metadata?.authority === "derived" && !note.metadata.derived_from?.length) issues.push("Derived notes need derived_from");
     if (note.metadata?.type === "index" && (!note.text.includes(BEGIN) || !note.text.includes(END)))
       issues.push("Router is missing the generated section");

@@ -663,6 +663,15 @@ function registerVaultHandlers(ctx: AppContext): void {
     await ctx.health.refresh();
     return { count };
   });
+  ctx.ipc.handle("rules.status", () => ctx.starterPack().status());
+  ctx.ipc.handle("rules.add", (req) => ctx.changeStarterRules((pack) => {
+    if (JSON.stringify(req.files) !== JSON.stringify(pack.status().add))
+      throw new Error("The rule files changed. Review the list again.");
+    return pack.install(ctx.starterDomains());
+  }, "Add the Brain rule pack"));
+  ctx.ipc.handle("rules.answer", (req) => ctx.changeStarterRules(
+    (pack) => pack.answer(req.path, req.before, req.after, req.accept), "Update Brain rules"));
+  ctx.ipc.handle("rules.undo", () => ctx.changeStarterRules((pack) => pack.undo(), "Undo the starter rules update"));
   ctx.ipc.handle("health.changes", (req) => ctx.healthActions.changes(req.folder));
   ctx.ipc.handle("health.commit", async (req) => ({
     hash: await ctx.healthActions.commit(req.folder, req.message),

@@ -39,6 +39,7 @@ const WATCHED = [
   "vault.changed",
   "recorder.changed",
   "workflow.changed",
+  "rules.changed",
   "workspace.changed",
 ] as const;
 

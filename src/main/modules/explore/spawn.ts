@@ -10,6 +10,7 @@ import type { RunService } from "../runs/service";
 import type { SessionService } from "../sessions/service";
 import { updateFromUpstream, type VaultWriter } from "../vault/writer";
 import { runRuleTool } from "../vault/rule-pack";
+import { registerStarterDomain } from "../vault/starter-pack";
 import { projectNoteNames, updateStarterRouter, writeProjectLayout } from "../vault/starter-layout";
 import {
   addHubRow,
@@ -377,10 +378,11 @@ async function stepNotes(c: Ctx): Promise<string> {
   if (r.vaultKind === "folder") {
     await deps.writer.exclusive(async () => {
       const root = deps.workspaceRoot();
+      const rulesChanged = registerStarterDomain(root, r.input.domain);
       writeProjectLayout(root, r.vaultFolder, r.input.name, r.input.domain, { overview: projectOverview(r) });
       const folders = deps.workspace()?.projects.flatMap((project) => project.vault ? [project.vault] : []) ?? [];
       const rootChanged = await updateStarterRouter(root, [...folders, r.vaultFolder]);
-      const paths = [r.vaultFolder, ...(rootChanged ? ["_index.md"] : [])];
+      const paths = [r.vaultFolder, ...(rootChanged ? ["_index.md"] : []), ...(rulesChanged ? ["Rules/rules.json"] : [])];
       await must("git add", git(root, ["add", "--", ...paths]));
       await must("git commit", git(root, ["commit", "-m", `${r.input.name}: start the notes`, "--", ...paths]));
       if ((await git(root, ["rev-parse", "--abbrev-ref", "@{u}"])).code === 0)

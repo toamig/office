@@ -100,6 +100,7 @@ export const eventTypes = [
   "profiles.migrated",
   "recorder.changed",
   "workflow.changed",
+  "rules.changed",
   "office.confirmation",
   "app.history",
   "app.terminal-action",
@@ -557,6 +558,14 @@ export const channels = {
   "vault.health": { req: z.void(), res: HealthView },
   "vault.validate": { req: z.void(), res: HealthView },
   "vault.reindex": { req: z.void(), res: z.object({ count: z.number() }) },
+  "rules.status": { req: z.void(), res: z.object({
+    add: z.array(z.string()),
+    conflicts: z.array(z.object({ path: z.string(), before: z.string(), after: z.string(), diff: z.string() })),
+    undo: z.array(z.string()),
+  }) },
+  "rules.add": { req: z.object({ files: z.array(z.string()) }), res: z.void() },
+  "rules.answer": { req: z.object({ path: z.string(), before: z.string(), after: z.string(), accept: z.boolean() }), res: z.void() },
+  "rules.undo": { req: z.void(), res: z.void() },
   /** What is uncommitted in one of the brain's repos ("." is the hub), with each file's changes. */
   "health.changes": { req: z.object({ folder: z.string() }), res: DiffResult },
   "health.commit": {

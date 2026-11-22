@@ -263,6 +263,7 @@ export const PendingItem = z.object({
     "waiting",
     "save-proposal",
     "workflow",
+    "rule-update",
   ]),
   /** danger (red) for something broken, attention (amber) for something that waits for an answer. */
   severity: z.enum(["danger", "attention"]),

@@ -55,6 +55,9 @@ import { HealthActions } from "./modules/vault/health-actions";
 import { HealthService } from "./modules/vault/health-service";
 import { OnboardingService } from "./modules/onboarding/service";
 import { readHubStatus, runValidate } from "./modules/vault/health";
+import { commitStarterFiles, detectRuleDomain, StarterPack } from "./modules/vault/starter-pack";
+import { notesPath, readText } from "./modules/vault/scope";
+import { frontmatterValue } from "./modules/notes/notes";
 import { detectTools } from "./modules/setup/detect";
 import { ToolsMonitor } from "./modules/setup/tools-monitor";
 import { ToolConfigService } from "./modules/setup/tool-config";
@@ -87,6 +90,9 @@ export interface AppContext {
   tasks: TaskEngine;
   scheduler: Scheduler;
   workflowResults: WorkflowResults;
+  starterPack: () => StarterPack;
+  changeStarterRules: (work: (pack: StarterPack) => string[], message: string, digest?: boolean) => Promise<void>;
+  starterDomains: () => string[];
   claudeSignIn: ClaudeSignIn;
   claudeEnv: () => Record<string, string>;
   modules: ModuleManager;
@@ -727,6 +733,28 @@ export async function createContext(
     templateDir: () => join(dirname(relayScript), "..", "brain-template"),
     notesRepo: (name, domain, stack) => agents.explore.notesRepo(name, domain, stack),
   });
+  const starterPack = () => new StarterPack(box.current.workspaceRoot, join(dirname(relayScript), "..", "brain-template"),
+    store.state.workspace?.vault.kind === "folder");
+  const starterDomains = () => (store.state.workspace?.projects ?? []).flatMap((project) => {
+    const root = box.current.workspaceRoot;
+    const domain = project.vault ? frontmatterValue(readText(notesPath(root, `${project.vault}/Overview.md`)), "domain") : null;
+    const code = folderOf(notes.projects)(project.id);
+    return [domain, code && detectRuleDomain(code)].filter((entry): entry is string => !!entry);
+  });
+  const changeStarterRules: AppContext["changeStarterRules"] = async (work, message, digest) => {
+    const root = box.current.workspaceRoot;
+    await notes.writer.exclusive(async () => {
+      if (root !== box.current.workspaceRoot) throw new Error("The Brain changed. Review it again.");
+      const paths = work(starterPack());
+      await commitStarterFiles(root, paths, message);
+      bus.emit("rules.changed", { starter: digest ? paths : [] });
+    });
+  };
+  const updateStarter = () => changeStarterRules((pack) => pack.refresh(), "Update starter rules", true)
+    .catch((error: unknown) => {
+      notes.warnings.unshift({ at: new Date().toISOString(), message: error instanceof Error ? error.message : String(error) });
+      bus.emit("vault.health", {});
+    });
   const claude = agents.providers.get("claude-code") as ClaudeCodeProvider;
   const claudeEnv = () => {
     try { return claude.auth.env(); } catch { return {}; }
@@ -767,7 +795,7 @@ export async function createContext(
       projects: () => notes.projects.list(),
       waiting: () => notes.vault.allWaiting(),
       github: () => agents.github.pendingState(),
-      proposals: () => [...agents.recorder.pending(), ...orch.workflowResults.pending()],
+      proposals: () => [...agents.recorder.pending(), ...orch.workflowResults.pending(), ...starterPack().pending()],
     },
   });
   const fix = createFix(base, notes, agents, orch, pending);
@@ -792,6 +820,9 @@ export async function createContext(
     toolConfig,
     requestRouter,
     officeTools,
+    starterPack,
+    changeStarterRules,
+    starterDomains,
     claudeSignIn,
     claudeEnv,
     permissions: agents.broker,
@@ -809,6 +840,8 @@ export async function createContext(
     toolsMonitor,
     setupState,
     ...lifecycle,
+    start: async () => { await lifecycle.start(); void updateStarter(); },
+    sync: async () => { const result = await lifecycle.sync(); await updateStarter(); return result; },
     stop: async () => { claudeSignIn.cancel(); await lifecycle.stop(); },
   };
 }

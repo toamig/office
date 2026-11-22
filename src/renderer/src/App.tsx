@@ -27,7 +27,7 @@ import { Projects } from "./views/Projects";
 import { Setup } from "./views/Setup";
 import { Tools } from "./views/Tools";
 import { Workflows } from "./views/Workflows";
-import { Banner, NotificationStack, notify } from "./ui";
+import { Banner, NotificationStack, notify, notifyError } from "./ui";
 import { Welcome } from "./views/welcome/Welcome";
 
 /** The views that are drawn fresh each time; the Agents view is kept alive by App and never comes through here. */
@@ -111,6 +111,16 @@ export default function App() {
       }),
     [],
   );
+  useEffect(() => {
+    return office.on("rules.changed", (event) => {
+      const { starter } = event.payload as { starter?: string[] };
+      if (!starter?.length) return;
+      notify({ tone: "info", title: "Starter rules updated", detail: starter.join(", "), subject: "starter-rules",
+        action: { label: "Undo", run: () => void office.invoke("rules.undo").catch((error: unknown) =>
+          notifyError(error, "Could not undo the rule update", "starter-rules")) },
+      });
+    });
+  }, []);
   useEffect(() => {
     if (setup.data && !setup.data.welcome) prefetchStart();
   }, [setup.data]);
