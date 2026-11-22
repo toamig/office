@@ -1,6 +1,6 @@
 import { GitBranch } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
-import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
+import { emptyChat, reduceChat, replayChat, toolGroup, type ChatItem, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatOptions, ChatState, SessionRow } from "@shared/models";
 import { isChatSession } from "@shared/roles";
 import { AutonomyPicker } from "../../components/AutonomyPicker";
@@ -11,11 +11,12 @@ import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
 import { Button, Dropdown, OverflowMenu, notifyError } from "../../ui";
 import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
+import { LivePlan, ToolGroup, TurnStatus } from "./Activity";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
 
 function useConversation(id: string): { conversation: Conversation; ready: boolean } {
-  const [conversation, setConversation] = useState<Conversation>({ items: [], working: false });
+  const [conversation, setConversation] = useState(emptyChat);
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let alive = true;
@@ -25,7 +26,7 @@ function useConversation(id: string): { conversation: Conversation; ready: boole
     const apply = (line: ChatLine) => {
       if (line.seq <= last) return;
       last = line.seq;
-      setConversation((current) => reduceChat(current, line.event));
+      setConversation((current) => reduceChat(current, line.event, Date.parse(line.at)));
     };
     const off = office.on("chat.event", (event) => {
       const payload = event.payload as { sessionId: string; line: ChatLine };
@@ -35,7 +36,7 @@ function useConversation(id: string): { conversation: Conversation; ready: boole
     });
     void office.invoke("chat.history", { id }).then((lines) => {
       if (!alive) return;
-      setConversation(buildChat(lines.map((line) => line.event)));
+      setConversation(replayChat(lines));
       last = lines.at(-1)?.seq ?? 0;
       loaded = true;
       for (const line of waiting.splice(0)) apply(line);
@@ -44,6 +45,21 @@ function useConversation(id: string): { conversation: Conversation; ready: boole
     return () => { alive = false; off(); };
   }, [id]);
   return { conversation, ready };
+}
+
+type ToolItem = Extract<ChatItem, { kind: "tool" }>;
+
+function groupMessages(items: ChatItem[]) {
+  const groups: Array<{ index: number; item: ChatItem } | { tools: ToolItem[] }> = [];
+  for (const [index, item] of items.entries()) {
+    if (item.kind === "assistant" && !item.text && !item.thinking) continue;
+    if (item.kind === "tool" && item.status !== "error" && toolGroup(item.name)) {
+      const last = groups.at(-1);
+      if (last && "tools" in last) last.tools.push(item);
+      else groups.push({ tools: [item] });
+    } else groups.push({ index, item });
+  }
+  return groups;
 }
 
 function ChatChoices({ state, working, onChange }: {
@@ -80,7 +96,7 @@ export function ChatView({ session, onChanged, headerActions }: {
   const id = session.id;
   const plain = isChatSession(session);
   const { conversation, ready } = useConversation(id);
-  const { items, working } = conversation;
+  const { items, working, activity } = conversation;
   const [state, setState] = useState<ChatState | null>(null);
   const [login, setLogin] = useState<{ messageId: string; run: ToolRun }>();
   const list = useRef<HTMLDivElement>(null);
@@ -152,7 +168,11 @@ export function ChatView({ session, onChanged, headerActions }: {
           {ready && items.length === 0 && <div className="chat-empty" data-testid="chat-empty">
             {plain ? "Ask a question or request an Office action." : "Ask the agent anything about this project."}
           </div>}
-          {items.map((item, index) => {
+          {groupMessages(items).map((group) => {
+            if ("tools" in group) return <ToolGroup key={group.tools[0]?.id} tools={group.tools}>
+              {group.tools.map((item) => <ChatMessage key={item.id} item={item} tool={toolLabel} working={working} />)}
+            </ToolGroup>;
+            const { item, index } = group;
             const messageId = retryTargets.get(index);
             return <ChatMessage key={`${item.kind}-${"id" in item ? item.id : index}`} item={item} tool={toolLabel} working={working}
               onEdit={item.kind === "user" && !item.brief && item.id === lastOwner
@@ -169,6 +189,8 @@ export function ChatView({ session, onChanged, headerActions }: {
         </div>
       </div>
       <div className="chat-column pb-4">
+        <LivePlan steps={activity.plan} />
+        <TurnStatus activity={activity} />
         <Composer sessionId={id} working={working}
           onSend={(text, images) => void act(() => office.invoke("chat.send", { id, text, images }))}
           onStop={() => void act(() => office.invoke("chat.stop", { id }))}

@@ -21,6 +21,7 @@ import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
 import { ClaudeChatParser, CodexChatParser } from "./events";
 import { chatFailure } from "../../../shared/chat-failure";
+import { activityLabel, emptyActivity, trackActivity, type TurnActivity } from "../../../shared/chat";
 import { redactClaudeToken } from "../../core/claude-secret";
 import { ClaudeCodeProvider } from "../providers/claude-code";
 
@@ -64,6 +65,7 @@ interface Live {
 export class ChatService {
   private readonly live = new Map<string, Live>();
   private readonly seqs = new Map<string, number>();
+  private readonly activities = new Map<string, TurnActivity>();
   /** What an incognito chat has said: kept in memory only, never in a file. */
   private readonly memory = new Map<string, ChatLine[]>();
   private readonly unsavedImages = new Map<string, Map<string, ChatImage[]>>();
@@ -115,7 +117,12 @@ export class ChatService {
     // An incognito chat's words stay in memory; nothing about it is written to a file.
     if (memory) memory.push(line);
     else appendFileSync(this.logFile(id), `${JSON.stringify(line)}\n`);
+    const previous = this.activity(id);
+    const activity = trackActivity(this.activities.get(id) ?? emptyActivity(), event, Date.parse(line.at));
+    if (activity.startedAt === undefined) this.activities.delete(id);
+    else this.activities.set(id, activity);
     this.deps.bus.emit("chat.event", { sessionId: id, line }, session?.projectId ?? undefined);
+    if (this.activity(id) !== previous) this.deps.bus.emit("session.activity", { sessionId: id });
   }
 
   private options(id: string): ChatOptions {
@@ -215,6 +222,11 @@ export class ChatService {
 
   running(id: string): boolean {
     return this.live.has(id);
+  }
+
+  activity(id: string): string | undefined {
+    const activity = this.activities.get(id);
+    return activity && activityLabel(activity);
   }
 
   private working(id: string): boolean {

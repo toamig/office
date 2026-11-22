@@ -367,6 +367,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
     configure: (id, extra) => chat.configure(id, extra),
     stop: (id) => chat.stop(id),
     running: (id) => chat.running(id),
+    activity: (id) => chat.activity(id),
     keep: (id) => chat.keep(id),
     forget: (id) => chat.forget(id),
     history: (id) => chat.history(id),

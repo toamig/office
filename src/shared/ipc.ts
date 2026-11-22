@@ -105,6 +105,7 @@ export const eventTypes = [
   "app.history",
   "app.terminal-action",
   "chat.event",
+  "session.activity",
   "chat.state",
   "app.update",
   /** The brain's health (validation, hub status) was refreshed by the background job. */

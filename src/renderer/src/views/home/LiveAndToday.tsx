@@ -6,7 +6,7 @@ import { Card, EmptyState, LinkButton, StatusBadge } from "../../ui";
 /** Running agents and the ones that need you, plus how many have finished since the owner looked. */
 export function LiveAgentsPanel() {
   const navigate = useUi((s) => s.navigate);
-  const sessions = useQuery("sessions.list", {}, ["session.status"]);
+  const sessions = useQuery("sessions.list", {}, ["session.status", "session.activity"]);
   const all = sessions.data ?? [];
   const live = all.filter((s) => s.running);
   const idle = all.filter((s) => s.idle);
@@ -23,6 +23,7 @@ export function LiveAgentsPanel() {
           <StatusChip status={s.status} />
           <div className="ui-line-main">
             <LinkButton onClick={() => navigate("agents")}>{s.title ?? s.provider}</LinkButton>
+            {s.activity && <div className="ui-line-sub truncate" title={s.activity}>{s.activity}</div>}
           </div>
         </div>
       ))}

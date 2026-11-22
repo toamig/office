@@ -9,7 +9,8 @@ import {
   X,
 } from "lucide-react";
 import { useState, type ReactNode } from "react";
-import { toolSummary, type ChatItem } from "@shared/chat";
+import { runningLabel, toolSummary, type ChatItem } from "@shared/chat";
+import { Elapsed } from "./Activity";
 
 type Tool = Extract<ChatItem, { kind: "tool" }>;
 
@@ -68,15 +69,16 @@ function Collapsible({
 
 /**
  * A tool call as a compact card: a file read or a search is one line, an edit shows its diff, a command
- * shows itself with its output folded away, a to-do list is a checklist, anything else folds its input.
+ * shows itself with its output folded away, and other calls fold their input.
  */
 export function ToolCard({ tool }: { tool: Tool }) {
   const summary = toolSummary(tool.input);
   const head = (icon: ReactNode, label: string): ReactNode => (
     <>
       {icon}
-      <span className="tool-name">{label}</span>
-      <span className="tool-summary">{summary}</span>
+      {tool.status === "running" && tool.startedAt !== undefined
+        ? <><span className="tool-summary" title={runningLabel(tool)}>{runningLabel(tool)}</span>, <Elapsed since={tool.startedAt} /></>
+        : <><span className="tool-name">{label}</span><span className="tool-summary">{summary}</span></>}
       <span className="flex-1" />
       <StatusIcon status={tool.status} />
     </>
@@ -111,24 +113,6 @@ export function ToolCard({ tool }: { tool: Tool }) {
             {tool.output || (tool.status === "running" ? "Running..." : "(no output)")}
           </pre>
         </Collapsible>
-      </div>
-    );
-  }
-
-  if (tool.name === "TodoWrite" && Array.isArray(tool.input["todos"])) {
-    const todos = tool.input["todos"] as Array<{ content?: string; status?: string }>;
-    return (
-      <div className="tool-card" data-testid="tool-card" data-tool="TodoWrite">
-        <ul className="todo-list" data-testid="todo-list">
-          {todos.map((t, i) => (
-            <li key={i} data-status={t.status}>
-              <span className="todo-box">
-                {t.status === "completed" ? "✓" : t.status === "in_progress" ? "●" : "○"}
-              </span>
-              {t.content}
-            </li>
-          ))}
-        </ul>
       </div>
     );
   }

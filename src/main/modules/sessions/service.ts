@@ -113,6 +113,7 @@ export class SessionService {
     ) => void;
     stop: (id: string) => void;
     running: (id: string) => boolean;
+    activity: (id: string) => string | undefined;
     /** Turns incognito off for a chat, writing what was said so far to its log. */
     keep: (id: string) => void;
     /** Forgets everything about an incognito chat. */
@@ -174,6 +175,7 @@ export class SessionService {
       lastOutputAt: r.last_output_at,
       capturedAt: r.captured_at,
       running: r.mode === "chat" ? (this.chat?.running(r.id) ?? false) : this.pty.isRunning(r.id) || this.starting.has(r.id),
+      activity: r.mode === "chat" ? this.chat?.activity(r.id) : undefined,
       mode: r.mode === "chat" ? "chat" : "terminal",
       conversationStarted: r.conversation_started === 1,
       idle: this.isIdle(r),

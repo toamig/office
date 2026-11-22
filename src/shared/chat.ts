@@ -1,4 +1,4 @@
-import type { ChatEvent, OfficeBrief } from "./models";
+import type { ChatEvent, ChatLine, OfficeBrief, PlanStep } from "./models";
 
 /** What the chat view draws, in order. */
 export type ChatItem =
@@ -11,7 +11,9 @@ export type ChatItem =
       input: Record<string, unknown>;
       status: "running" | "done" | "error";
       output: string;
+      startedAt?: number;
     }
+  | { kind: "plan"; id: string }
   | { kind: "error"; message: string }
   | { kind: "subagent"; id: string; task: string; progress: string; verdict: string; status: "working" | "done" | "error" }
   | { kind: "turn"; ok: boolean; durationMs: number | null; error: string | undefined }
@@ -21,9 +23,96 @@ export interface ChatState {
   items: ChatItem[];
   /** True from the owner's message until the turn's result (or a stop or an error). */
   working: boolean;
+  activity: TurnActivity;
 }
 
-export const emptyChat = (): ChatState => ({ items: [], working: false });
+interface RunningTool { id: string; label: string }
+
+export interface TurnActivity {
+  startedAt?: number;
+  durationMs?: number;
+  plan: PlanStep[];
+  tools: RunningTool[];
+}
+
+export const emptyActivity = (): TurnActivity => ({ plan: [], tools: [] });
+export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity() });
+
+export function planSteps(value: unknown): PlanStep[] {
+  if (!Array.isArray(value)) return [];
+  return value.flatMap((entry: unknown) => {
+    if (!entry || typeof entry !== "object") return [];
+    const step = entry as Record<string, unknown>;
+    const text = step["content"] ?? step["step"] ?? step["text"];
+    const status = step["completed"] === true ? "completed" : step["status"];
+    return typeof text === "string" && text.trim()
+      ? [{ text, status: status === "completed" || status === "in_progress" ? status : "pending" }]
+      : [];
+  });
+}
+
+export function planEvent(event: ChatEvent): ChatEvent {
+  return event.t === "tool-use" && event.name === "TodoWrite"
+    ? { t: "plan", id: event.id, steps: planSteps(event.input["todos"]) }
+    : event;
+}
+
+export function toolGroup(name: string): "read" | "search" | "command" | undefined {
+  if (["Read", "NotebookRead"].includes(name)) return "read";
+  if (["Grep", "Glob", "LS", "WebSearch", "web_search"].includes(name)) return "search";
+  if (["Bash", "PowerShell"].includes(name)) return "command";
+  return undefined;
+}
+
+export function runningLabel(tool: { name: string; input: Record<string, unknown> }): string {
+  const summary = toolSummary(tool.input).slice(0, 140);
+  const group = toolGroup(tool.name);
+  const verb = group === "read" ? "Reading" : group === "search" ? "Searching" : "Running";
+  return `${verb} ${summary || tool.name}`;
+}
+
+export function trackActivity(state: TurnActivity, event: ChatEvent, at?: number): TurnActivity {
+  switch (event.t) {
+    case "user":
+      return { ...emptyActivity(), startedAt: at };
+    case "turn-start":
+      return state.startedAt === undefined ? { ...state, startedAt: at } : state;
+    case "plan":
+      return { ...state, plan: event.steps };
+    case "tool-use":
+      return state.tools.some((tool) => tool.id === event.id) ? state : {
+        ...state, tools: [...state.tools, { id: event.id, label: runningLabel(event) }],
+      };
+    case "tool-result":
+      return { ...state, tools: state.tools.filter((tool) => tool.id !== event.toolUseId) };
+    case "result":
+    case "error":
+    case "stopped":
+      return {
+        tools: [], plan: state.plan.every((step) => step.status === "completed") ? [] : state.plan,
+        durationMs: state.startedAt !== undefined && at !== undefined
+          ? Math.max(0, at - state.startedAt)
+          : event.t === "result" ? event.durationMs ?? state.durationMs : state.durationMs,
+      };
+    default:
+      return state;
+  }
+}
+
+export function activityLabel(activity: TurnActivity): string {
+  const label = activity.tools.at(-1)?.label ?? "Working";
+  const step = activity.plan.findIndex((entry) => entry.status === "in_progress");
+  if (!activity.plan.length) return label;
+  if (step !== -1) return `${label}, step ${step + 1} of ${activity.plan.length}`;
+  const done = activity.plan.filter((entry) => entry.status === "completed").length;
+  return `${label}, ${done} of ${activity.plan.length} steps done`;
+}
+
+export function formatElapsed(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000));
+  const minutes = Math.floor(seconds / 60);
+  return minutes ? `${minutes}m ${seconds % 60}s` : `${seconds}s`;
+}
 
 const indexOfAssistant = (items: ChatItem[], id: string): number =>
   items.findIndex((i) => i.kind === "assistant" && i.id === id);
@@ -39,21 +128,18 @@ function settle(items: ChatItem[], toolStatus: "done" | "error"): ChatItem[] {
   });
 }
 
-function failedTurn(items: ChatItem[], message: string): ChatState {
+function failedTurn(items: ChatItem[], message: string): ChatItem[] {
   const last = items.at(-1);
   const text = message.trim();
   if (last?.kind === "error") {
     if (!text || last.message === text || last.message.length >= text.length)
-      return { items, working: false };
-    return { items: [...items.slice(0, -1), { kind: "error", message: text }], working: false };
+      return items;
+    return [...items.slice(0, -1), { kind: "error", message: text }];
   }
   const assistant = last?.kind === "assistant" ? last.text.trim() : "";
   const repeats = assistant.length >= 12 && text.length >= 12 &&
     (text.includes(assistant) || assistant.includes(text));
-  return {
-    items: [...settle(repeats ? items.slice(0, -1) : items, "error"), { kind: "error", message: text }],
-    working: false,
-  };
+  return [...settle(repeats ? items.slice(0, -1) : items, "error"), { kind: "error", message: text }];
 }
 
 /**
@@ -61,16 +147,23 @@ function failedTurn(items: ChatItem[], message: string): ChatState {
  * tests all agree. A streamed message is replaced by its final text when that arrives, and a repeated
  * tool call or message id never makes a second item.
  */
-export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
+export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): ChatState {
+  const event = planEvent(raw);
+  const activity = trackActivity(previous.activity, event, at);
+  const state = activity === previous.activity ? previous : { ...previous, activity };
   const items = state.items;
   switch (event.t) {
     case "user":
       return {
+        ...state,
         items: [...items, { kind: "user", id: event.id, text: event.text, images: event.images, brief: event.brief }],
         working: true,
       };
     case "turn-start":
       return { ...state, working: true };
+    case "plan":
+      return items.some((item) => item.kind === "plan" && item.id === event.id) ? state :
+        { ...state, items: [...items, { kind: "plan", id: event.id }] };
     case "assistant-start": {
       if (indexOfAssistant(items, event.id) >= 0) return state;
       return {
@@ -127,6 +220,7 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
             input: event.input,
             status: "running",
             output: "",
+            startedAt: at,
           },
         ],
       };
@@ -157,9 +251,10 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
       };
     }
     case "result":
-      if (!event.ok) return failedTurn(items, event.error ?? "");
+      if (!event.ok) return { ...state, items: failedTurn(items, event.error ?? ""), working: false };
       if (!state.working && items.at(-1)?.kind === "error") return state;
       return {
+        ...state,
         items: [
           ...settle(items, event.ok ? "done" : "error"),
           { kind: "turn", ok: event.ok, durationMs: event.durationMs, error: event.error },
@@ -167,15 +262,19 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
         working: false,
       };
     case "error":
-      return failedTurn(items, event.message);
+      return { ...state, items: failedTurn(items, event.message), working: false };
     case "stopped":
-      return { items: [...settle(items, "done"), { kind: "stopped" }], working: false };
+      return { ...state, items: [...settle(items, "done"), { kind: "stopped" }], working: false };
   }
 }
 
 /** Replays stored events into a conversation. */
 export function buildChat(events: ChatEvent[]): ChatState {
-  return events.reduce(reduceChat, emptyChat());
+  return events.reduce((state, event) => reduceChat(state, event), emptyChat());
+}
+
+export function replayChat(lines: ChatLine[]): ChatState {
+  return lines.reduce((state, line) => reduceChat(state, line.event, Date.parse(line.at)), emptyChat());
 }
 
 /** How long a turn took, for the footer: "3.2 s", "1 min 5 s". */

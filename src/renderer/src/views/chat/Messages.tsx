@@ -47,6 +47,8 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit }: {
       );
     case "tool":
       return <ToolCard tool={item} />;
+    case "plan":
+      return <div className="turn-footer">Updated the plan</div>;
     case "subagent":
       return (
         <div className="tool-card" data-testid="subagent-card">

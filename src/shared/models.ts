@@ -570,6 +570,9 @@ export type ChatImage = z.infer<typeof ChatImage>;
 export const OfficeBrief = z.object({ title: z.string(), where: z.string(), done: z.string() });
 export type OfficeBrief = z.infer<typeof OfficeBrief>;
 
+const PlanStep = z.object({ text: z.string(), status: z.enum(["completed", "in_progress", "pending"]) });
+export type PlanStep = z.infer<typeof PlanStep>;
+
 export const ChatEvent = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("user"),
@@ -579,6 +582,7 @@ export const ChatEvent = z.discriminatedUnion("t", [
     brief: OfficeBrief.optional(),
   }),
   z.object({ t: z.literal("turn-start") }),
+  z.object({ t: z.literal("plan"), id: z.string(), steps: z.array(PlanStep) }),
   /** A new assistant message begins (its text streams in as text-delta events). */
   z.object({ t: z.literal("assistant-start"), id: z.string() }),
   z.object({ t: z.literal("text-delta"), id: z.string(), text: z.string() }),
@@ -670,6 +674,7 @@ export const SessionRow = z.object({
   capturedAt: z.string().nullable(),
   /** True while the terminal process is alive (or, for a chat, while its program is). */
   running: z.boolean(),
+  activity: z.string().optional(),
   /** Whether the session is a chat or a terminal. Sessions made before chats existed are terminals. */
   mode: SessionMode,
   /** True once a process for the provider conversation has run, so resuming it is possible. */

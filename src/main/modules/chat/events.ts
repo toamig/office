@@ -1,4 +1,5 @@
 import type { ChatEvent } from "../../../shared/models";
+import { planEvent, planSteps } from "../../../shared/chat";
 
 type Json = Record<string, unknown>;
 
@@ -131,12 +132,12 @@ export class ClaudeChatParser {
           });
           continue;
         }
-        tools.push({
+        tools.push(planEvent({
           t: "tool-use",
           id: toolId,
           name,
           input,
-        });
+        }));
       }
     }
     const events: ChatEvent[] = [];
@@ -216,31 +217,32 @@ export class CodexChatParser {
         };
       });
     }
+    if (kind === "todo_list" && ["item.started", "item.updated", "item.completed"].includes(type)) {
+      return [{ t: "plan", id, steps: planSteps(item["items"]) }];
+    }
+    if (["command_execution", "mcp_tool_call", "web_search"].includes(kind)) {
+      if (type !== "item.started" && type !== "item.completed") return [];
+      const use: ChatEvent = kind === "command_execution"
+        ? { t: "tool-use", id, name: "Bash", input: { command: str(item["command"]) } }
+        : { t: "tool-use", id, name: kind, input: obj(item) };
+      if (type === "item.started") return [use];
+      return [use, {
+        t: "tool-result", toolUseId: id, output: str(item["aggregated_output"]),
+        isError: Boolean(item["error"]) || item["status"] === "failed" ||
+          (typeof item["exit_code"] === "number" && item["exit_code"] !== 0),
+      }];
+    }
     if (type !== "item.completed") return [];
     if (kind === "agent_message")
       return [{ t: "assistant", id, text: str(item["text"]), thinking: "" }];
     if (kind === "reasoning")
       return [{ t: "assistant", id, text: "", thinking: str(item["text"]) }];
-    if (kind === "command_execution") {
-      const output = str(item["aggregated_output"]);
-      const code = typeof item["exit_code"] === "number" ? item["exit_code"] : 0;
-      return [
-        { t: "tool-use", id, name: "Bash", input: { command: str(item["command"]) } },
-        { t: "tool-result", toolUseId: id, output, isError: code !== 0 },
-      ];
-    }
     if (kind === "file_change") {
       const changes = Array.isArray(item["changes"]) ? (item["changes"] as Json[]) : [];
       const files = changes.map((c) => str(c["path"])).filter(Boolean);
       return [
         { t: "tool-use", id, name: "Edit", input: { file_path: files.join(", "), changes } },
         { t: "tool-result", toolUseId: id, output: files.join("\n"), isError: false },
-      ];
-    }
-    if (kind === "mcp_tool_call" || kind === "web_search") {
-      return [
-        { t: "tool-use", id, name: kind, input: obj(item) },
-        { t: "tool-result", toolUseId: id, output: "", isError: false },
       ];
     }
     return [];

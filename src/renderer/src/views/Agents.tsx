@@ -116,6 +116,7 @@ function SessionList({
                   <Time iso={s.updatedAt} />
                   {s.idle && <span data-testid="session-idle">Still needed?</span>}
                 </div>
+                {s.activity && <div className="ui-line-sub truncate" title={s.activity}>{s.activity}</div>}
               </div>
               <div className="session-actions flex gap-0.5">
                 {!s.running && s.mode !== "chat" && (
@@ -196,10 +197,15 @@ function IdlePrompt({ session, onChanged }: { session: SessionRow; onChanged: ()
   );
 }
 
+function sessionTabTitle(session: SessionRow): string {
+  const title = session.title ?? session.provider;
+  return session.activity ? `${title} · ${session.activity}` : title;
+}
+
 /** One session as a panel of the dock: a chat or a terminal, kept mounted so moving it never restarts it. */
 const SessionPanel: PanelComponent = ({ params }) => {
   const id = String(params["sessionId"] ?? "");
-  const sessions = useQuery("sessions.list", {}, ["session.status"]);
+  const sessions = useQuery("sessions.list", {}, ["session.status", "session.activity"]);
   const session = sessions.data?.find((s) => s.id === id);
   if (!session)
     return (
@@ -267,6 +273,7 @@ export function Agents({ active: visible }: { active: boolean }) {
   const scope = filter || "all";
   const sessions = useQuery("sessions.list", filter ? { projectId: filter } : {}, [
     "session.status",
+    "session.activity",
   ]);
   const projects = useQuery("projects.list");
   const settings = useQuery("settings.get", undefined, ["settings.changed"]);
@@ -313,7 +320,7 @@ export function Agents({ active: visible }: { active: boolean }) {
       dock.addPanel({
         id: s.id,
         component: "session",
-        title: s.title ?? s.provider,
+        title: sessionTabTitle(s),
         params: { sessionId: s.id, testId: "tab" },
         renderer: "always",
       });
@@ -331,7 +338,7 @@ export function Agents({ active: visible }: { active: boolean }) {
   // Tab titles follow the sessions' titles.
   useEffect(() => {
     for (const s of sessions.data ?? [])
-      api.current?.getPanel(s.id)?.api.setTitle(s.title ?? s.provider);
+      api.current?.getPanel(s.id)?.api.setTitle(sessionTabTitle(s));
   }, [sessions.data]);
 
   const activeSession = activeId ? byId.get(activeId) : undefined;
