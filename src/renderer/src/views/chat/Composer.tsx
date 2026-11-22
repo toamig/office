@@ -1,8 +1,9 @@
 import { ArrowUp, Square } from "lucide-react";
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { ChatImage } from "@shared/models";
 import { office } from "../../lib/ipc";
 import { OverflowMenu } from "../../ui";
+import type { SlashCommand } from "./commands";
 
 const PRESETS = [
   {
@@ -46,12 +47,18 @@ export function Composer({
   onSend,
   onStop,
   controls,
+  commands,
+  onSlashOpen,
+  onCommand,
 }: {
   sessionId: string;
   working: boolean;
   onSend: (text: string, images: ChatImage[]) => Promise<boolean>;
   onStop: () => void;
   controls?: ReactNode;
+  commands: SlashCommand[];
+  onSlashOpen: () => void;
+  onCommand: (command: SlashCommand) => Promise<boolean>;
 }) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -59,7 +66,17 @@ export function Composer({
   const [files, setFiles] = useState<string[]>([]);
   const [pick, setPick] = useState(0);
   const [sending, setSending] = useState(false);
+  const [slash, setSlash] = useState<string>();
+  const [commandPick, setCommandPick] = useState(0);
+  const commandListId = useId();
+  const commandList = useRef<HTMLUListElement>(null);
   const area = useRef<HTMLTextAreaElement>(null);
+  const matches = slash === undefined ? [] : commands.filter((command) => command.name.startsWith(slash));
+  const selected = Math.min(commandPick, matches.length - 1);
+
+  useEffect(() => {
+    commandList.current?.querySelector('[aria-selected="true"]')?.scrollIntoView({ block: "nearest" });
+  }, [selected]);
 
   useEffect(() => {
     if (!mention) return;
@@ -91,20 +108,42 @@ export function Composer({
     });
   };
 
-  const send = (): void => {
-    const body = text.trim();
-    if (!body || sending) return;
+  const submit = (action: () => Promise<boolean>, clearImages = false): void => {
+    if (sending) return;
     setSending(true);
-    void onSend(body, images).then((sent) => {
+    void action().then((sent) => {
       if (!sent) return;
       setText((current) => current === text ? "" : current);
-      setImages((current) => current.filter((image) => !images.includes(image)));
+      if (clearImages) setImages((current) => current.filter((image) => !images.includes(image)));
       setMention(null);
+      setSlash(undefined);
     }).finally(() => setSending(false));
+  };
+
+  const chooseCommand = (command: SlashCommand): void => {
+    if (command.kind === "message") submit(() => onSend(`/${command.name}`, images), true);
+    else submit(() => onCommand(command));
+  };
+
+  const send = (): void => {
+    const body = text.trim();
+    if (!body) return;
+    const exact = commands.find((command) => `/${command.name}` === body);
+    if (exact && exact.kind !== "message") chooseCommand(exact);
+    else submit(() => onSend(body, images), true);
   };
 
   return (
     <div className="composer" data-testid="composer">
+      {matches.length > 0 && <ul ref={commandList} id={commandListId} role="listbox" aria-label="Slash commands" className="mention-list">
+        {matches.map((command, index) => <li key={command.name} role="presentation">
+          <button type="button" tabIndex={-1} role="option" id={`${commandListId}-${index}`} aria-selected={index === selected}
+            className="mention-item flex justify-between gap-3" data-active={index === selected}
+            onMouseDown={(event) => event.preventDefault()} onClick={() => chooseCommand(command)}>
+            /{command.name}{command.kind === "terminal" && <span className="ui-muted">Open in terminal</span>}
+          </button>
+        </li>)}
+      </ul>}
       {mention && files.length > 0 && (
         <ul className="mention-list" data-testid="mention-list">
           {files.map((f, i) => (
@@ -163,12 +202,36 @@ export function Composer({
           spellCheck
           placeholder={working ? "Enter queues a message. Shift+Enter adds a line." : "Message the agent. Enter sends, Shift+Enter adds a line, @ mentions a file."}
           aria-label="Message"
+          aria-controls={matches.length ? commandListId : undefined}
+          aria-activedescendant={selected >= 0 ? `${commandListId}-${selected}` : undefined}
           data-testid="composer-input"
           onChange={(e) => {
             setText(e.target.value);
-            setMention(mentionAt(e.target.value, e.target.selectionStart));
+            const prefix = /^\/([\w:-]*)$/.exec(e.target.value)?.[1];
+            if (prefix !== undefined && slash === undefined) onSlashOpen();
+            setSlash(prefix?.toLowerCase());
+            setCommandPick(0);
+            setMention(prefix === undefined ? mentionAt(e.target.value, e.target.selectionStart) : null);
           }}
           onKeyDown={(e) => {
+            if (e.nativeEvent.isComposing) return;
+            if (matches.length && !e.shiftKey) {
+              if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+                e.preventDefault();
+                const step = e.key === "ArrowDown" ? 1 : -1;
+                return setCommandPick((selected + step + matches.length) % matches.length);
+              }
+              const command = matches[selected];
+              if ((e.key === "Enter" || e.key === "Tab") && command) {
+                e.preventDefault();
+                return chooseCommand(command);
+              }
+            }
+            if (e.key === "Escape" && slash !== undefined) {
+              e.preventDefault();
+              e.stopPropagation();
+              return setSlash(undefined);
+            }
             if (mention && files.length > 0) {
               if (e.key === "ArrowDown") {
                 e.preventDefault();

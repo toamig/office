@@ -20,7 +20,7 @@ import type { PermissionBroker } from "../runs/permissions";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
-import { ClaudeChatParser, CodexChatParser } from "./events";
+import { ClaudeChatParser, CodexChatParser, initializationCommands } from "./events";
 import { chatFailure } from "../../../shared/chat-failure";
 import { activityLabel, emptyActivity, trackActivity, trackQueue, type TurnActivity } from "../../../shared/chat";
 import { redactClaudeToken } from "../../core/claude-secret";
@@ -71,6 +71,7 @@ export class ChatService {
   private readonly seqs = new Map<string, number>();
   private readonly activities = new Map<string, TurnActivity>();
   private readonly queues = new Map<string, QueuedMessage[]>();
+  private readonly commandProbes = new Map<string, Promise<string[]>>();
   /** What an incognito chat has said: kept in memory only, never in a file. */
   private readonly memory = new Map<string, ChatLine[]>();
   private readonly unsavedImages = new Map<string, Map<string, ChatImage[]>>();
@@ -137,7 +138,7 @@ export class ChatService {
     const history = this.history(id);
     if (this.live.has(id)) return history;
     const last = history.findLast(({ event }) =>
-      event.t === "user" || event.t === "result" || event.t === "error" || event.t === "stopped");
+      event.t === "user" || event.t === "result" || event.t === "error" || event.t === "stopped" || event.t === "cleared");
     if (last?.event.t !== "user") return history;
     this.append(id, { t: "error", message: "Office closed before this turn finished. Retry to resend the message." });
     return this.history(id);
@@ -278,6 +279,59 @@ export class ChatService {
     if (role.autonomy === "full-auto") return { kind: "full" };
     if (kind === "codex" || officeMcp) return { kind: "ask" };
     return { kind: "ask", mcpConfig: this.deps.writeMcpConfig(row.id, this.dir(row.id)) };
+  }
+
+  /** The init event supplies commands during a turn. Before the first turn, ask the CLI without a prompt. */
+  async slashCommands(id: string): Promise<string[]> {
+    const row = this.session(id);
+    const provider = this.deps.providers.get(row.provider);
+    if (!provider?.chatCommand || provider.chatKind === "codex") return [];
+    const seen = this.history(id).findLast(({ event }) => event.t === "commands")?.event;
+    if (seen?.t === "commands") return seen.names;
+    const pending = this.commandProbes.get(id);
+    if (pending) return pending;
+    const probe = this.probeCommands(row, provider).finally(() => this.commandProbes.delete(id));
+    this.commandProbes.set(id, probe);
+    return probe;
+  }
+
+  private async probeCommands(row: SessionRow, provider: Provider): Promise<string[]> {
+    let handle: StreamHandle | undefined;
+    let timeout: NodeJS.Timeout | undefined;
+    try {
+      const spec = provider.chatCommand!({
+        cwd: row.cwd, officeSessionId: row.id, threadId: randomUUID(), resume: false,
+        restricted: true, incognito: true, permission: { kind: "readonly" }, runDir: row.cwd,
+      });
+      handle = spawnStream(spec.cmd, spec.args, { cwd: row.cwd, env: spec.env, keepStdin: true, prepare: spec.prepare });
+      const request = randomUUID();
+      handle.write(JSON.stringify({ type: "control_request", request_id: request, request: { subtype: "initialize" } }));
+      const response = async (lines: AsyncIterable<string>) => {
+        for await (const line of lines) {
+          const names = initializationCommands(line, request);
+          if (names) return names;
+        }
+        return [];
+      };
+      return await Promise.race([response(handle.lines), new Promise<string[]>((resolve) => {
+        timeout = setTimeout(() => resolve([]), 4000);
+      })]);
+    } catch {
+      return [];
+    } finally {
+      clearTimeout(timeout);
+      handle?.kill();
+    }
+  }
+
+  clear(id: string): void {
+    const row = this.session(id);
+    if (row.mode !== "chat" || this.working(id)) throw new IpcFailure("busy", "Finish or stop the turn before clearing the conversation.");
+    const live = this.live.get(id);
+    if (live) this.endIdle(id, live);
+    const kind = this.deps.providers.get(row.provider)?.chatKind;
+    this.deps.sessions.resetConversation(id, kind === "codex" ? null : randomUUID());
+    this.append(id, { t: "cleared" });
   }
 
   // ---------- sending ----------
@@ -426,7 +480,9 @@ export class ChatService {
   }
 
   resend(id: string, messageId: string, text?: string, useDefault?: boolean): void {
-    const messages = this.history(id).flatMap(({ event }) => event.t === "user" ? [event] : []);
+    const history = this.history(id);
+    const messages = history.slice(history.findLastIndex(({ event }) => event.t === "cleared") + 1)
+      .flatMap(({ event }) => event.t === "user" ? [event] : []);
     const message = messages.find((event) => event.id === messageId);
     if (!message || (text !== undefined && (message.brief || messages.at(-1) !== message)))
       throw new IpcFailure("no-message", "That message is unavailable to resend.");
@@ -473,6 +529,7 @@ export class ChatService {
       cwd: row.cwd,
       officeSessionId: id,
       resume: row.conversationStarted,
+      ...(row.providerSessionId ? { threadId: row.providerSessionId } : {}),
       ...(restricted ? { restricted: true } : {}),
       ...(incognito ? { incognito: true } : {}),
       role: this.deps.sessions.roleForAgent(row),

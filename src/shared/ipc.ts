@@ -456,6 +456,8 @@ export const channels = {
   "pipelines.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "chat.state": { req: z.object({ id: z.string() }), res: ChatState },
   "chat.history": { req: z.object({ id: z.string() }), res: z.array(ChatLine) },
+  "chat.commands": { req: z.object({ id: z.string() }), res: z.array(z.string()) },
+  "chat.clear": { req: z.object({ id: z.string() }), res: z.void() },
   "chat.send": {
     req: z.object({
       id: z.string(),

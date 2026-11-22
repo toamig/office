@@ -14,6 +14,19 @@ const asJson = (line: string): Json | null => {
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const obj = (v: unknown): Json => (v && typeof v === "object" ? (v as Json) : {});
 
+export function commandNames(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  const names = value.map((item: unknown) => str(item) || str(obj(item)["name"]));
+  return [...new Set(names.filter((name) => /^[\w:-]+$/.test(name) && !name.startsWith("__")))];
+}
+
+export function initializationCommands(line: string, id: string): string[] | undefined {
+  const message = asJson(line);
+  const reply = obj(message?.["response"]);
+  if (message?.["type"] !== "control_response" || reply["request_id"] !== id) return;
+  return commandNames(obj(reply["response"])["commands"]);
+}
+
 /** A tool result's content: a string, or blocks of text. */
 function resultText(content: unknown): string {
   if (typeof content === "string") return content;
@@ -55,6 +68,9 @@ export class ClaudeChatParser {
     if (type === "system") {
       const id = str(message["tool_use_id"]);
       const subtype = str(message["subtype"]);
+      if (subtype === "init" && Array.isArray(message["slash_commands"])) {
+        return [{ t: "commands", names: commandNames(message["slash_commands"]) }];
+      }
       if (id && subtype.startsWith("task_")) {
         const summary = str(message["summary"]) || str(message["description"]);
         const status = str(message["status"]);

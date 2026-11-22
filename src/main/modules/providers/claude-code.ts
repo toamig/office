@@ -233,7 +233,7 @@ export class ClaudeCodeProvider implements Provider {
 
   /** The Office session id is the Claude session id, so hook events map straight back (plan 7.2). */
   interactiveCommand(o: RunOptions): CommandSpec {
-    return this.work(["--session-id", o.officeSessionId, ...this.terminalFlags(o)], o.env);
+    return this.work(["--session-id", o.providerSessionId ?? o.officeSessionId, ...this.terminalFlags(o)], o.env);
   }
 
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun {
@@ -299,7 +299,7 @@ export class ClaudeCodeProvider implements Provider {
       "--include-partial-messages",
       // An incognito conversation is never saved, so there is nothing to resume.
       o.resume && !o.incognito ? "--resume" : "--session-id",
-      o.officeSessionId,
+      o.threadId ?? o.officeSessionId,
       ...(o.effort ? ["--effort", o.effort] : []),
       ...(o.restricted
         ? [...chatToolFlags(o.addDirs ?? [], runOptions.role?.model, o.officeMcp), ...this.roleFlags({ ...runOptions, role: undefined, addDirs: undefined })]

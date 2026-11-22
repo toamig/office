@@ -587,6 +587,8 @@ export const ChatEvent = z.discriminatedUnion("t", [
   QueuedMessage.extend({ t: z.literal("queued") }),
   z.object({ t: z.literal("queue-remove"), id: z.string() }),
   z.object({ t: z.literal("turn-start") }),
+  z.object({ t: z.literal("commands"), names: z.array(z.string()) }),
+  z.object({ t: z.literal("cleared") }),
   z.object({ t: z.literal("plan"), id: z.string(), steps: z.array(PlanStep) }),
   /** A new assistant message begins (its text streams in as text-delta events). */
   z.object({ t: z.literal("assistant-start"), id: z.string() }),

@@ -9,10 +9,12 @@ import { PermissionRequests } from "../../components/PermissionRequests";
 import { StatusChip } from "../../components/StatusChip";
 import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
-import { Button, Dropdown, OverflowMenu, notifyError } from "../../ui";
+import { useUi } from "../../stores/ui";
+import { Button, Dialog, Dropdown, OverflowMenu, notifyError } from "../../ui";
 import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
 import { LivePlan, ToolGroup, TurnStatus } from "./Activity";
 import { Composer } from "./Composer";
+import { slashMenu, type SlashCommand } from "./commands";
 import { ChatMessage } from "./Messages";
 import { QueuedMessage } from "./QueuedMessage";
 
@@ -100,6 +102,10 @@ export function ChatView({ session, onChanged, headerActions }: {
   const { items, working, activity, queue } = conversation;
   const [state, setState] = useState<ChatState | null>(null);
   const [login, setLogin] = useState<{ messageId: string; run: ToolRun }>();
+  const [discovered, setDiscovered] = useState<string[]>();
+  const [rewind, setRewind] = useState(false);
+  const navigate = useUi((store) => store.navigate);
+  const chat = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
   const reveal = useCallback(() => {
@@ -135,6 +141,39 @@ export function ChatView({ session, onChanged, headerActions }: {
     }
   };
   const toolLabel = state?.kind === "codex" || session.provider === "codex" ? "Codex" : "Claude Code";
+  const claude = toolLabel === "Claude Code";
+  const openTerminal = () => act(async () => {
+    await office.invoke("chat.toTerminal", { id });
+    onChanged();
+  });
+  const choices = slashMenu(conversation.commands.length ? conversation.commands : discovered ?? [], claude, !plain);
+  const command = (entry: SlashCommand): Promise<boolean> => {
+    if (entry.kind === "terminal") return working ? act(async () => {
+      throw new Error("Finish or stop the turn before opening it in the terminal.");
+    }) : openTerminal();
+    return act(async () => {
+      switch (entry.name) {
+        case "model":
+        case "effort": {
+          const label = entry.name === "model" ? "Model" : "Effort";
+          const picker = chat.current?.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
+          if (!picker || picker.disabled) throw new Error(`${label} is unavailable for this turn or model.`);
+          picker.focus();
+          picker.click();
+          break;
+        }
+        case "clear":
+          await office.invoke("chat.clear", { id });
+          break;
+        case "resume":
+          navigate("agents");
+          break;
+        case "rewind":
+          setRewind(true);
+          break;
+      }
+    });
+  };
   const resend = (messageId: string, text?: string, useDefault?: boolean) =>
     act(() => office.invoke("chat.resend", { id, messageId, text, useDefault }));
   const signIn = (messageId: string) => void act(async () => {
@@ -152,7 +191,7 @@ export function ChatView({ session, onChanged, headerActions }: {
     if (item.kind === "error" && lastMessage) retryTargets.set(index, lastMessage);
   }
   return (
-    <div className="chat" data-testid="chat" data-session={id}>
+    <div className="chat" ref={chat} data-testid="chat" data-session={id}>
       <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>
         <StatusChip status={session.status} />
@@ -197,6 +236,12 @@ export function ChatView({ session, onChanged, headerActions }: {
         <LivePlan steps={activity.plan} />
         <TurnStatus activity={activity} />
         <Composer sessionId={id} working={working}
+          commands={choices} onCommand={command}
+          onSlashOpen={() => {
+            if (claude && !conversation.commands.length && discovered === undefined) {
+              void office.invoke("chat.commands", { id }).then(setDiscovered, () => undefined);
+            }
+          }}
           onSend={(text, images) => act(() => office.invoke("chat.send", { id, text, images }))}
           onStop={() => void act(() => office.invoke("chat.stop", { id }))}
           controls={<>
@@ -207,12 +252,20 @@ export function ChatView({ session, onChanged, headerActions }: {
               onChange={(level) => office.invoke("sessions.setAutonomy", { id, level }).then(onChanged)} />}
             {!plain && <OverflowMenu label="More about this session" testId="chat-more" items={[{
               label: "Open in terminal", testId: "open-in-terminal",
-              onSelect: () => void act(async () => { await office.invoke("chat.toTerminal", { id }); onChanged(); }),
+              onSelect: () => void openTerminal(),
             }]} />}
           </>} />
       </div>
       {login && <ToolRunDialog key={login.run.session.id} run={login.run} onClose={() => setLogin(undefined)}
         onSuccess={() => void resend(login.messageId)} />}
+      {rewind && <Dialog title="Rewind" onClose={() => setRewind(false)} footer={<>
+        <Button onClick={() => setRewind(false)}>Close</Button>
+        {claude && !plain && <Button variant="primary" disabled={working} onClick={() => {
+          void openTerminal().then((opened) => { if (opened) setRewind(false); });
+        }}>Rewind the conversation</Button>}
+      </>}>
+        {claude && !plain ? <p>Open this conversation in the terminal and run /rewind.</p> : <p>No file snapshots are available.</p>}
+      </Dialog>}
     </div>
   );
 }

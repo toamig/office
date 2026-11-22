@@ -22,6 +22,7 @@ export interface RunOptions {
   cwd: string;
   role?: Role;
   officeSessionId: string;
+  providerSessionId?: string;
   effort?: string;
   addDirs?: string[];
   brain?: BrainScope;
@@ -86,8 +87,9 @@ export interface ChatCommandOptions {
   model?: string;
   effort?: string;
   permissionMode?: string;
-  /** Codex runs one process per turn, so each carries its message and the thread to continue. */
+  /** Codex runs one process per turn, so each carries its message. */
   message?: string;
+  /** The provider's conversation id, when it differs from the Office session id. */
   threadId?: string;
   /** A folder for the turn's output file (Codex). */
   runDir: string;

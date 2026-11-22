@@ -25,6 +25,7 @@ export interface ChatState {
   working: boolean;
   activity: TurnActivity;
   queue: QueuedMessage[];
+  commands: string[];
 }
 
 interface RunningTool { id: string; label: string }
@@ -37,7 +38,7 @@ export interface TurnActivity {
 }
 
 export const emptyActivity = (): TurnActivity => ({ plan: [], tools: [] });
-export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity(), queue: [] });
+export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity(), queue: [], commands: [] });
 
 export function trackQueue(queue: QueuedMessage[], event: ChatEvent): QueuedMessage[] {
   if (event.t === "user" || event.t === "queue-remove") return queue.filter((message) => message.id !== event.id);
@@ -164,6 +165,10 @@ export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): Ch
   const state = activity === previous.activity && queue === previous.queue ? previous : { ...previous, activity, queue };
   const items = state.items;
   switch (event.t) {
+    case "commands":
+      return { ...state, commands: event.names };
+    case "cleared":
+      return { ...emptyChat(), queue: state.queue, commands: state.commands };
     case "queued":
     case "queue-remove":
       return state;

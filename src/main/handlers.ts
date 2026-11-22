@@ -610,6 +610,8 @@ function registerConfigHandlers(ctx: AppContext): void {
 function registerTaskHandlers(ctx: AppContext): void {
   ctx.ipc.handle("chat.state", (req) => ctx.chat.state(req.id));
   ctx.ipc.handle("chat.history", (req) => ctx.chat.visibleHistory(req.id));
+  ctx.ipc.handle("chat.commands", (req) => ctx.chat.slashCommands(req.id));
+  ctx.ipc.handle("chat.clear", (req) => ctx.chat.clear(req.id));
   ctx.ipc.handle("chat.send", (req) =>
     ctx.chat.submit(req.id, req.text, req.images ?? [], req.options),
   );

@@ -459,6 +459,12 @@ export class SessionService {
       .run(providerSessionId, id);
   }
 
+  resetConversation(id: string, providerSessionId: string | null): void {
+    this.deps.db
+      .prepare("UPDATE sessions SET provider_session_id = ?, conversation_started = 0 WHERE id = ?")
+      .run(providerSessionId, id);
+  }
+
   /** Starts any command in a terminal tab (logins, and tests). */
   startCommand(spec: CommandSpec, title: string, cwd: string, provider = "terminal"): SessionRow {
     return this.launch({
@@ -572,6 +578,7 @@ export class SessionService {
     const brain = this.brainForSession(row);
     const officeMcp = this.officeMcpForSession(row);
     const options = { cwd: row.cwd, officeSessionId: id, role: this.roleForAgent(row),
+      ...(ownId && providerSessionId ? { providerSessionId } : {}),
       ...(brain ? { brain } : {}), ...(officeMcp ? { officeMcp } : {}) };
     const spec = row.conversationStarted
       ? provider.resumeCommand(providerSessionId, options)
