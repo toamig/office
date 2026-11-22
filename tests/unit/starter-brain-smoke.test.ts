@@ -21,7 +21,8 @@ it("creates a starter brain with its own rule pack and standalone validation", a
     const validation = await runRuleTool(root, "validate", 5000);
     expect(validation?.stdout).toContain("0 errors");
     expect(validation?.code).toBe(0);
-    expect((await runRuleTool(root, "reindexCheck", 5000))?.code).toBe(0);
+    const routers = await runRuleTool(root, "reindexCheck", 5000);
+    expect(routers?.code, routers?.stdout || routers?.stderr).toBe(0);
   } finally {
     vi.unstubAllEnvs();
     rmSync(base, { recursive: true, force: true });

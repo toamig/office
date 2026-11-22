@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readSync } from "node:fs";
-import { join } from "node:path";
+import { join, resolve, sep } from "node:path";
 import { Cron } from "croner";
 import { WorkflowRunStatus, workflowsFor, type Workflow, type WorkflowItem, type WorkflowView } from "../../shared/workflow";
 import type { Workspace } from "../../shared/types";
+import type { HealthView } from "../../shared/models";
 import type { Db } from "./db";
 import type { Notifier } from "./notifier";
 import type { RunRequest, RunService } from "../modules/runs/service";
-import { brainScope, type BrainScope } from "../modules/vault/scope";
+import { brainScope, notesPath, type BrainScope } from "../modules/vault/scope";
 import { parseWorkflowItems, workflowItemProjects, WORKFLOW_ITEM_FORMAT } from "../modules/runs/workflow-items";
 
 export interface WorkflowOutputRun {
@@ -27,6 +28,7 @@ export interface SchedulerDeps {
   defaultProvider: () => string;
   output: (root: string, workflow: Workflow, run: WorkflowOutputRun) => Promise<void>;
   changed?: () => void;
+  validate?: (root: string) => Promise<HealthView["validate"]>;
   now?: () => Date;
 }
 
@@ -101,7 +103,7 @@ export function workflowRequest(
     providerId: provider,
     cwd,
     prompt: `${workflow.prompt}\n\n${output}`,
-    tools: workflow.read === "none" ? "" : "Read,Grep,Glob,WebSearch",
+    tools: workflow.read === "none" ? "" : workflow.template === "brain-upkeep" ? "Read,Grep,Glob" : "Read,Grep,Glob,WebSearch",
     role: { provider, model: workflow.model || cheapestModel(provider), instructions: "", readOnly: true, allowedCommands: [] },
     ...(workflow.projectId ? { projectId: workflow.projectId } : {}),
     ...(readScope ? { brain: readScope } : {}),
@@ -200,6 +202,9 @@ export class Scheduler {
       const projects = workflowItemProjects(ws, root, workflow.projectId);
       const request = workflowRequest(workflow, ws, root, project, this.deps.neutralFolder(),
         workflow.provider || this.deps.defaultProvider(), projects);
+      if (workflow.template === "brain-upkeep" && request.brain?.root === root)
+        await this.addValidationWarnings(root, request);
+      if (this.deps.root() !== root) throw new Error("The Brain changed before the workflow could start.");
       const handle = this.deps.runs.start(request);
       this.deps.db.prepare("UPDATE automations_log SET run_id = ? WHERE id = ?").run(handle.id, logId);
       const result = await handle.result;
@@ -229,6 +234,20 @@ export class Scheduler {
       this.inFlight.delete(key);
       this.deps.changed?.();
     }
+  }
+
+  private async addValidationWarnings(root: string, request: RunRequest): Promise<void> {
+    const result = await this.deps.validate?.(root);
+    const hidden = (request.brain?.private ?? []).map((path) => resolve(path).toLowerCase());
+    const warnings = (result?.problems ?? []).flatMap((problem) => {
+      if (problem.level !== "warning" || !problem.file || !/\b(?:lines?|ceiling|split|size)\b/i.test(problem.message)) return [];
+      const path = notesPath(root, problem.file)?.toLowerCase();
+      if (!path || hidden.some((folder) => path === folder || path.startsWith(folder + sep))) return [];
+      return problem.message.slice(0, 400);
+    }).slice(0, 30);
+    const summary = warnings.length ? warnings.join("\n")
+      : result?.ran ? "No size warnings in the readable notes." : "Validation was unavailable.";
+    request.prompt += `\n\nBrain validation size warnings\n${summary}`;
   }
 
   private async collectItems(output: WorkflowOutputRun, request: RunRequest, projects: ReadonlySet<string>): Promise<void> {

@@ -1,6 +1,6 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { describeSchedule, workflowOutputLabels, type Workflow, type WorkflowView } from "@shared/workflow";
+import { brainUpkeepTemplate, describeSchedule, workflowOutputLabels, type Workflow, type WorkflowView } from "@shared/workflow";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { Banner, Button, Card, Dialog, EmptyState, OverflowMenu, Page, Time, notifyError } from "../ui";
@@ -37,7 +37,9 @@ export function Workflows() {
   const list = useQuery("workflows.list", undefined, ["workspace.changed", "workflow.changed"]);
   const projects = useQuery("projects.list", undefined, ["workspace.changed"]);
   const providers = useQuery("providers.list");
+  const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
   const [editor, setEditor] = useState<Workflow | null>();
+  const [template, setTemplate] = useState(false);
   const [remove, setRemove] = useState<Workflow>();
   const [busy, setBusy] = useState<string[]>([]);
   const available = (projects.data ?? []).filter((project) => !project.archived);
@@ -57,8 +59,11 @@ export function Workflows() {
   const deleting = remove && busy.includes(remove.id);
 
   return (
-    <Page title="Workflows" testId="workflows" primary={
-      <Button variant="primary" onClick={() => setEditor(null)}><Plus /> New workflow</Button>
+    <Page title="Workflows" testId="workflows"
+      more={workspace.data?.workspace && workspace.data.workspace.vault.kind !== "none" ? [{
+        label: "Use Brain upkeep template", onSelect: () => { setTemplate(true); setEditor(null); },
+      }] : undefined} primary={
+      <Button variant="primary" onClick={() => { setTemplate(false); setEditor(null); }}><Plus /> New workflow</Button>
     }>
       {list.error && <Banner tone="danger">{list.error}</Banner>}
       {list.data?.length === 0 && <EmptyState title="No workflows yet" />}
@@ -96,7 +101,8 @@ export function Workflows() {
           </Card>
         );
       })}
-      {editor !== undefined && <WorkflowForm workflow={editor} projects={available} providers={providers.data ?? []}
+      {editor !== undefined && <WorkflowForm key={editor?.id ?? (template ? "brain-upkeep" : "new-workflow")} workflow={editor}
+        template={template ? brainUpkeepTemplate : undefined} projects={available} providers={providers.data ?? []}
         busy={saving} onClose={() => { if (!saving) setEditor(undefined); }}
         onSave={(workflow) => act("editor", async () => {
           await office.invoke(editor ? "workflows.save" : "workflows.create", workflow);

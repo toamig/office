@@ -189,7 +189,7 @@ export class OnboardingService {
         const dir = join(root, vault);
         if (existsSync(join(dir, "Overview.md")))
           throw new IpcFailure("notes-exist", `${vault} already has notes; link them instead`);
-        const domain = detectRuleDomain(item.path) ?? item.domain;
+        const domain = detectRuleDomain(item.path) ?? "meta";
         const starter = readRulePack(root)?.source.startsWith("office-starter@");
         rulesChanged = starter ? registerStarterDomain(root, domain) : false;
         writeProjectLayout(root, vault, item.name, starter ? domain : item.domain, { overview, waitingHeading: heading });

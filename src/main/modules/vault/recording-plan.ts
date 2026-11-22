@@ -9,10 +9,18 @@ const Destination = z.enum([
   "decision", "todo", "waiting", "architecture", "contract", "design", "audience", "reference",
   "journal", "lesson", "profile",
 ]);
+export const DecisionDetails = z.object({
+  title: z.string().trim().min(1).max(100),
+  context: z.string().trim().min(1).max(750).optional(),
+  alternatives: z.string().trim().min(1).max(750).optional(),
+  consequences: z.string().trim().min(1).max(750).optional(),
+  affects: z.string().trim().min(1).max(750).optional(),
+});
 const Entry = z.object({
   destination: Destination,
   text: z.string().trim().min(1).max(750),
   certainty: z.enum(["save", "ask"]),
+  decision: DecisionDetails.optional(),
 });
 export type Entry = z.infer<typeof Entry>;
 const Plan = z.object({ entries: z.array(Entry).max(20) });
@@ -64,7 +72,7 @@ export function recordTarget(
   };
 }
 
-export function recordingPrompt(text: string, general: boolean, learning: boolean, placement = ""): string {
+export function recordingPrompt(text: string, general: boolean, learning: boolean, placement = "", useAdr = false): string {
   const destinations = general
     ? "journal, reference"
     : `decision, todo, waiting, architecture, contract, design, audience, reference, journal${learning ? ", lesson, profile" : ""}`;
@@ -75,9 +83,32 @@ export function recordingPrompt(text: string, general: boolean, learning: boolea
     "Record only supported facts that add durable context. Never record credentials, secrets, or private personal information.",
     "Use certainty 'ask' where the fact, placement, or owner's intent is uncertain. Use 'save' only when there is direct evidence.",
     ...(placement ? [`Follow this brain's placement rules when choosing a destination:\n${placement}`] : []),
+    ...(useAdr && !general ? ['For a settled decision, give the choice in text and add a "decision" object with title and any supported context, alternatives, consequences or affects. Omit details the transcript does not establish.'] : []),
     "For lessons state the correction and the rule it implies. For the owner profile use only explicit preferences or recurring corrections.",
     "Return an empty list if the transcript contains nothing worth saving.",
     "",
     text,
   ].join("\n");
+}
+
+function oneLine(text: string): string {
+  return text.replace(/[\u2013\u2014]/g, ",").replace(/\s+/g, " ").trim();
+}
+
+export function appendDecision(content: string, date: string, text: string, details?: z.infer<typeof DecisionDetails>): string {
+  const decision = oneLine(text);
+  if (content.split(/\r?\n/).some((line) =>
+    line.trim() === `**Decision:** ${decision}` || line.replace(/^- \d{4}-\d{2}-\d{2} /, "") === decision))
+    return content;
+  const ids = [...content.matchAll(/^#{2,6}\s+ADR-(\d+)\b/gm)].map((match) => Number(match[1]));
+  const number = Math.max(0, ...ids) + 1;
+  const title = oneLine(details?.title ?? decision).slice(0, 100);
+  const entry = [`## ADR-${number}: ${title}`, "", "**Status:** Accepted", `**Date:** ${date}`,
+    ...(details?.context ? [`**Context:** ${oneLine(details.context)}`] : []),
+    `**Decision:** ${decision}`,
+    ...(details?.alternatives ? [`**Alternatives:** ${oneLine(details.alternatives)}`] : []),
+    ...(details?.consequences ? [`**Consequences:** ${oneLine(details.consequences)}`] : []),
+    ...(details?.affects ? [`**Affects:** ${oneLine(details.affects)}`] : []),
+  ];
+  return [content.trimEnd(), "", ...entry, ""].join("\n");
 }

@@ -54,7 +54,7 @@ export function parseValidate(stdout: string, code: number): HealthView["validat
 
 /** One finding: the note it names ("Repo/Note.md: ...") and the repo that holds it. */
 export function problemOf(level: HealthProblem["level"], message: string): HealthProblem {
-  const named = /^([\w./-]+\.md)(?::\d+)?:\s/.exec(message);
+  const named = /^([^:\r\n]+\.md)(?::\d+)?:\s/.exec(message);
   const file = named?.[1] ?? null;
   const repo = file && file.includes("/") ? (file.split("/")[0] ?? null) : null;
   return { level, message, file, repo };

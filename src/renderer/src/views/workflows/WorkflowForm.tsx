@@ -9,15 +9,16 @@ const schedules = {
   custom: { pattern: "", label: "Custom schedule" },
 } as const;
 
-export function WorkflowForm({ workflow, projects, providers, onSave, onClose, busy }: {
+export function WorkflowForm({ workflow, template, projects, providers, onSave, onClose, busy }: {
   workflow: Workflow | null;
+  template?: Workflow;
   projects: Array<{ id: string; name: string }>;
   providers: Array<{ id: string; label: string }>;
   onSave: (workflow: Workflow) => Promise<void>;
   onClose: () => void;
   busy: boolean;
 }) {
-  const [draft, setDraft] = useState<Workflow>(workflow ?? {
+  const [draft, setDraft] = useState<Workflow>(workflow ?? template ?? {
     id: "", name: "", schedule: null, projectId: null, read: "brain", prompt: "",
     enabled: true, output: "worth-a-look",
   });
@@ -39,6 +40,7 @@ export function WorkflowForm({ workflow, projects, providers, onSave, onClose, b
       </>
     }>
       <div className="grid gap-3">
+        {template && !workflow && <p className="ui-muted">This workflow starts off. Turn it on from Workflows when you are ready.</p>}
         <Input label="Name" value={draft.name} onChange={(event) => update({ name: event.target.value })} maxLength={100} />
         <Textarea label="Prompt" value={draft.prompt} onChange={(event) => update({ prompt: event.target.value })} rows={4} maxLength={20000} />
         <label className="grid gap-1">

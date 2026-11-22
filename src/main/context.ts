@@ -487,6 +487,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     defaultProvider: cheapestProvider,
     output: (root, workflow, result) => workflowResults.save(root, workflow, result),
     changed: () => bus.emit("workflow.changed", {}),
+    validate: (root) => runValidate(root, notes.folderTools.enabled() ? () => notes.folderTools.validate(root) : undefined),
   });
   const modules = new ModuleManager({
     dir: () => modulesDir(),
@@ -749,8 +750,8 @@ export async function createContext(
   const ruleHookTargets: AppContext["ruleHookTargets"] = (projectId) => {
     const root = box.current.workspaceRoot;
     const kind = store.state.workspace?.vault.kind;
-    if (!root || !kind || kind === "none") return [];
-    const brain = [{ name: "Brain", repo: root }, ...(kind === "brain-hub"
+    if (!root || !kind) return [];
+    const brain = kind === "none" ? [] : [{ name: "Brain", repo: root }, ...(kind === "brain-hub"
       ? readHub(root).flatMap(({ folder }) => {
         const repo = notesPath(root, folder);
         return repo ? [{ name: folder, repo }] : [];

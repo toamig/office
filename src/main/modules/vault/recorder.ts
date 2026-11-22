@@ -6,7 +6,7 @@ import type { Workspace } from "../../../shared/types";
 import type { Db } from "../../core/db";
 import { nowIso } from "../../core/util";
 import { Cursor, readRecording } from "./recording-input";
-import { type Entry, type RecordTarget, parseRecording, recordTarget, recordingPrompt } from "./recording-plan";
+import { appendDecision, DecisionDetails, type Entry, type RecordTarget, parseRecording, recordTarget, recordingPrompt } from "./recording-plan";
 import { readRulePack, ruleBody } from "./rule-pack";
 import { appendToSection, formatWaitingLine } from "./openitems";
 import { notesPath } from "./scope";
@@ -32,6 +32,7 @@ type Proposal = Pick<Entry, "destination" | "text"> & {
   workspace: string;
   project_id: string | null;
   created_at: string;
+  decision?: string | null;
 };
 
 const empty = (): WrapUpResult => ({ saved: 0, proposed: 0 });
@@ -104,7 +105,7 @@ export class Recorder {
     const learning = this.deps.settings().learning;
     const pack = readRulePack(root);
     const result = await this.deps.complete(session, recordingPrompt(delta.text, general, learning,
-      pack ? ruleBody(root, pack.placement) : ""));
+      pack ? ruleBody(root, pack.placement) : "", !!pack));
     if (this.deps.root() !== root || !this.deps.settings().enabled) return empty();
     const entries = parseRecording(result).flatMap((entry) => {
       if ((entry.destination === "lesson" || entry.destination === "profile") && !learning) return [];
@@ -123,15 +124,17 @@ export class Recorder {
     const { db } = this.deps;
     const grouped = new Map<string, Proposal[]>();
     let proposed = 0;
-    const insert = db.prepare("INSERT INTO recorder_proposals VALUES (?, ?, ?, ?, ?, ?, ?)");
+    const insert = db.prepare(`INSERT INTO recorder_proposals
+      (id, workspace, project_id, destination, text, created_at, state, decision) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`);
     db.transaction(() => {
       for (const { entry, target } of entries) {
         const proposal: Proposal = {
           id: randomUUID(), workspace: root, project_id: session.projectId,
           destination: entry.destination, text: entry.text, created_at: nowIso(),
+          decision: entry.destination === "decision" && entry.decision ? JSON.stringify(entry.decision) : null,
         };
         insert.run(proposal.id, root, proposal.project_id, proposal.destination, proposal.text, proposal.created_at,
-          entry.certainty === "ask" ? "ask" : "writing");
+          entry.certainty === "ask" ? "ask" : "writing", proposal.decision);
         if (entry.certainty === "ask") proposed++;
         else grouped.set(target.path, [...(grouped.get(target.path) ?? []), proposal]);
       }
@@ -173,10 +176,16 @@ export class Recorder {
     };
     mkdirSync(dirname(path), { recursive: true });
     const date = writer.today();
+    const useAdr = !!readRulePack(first.workspace);
     const result = await writer.edit(path, `${target.name}: record ${target.path.split("/").at(-1)}`, (content) => {
       for (const row of batch) {
         const current = this.target(row.workspace, row.project_id, row.destination);
         if (current?.path !== target.path || !current.heading) throw new Error("The note's destination changed.");
+        if (useAdr && row.destination === "decision") {
+          const details = row.decision ? DecisionDetails.parse(JSON.parse(row.decision)) : undefined;
+          content = appendDecision(content, date, row.text, details);
+          continue;
+        }
         const line = row.destination === "waiting"
           ? formatWaitingLine(date, row.text, "Office recorder")
           : `- ${date} ${row.text}`;

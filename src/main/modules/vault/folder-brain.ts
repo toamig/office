@@ -3,7 +3,7 @@ import { posix } from "node:path";
 import { parse, stringify } from "yaml";
 import { z } from "zod";
 import type { HealthView } from "../../../shared/models";
-import { stripFrontmatter } from "../notes/notes";
+import { frontmatterValue, stripFrontmatter } from "../notes/notes";
 import { parseValidate } from "./health";
 import { notesPath, privateNotes, readText } from "./scope";
 import { readRulePack } from "./rule-pack";
@@ -150,7 +150,8 @@ export function folderRouterEdits(root: string, folders: string[]): RouterEdit[]
     if (!tableRows.length && !route) continue;
     edits.push({ path, before: route?.text ?? "", initial, generated: table(tableRows) });
     if (!privateNotes(root, folder))
-      routers.push({ path, type: "index", summary: route?.metadata?.summary ?? `Notes in ${project ?? folder}.` });
+      routers.push({ path, type: "index",
+        summary: route?.metadata?.summary ?? frontmatterValue(initial, "summary") ?? `Notes in ${project ?? folder}.` });
   }
   const rootNotes = byFolder.get(".") ?? [];
   const rootRouter = rootNotes.find((note) => note.path === "_index.md");

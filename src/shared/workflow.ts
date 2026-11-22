@@ -15,8 +15,21 @@ export const Workflow = z.object({
   prompt: z.string().trim().min(1).max(20_000),
   output: WorkflowOutput.default("worth-a-look"),
   enabled: z.boolean().default(true),
+  template: z.literal("brain-upkeep").optional(),
 });
 export type Workflow = z.infer<typeof Workflow>;
+
+export const brainUpkeepTemplate: Workflow = {
+  id: "brain-upkeep", name: "Brain upkeep", schedule: "0 8 * * 1", projectId: null,
+  read: "brain", output: "worth-a-look", enabled: false, template: "brain-upkeep",
+  prompt: [
+    "Review the Brain using its rule pack and the validation size warnings supplied by Office.",
+    "Follow the routers to compare relevant notes. Look for duplicate facts across current projects, contradictions, settled decisions without an ADR, and long notes that answer several questions.",
+    "Only suggest a shared note when two current projects need the same stable fact and a divergence would be a bug. Follow the pack's placement and extraction guidance.",
+    "Give up to five supported suggestions with precise note paths and headings, the projects affected, and the first step the owner could approve in a discussion. Return no items when none are supported.",
+    "Review only. Do not edit files, run commands, or access private notes belonging to another project.",
+  ].join("\n"),
+};
 
 export const WorkflowRunStatus = z.enum(["running", "done", "failed", "cancelled"]);
 export const WorkflowView = Workflow.extend({
