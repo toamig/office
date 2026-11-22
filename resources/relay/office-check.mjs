@@ -1,7 +1,8 @@
 import { spawnSync } from "node:child_process";
 import { Buffer } from "node:buffer";
 import console from "node:console";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmdirSync, rmSync, writeFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmdirSync, rmSync, statSync, unlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { isAbsolute, join, relative, resolve, sep } from "node:path";
 import process from "node:process";
@@ -155,23 +156,67 @@ function stripTrailer(path) {
   if (cleaned !== text) writeFileSync(path, Buffer.from(cleaned, "latin1"));
 }
 
+function removeLock(lock, owner) {
+  try {
+    if (owner) unlinkSync(join(lock, owner));
+    rmdirSync(lock);
+    return true;
+  } catch (error) {
+    if (error.code !== "ENOENT" && error.code !== "ENOTEMPTY") throw error;
+    return false;
+  }
+}
+
+function reclaimLock(lock) {
+  try {
+    const info = statSync(lock);
+    const names = readdirSync(lock);
+    if (names.length > 1) return false;
+    const owner = names[0];
+    if (owner && owner !== "pid" && !/^pid-[0-9a-f-]{36}$/i.test(owner)) return false;
+    if (Date.now() - info.mtimeMs > 300_000) {
+      if (!owner) {
+        const current = statSync(lock);
+        if (current.ino !== info.ino || current.mtimeMs !== info.mtimeMs) return false;
+      }
+      return removeLock(lock, owner);
+    }
+    if (!owner) return false;
+    const pid = Number(readFileSync(join(lock, owner), "utf8"));
+    if (!Number.isSafeInteger(pid) || pid <= 0) return false;
+    try { process.kill(pid, 0); }
+    catch (error) { if (error.code === "ESRCH") return removeLock(lock, owner); }
+    return false;
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    return false;
+  }
+}
+
 async function syncAfterCommit(pack) {
   const dir = stdout(git(["rev-parse", "--absolute-git-dir"], root, true)).trim();
   if (!dir) return;
   const lock = join(dir, "office-post-commit.lock");
+  // A former owner can only remove its own marker after another hook takes over.
+  const owner = `pid-${randomUUID()}`;
   for (let attempt = 0; attempt < 120; attempt++) {
-    try { mkdirSync(lock); break; }
+    try { mkdirSync(lock); }
     catch (error) {
-      if (error.code !== "EEXIST" || attempt === 119) return;
-      await pause(1000);
+      if (error.code !== "EEXIST") throw error;
+      if (!reclaimLock(lock) && attempt < 119) await pause(1000);
+      continue;
     }
-  }
-  try {
-    if (typeof pack?.tools?.sync === "string") runPackCommand(pack.tools.sync, root);
-    else if (git(["rev-parse", "--abbrev-ref", "@{u}"], repo, true).status === 0)
-      git(["push", "--quiet"], repo, true);
-  } finally {
-    rmdirSync(lock);
+    let claimed = false;
+    try {
+      writeFileSync(join(lock, owner), String(process.pid), { flag: "wx" });
+      claimed = true;
+      if (typeof pack?.tools?.sync === "string") runPackCommand(pack.tools.sync, root);
+      else if (git(["rev-parse", "--abbrev-ref", "@{u}"], repo, true).status === 0)
+        git(["push", "--quiet"], repo, true);
+    } finally {
+      removeLock(lock, claimed ? owner : undefined);
+    }
+    return;
   }
 }
 

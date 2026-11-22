@@ -1,4 +1,4 @@
-import { chmodSync, copyFileSync, existsSync, readFileSync, rmSync } from "node:fs";
+import { chmodSync, copyFileSync, existsSync, readFileSync, rmSync, utimesSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { expect, it, vi } from "vitest";
 import { run } from "../../src/main/core/exec";
@@ -18,6 +18,34 @@ function fixture() {
   sh(root, "config", "core.autocrlf", "false");
   return root;
 }
+
+it.each(["an exited process", "a live process with a lock older than five minutes"])("takes over the post-commit lock from %s", async (reason) => {
+  const root = fixture();
+  try {
+    const lock = join(root, ".git", "office-post-commit.lock");
+    const aged = reason.startsWith("a live");
+    const oldOwner = aged ? String(process.pid) : (await run("node", ["-p", "process.pid"], { cwd: root })).stdout.trim();
+    expect(oldOwner).toMatch(/^\d+$/);
+    write(root, ".git/office-post-commit.lock/pid", oldOwner);
+    if (aged) {
+      const stale = new Date(Date.now() - 301_000);
+      utimesSync(lock, stale, stale);
+    }
+    write(root, "Rules/rules.json", JSON.stringify({ tools: {
+      sync: `node -e "const fs=require('fs'); const dir='.git/office-post-commit.lock/'; const owner=fs.readdirSync(dir)[0]; fs.writeFileSync('sync-ran',fs.readFileSync(dir+owner,'utf8')+'='+process.ppid)"`,
+    } }));
+    const result = await run("node", [check, "post-commit", root, "brain"], { cwd: root, env: { OFFICE_VAULT_WRITER: undefined }, timeoutMs: 5000 });
+    expect(result).toMatchObject({ code: 0, stderr: "" });
+    const [pid, parent] = readFileSync(join(root, "sync-ran"), "utf8").split("=");
+    expect(pid).toMatch(/^\d+$/);
+    expect(pid).toBe(parent);
+    expect(pid).not.toBe(oldOwner);
+    expect(existsSync(lock)).toBe(false);
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+    vi.unstubAllEnvs();
+  }
+}, 10_000);
 
 it("chains the existing hook even if the Office script is missing and leaves its bytes untouched", async () => {
   const root = fixture();
