@@ -585,6 +585,7 @@ export type QueuedMessage = z.infer<typeof QueuedMessage>;
 
 export const RewindPreview = z.object({
   revision: z.string(),
+  omitted: z.array(z.string()),
   files: z.array(z.object({ path: z.string(), action: z.enum(["create", "modify", "delete"]) })),
 });
 export type RewindPreview = z.infer<typeof RewindPreview>;

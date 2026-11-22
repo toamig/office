@@ -1,9 +1,9 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import {
-  existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync,
-  renameSync, rmdirSync, symlinkSync, unlinkSync, writeFileSync,
+  copyFileSync, existsSync, lstatSync, mkdirSync, readdirSync, readlinkSync, realpathSync,
+  renameSync, rmdirSync, symlinkSync, unlinkSync,
 } from "node:fs";
-import { mkdtemp, rm } from "node:fs/promises";
+import { copyFile, mkdtemp, rm, stat as fileStat, utimes } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { IpcFailure } from "../../core/ipc";
@@ -15,6 +15,8 @@ interface Change { path: string; before?: Entry; after?: Entry }
 
 const idPattern = /^[0-9a-f-]{36}$/i;
 const oidPattern = /^(?:[0-9a-f]{40}|[0-9a-f]{64})$/;
+const maxUntrackedBytes = 50_000_000;
+const snapshotTitle = "Office file snapshot";
 
 export function rewindRoot(cwd: string): string | undefined {
   if (!existsSync(cwd)) return;
@@ -24,12 +26,12 @@ export function rewindRoot(cwd: string): string | undefined {
   }
 }
 
-async function git(root: string, args: string[], options: { index?: string; input?: Buffer | string; allowFailure?: boolean } = {}): Promise<Buffer> {
+async function git(root: string, args: string[], options: { index?: string; input?: string; attributes?: string; allowFailure?: boolean } = {}): Promise<Buffer> {
   const result = await runBytes("git", ["-c", "core.hooksPath=/dev/null", "-c", "core.fsmonitor=false", "-c", "commit.gpgSign=false", ...args], {
     cwd: root, input: options.input, timeoutMs: 60_000,
     env: {
       GIT_DIR: undefined, GIT_WORK_TREE: undefined, GIT_COMMON_DIR: undefined,
-      GIT_INDEX_FILE: options.index, GIT_OPTIONAL_LOCKS: "0",
+      GIT_INDEX_FILE: options.index, GIT_OPTIONAL_LOCKS: "0", GIT_ATTR_SOURCE: options.attributes,
       GIT_AUTHOR_NAME: "Office", GIT_AUTHOR_EMAIL: "office@localhost",
       GIT_COMMITTER_NAME: "Office", GIT_COMMITTER_EMAIL: "office@localhost",
     },
@@ -67,43 +69,47 @@ function stat(file: string) {
   }
 }
 
-/** Scan the real index read-only for names, then write raw blobs into a separate index. */
-async function workingTree(root: string): Promise<string> {
+async function copyIndex(root: string, index: string): Promise<void> {
+  const path = (await git(root, ["rev-parse", "--git-path", "index"])).toString("utf8").replace(/\r?\n$/, "");
+  const source = resolve(root, path);
+  try {
+    const info = await fileStat(source);
+    await copyFile(source, index);
+    // Git uses the index timestamp to decide which cached entries might be racy.
+    await utimes(index, info.atimeMs / 1000, info.mtimeMs / 1000);
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+    await git(root, ["read-tree", "--empty"], { index });
+  }
+}
+
+/** Stage the working tree in a copy of the index so Git can reuse stat and clean-filter results. */
+async function workingTree(root: string): Promise<{ tree: string; omitted: string[] }> {
   const dir = await mkdtemp(join(tmpdir(), "office-rewind-index-"));
   const index = join(dir, "index");
   try {
-    const names = [...new Set((await git(root, ["ls-files", "-z", "--cached", "--others", "--exclude-standard"]))
-      .toString("utf8").split("\0").filter((name) => name && !name.endsWith("/")))];
-    const entries: string[] = [];
-    let files: Array<{ name: string; mode: string }> = [];
-    let length = 0;
-    const hashFiles = async () => {
-      if (!files.length) return;
-      const hashes = (await git(root, ["hash-object", "-w", "--no-filters", "--", ...files.map(({ name }) => name)]))
-        .toString("ascii").trim().split(/\s+/);
-      entries.push(...files.map(({ name, mode }, i) => `${mode} ${hashes[i]}\t${name}\0`));
-      files = [];
-      length = 0;
-    };
+    await copyIndex(root, index);
+    const names = (await git(root, ["ls-files", "-z", "--others", "--exclude-standard"], { index }))
+      .toString("utf8").split("\0").filter(Boolean);
+    const omitted: string[] = [];
+    const excluded: string[] = [];
     for (const name of names) {
-      const path = target(root, name);
-      // Exclude entries below a replaced directory or a symlink, even if still present in the real index.
-      if (parents(name).some((parent) => !stat(target(root, parent))?.isDirectory())) continue;
-      const info = stat(path);
-      if (info?.isSymbolicLink()) {
-        const oid = (await git(root, ["hash-object", "-w", "--stdin"], { input: readlinkSync(path, { encoding: "buffer" }) }))
-          .toString("ascii").trim();
-        entries.push(`120000 ${oid}\t${name}\0`);
-      } else if (info?.isFile()) {
-        if (length + name.length > 8000) await hashFiles();
-        length += 2 * name.length + 3;
-        files.push({ name, mode: info.mode & 0o111 ? "100755" : "100644" });
+      if (name.endsWith("/")) {
+        excluded.push(name.slice(0, -1));
+        continue;
+      }
+      const info = stat(target(root, name));
+      if (info?.isFile() && info.size > maxUntrackedBytes) {
+        omitted.push(name);
+        excluded.push(name);
       }
     }
-    await hashFiles();
-    await git(root, ["read-tree", "--empty"], { index });
-    if (entries.length) await git(root, ["update-index", "-z", "--index-info"], { index, input: entries.join("") });
-    return (await git(root, ["write-tree"], { index })).toString("ascii").trim();
+    if (excluded.length) {
+      const input = [".", ...excluded.map((name) => `:(top,literal,exclude)${name}`), ""].join("\0");
+      await git(root, ["add", "-A", "--pathspec-from-file=-", "--pathspec-file-nul"], { index, input });
+    } else await git(root, ["add", "-A", "--", "."], { index });
+    const tree = (await git(root, ["write-tree"], { index })).toString("ascii").trim();
+    return { tree, omitted: omitted.sort() };
   } finally {
     await rm(dir, { recursive: true, force: true });
   }
@@ -111,8 +117,9 @@ async function workingTree(root: string): Promise<string> {
 
 export async function saveSnapshot(root: string, session: string, message: string): Promise<void> {
   const name = ref(session, message);
-  const tree = await workingTree(root);
-  const commit = (await git(root, ["commit-tree", tree, "-m", "Office file snapshot"])).toString("ascii").trim();
+  const { tree, omitted } = await workingTree(root);
+  const input = `${snapshotTitle}\n${omitted.length ? `\n${JSON.stringify(omitted)}\n` : ""}`;
+  const commit = (await git(root, ["commit-tree", tree], { input })).toString("ascii").trim();
   await git(root, ["update-ref", name, commit]);
 }
 
@@ -148,18 +155,36 @@ function differences(current: Tree, snapshot: Tree): Change[] {
   });
 }
 
+async function snapshotInfo(root: string, session: string, message: string) {
+  const raw = (await git(root, ["cat-file", "commit", ref(session, message)], { allowFailure: true })).toString("utf8");
+  const tree = raw.split("\n", 1)[0]?.slice(5) ?? "";
+  if (!raw.startsWith("tree ") || !oidPattern.test(tree)) throw new IpcFailure("no-snapshot", "This message has no file snapshot.");
+  const metadata = raw.split("\n\n")[2]?.trim();
+  const paths: unknown = metadata ? JSON.parse(metadata) : [];
+  if (!Array.isArray(paths) || !paths.every((path: unknown) => typeof path === "string")) throw new Error("Invalid snapshot metadata.");
+  return { tree, omitted: paths as string[] };
+}
+
+function relatedToOmission(path: string, omitted: Set<string>): boolean {
+  return omitted.has(path) || parents(path).some((parent) => omitted.has(parent)) ||
+    [...omitted].some((name) => name.startsWith(`${path}/`));
+}
+
 async function compare(root: string, session: string, message: string) {
-  const snap = (await git(root, ["rev-parse", "--verify", `${ref(session, message)}^{tree}`], { allowFailure: true })).toString("ascii").trim();
-  if (!oidPattern.test(snap)) throw new IpcFailure("no-snapshot", "This message has no file snapshot.");
-  const tree = await workingTree(root);
-  const [current, snapshot] = await Promise.all([entries(root, tree), entries(root, snap)]);
-  return { tree, snap, changes: differences(current, snapshot) };
+  const snap = await snapshotInfo(root, session, message);
+  const current = await workingTree(root);
+  const [currentFiles, snapshotFiles] = await Promise.all([entries(root, current.tree), entries(root, snap.tree)]);
+  const omitted = new Set([...snap.omitted, ...current.omitted]);
+  const paths = [...omitted].sort();
+  const revision = createHash("sha256").update(JSON.stringify([current, snap])).digest("hex");
+  const changes = differences(currentFiles, snapshotFiles).filter(({ path }) => !relatedToOmission(path, omitted));
+  return { current, snap: snap.tree, revision, omitted: paths, changes };
 }
 
 export async function previewSnapshot(root: string, session: string, message: string) {
-  const { tree, snap, changes } = await compare(root, session, message);
+  const { revision, omitted, changes } = await compare(root, session, message);
   return {
-    revision: `${tree}:${snap}`, files: changes.map(({ path, before, after }) => ({
+    revision, omitted, files: changes.map(({ path, before, after }) => ({
       path, action: before && after ? "modify" as const : after ? "create" as const : "delete" as const,
     })),
   };
@@ -170,7 +195,12 @@ function parents(name: string): string[] {
   return parts.slice(0, -1).map((_, i) => parts.slice(0, i + 1).join("/"));
 }
 
-function apply(root: string, changes: Change[], contents: Map<string, Buffer>): void {
+function copyEntry(source: string, destination: string): void {
+  if (lstatSync(source).isSymbolicLink()) symlinkSync(readlinkSync(source), destination);
+  else copyFileSync(source, destination);
+}
+
+function apply(root: string, changes: Change[], checkout: string, backup: string): void {
   const remove = new Set(changes.filter(({ before }) => before).map(({ path }) => path));
   const dirsToRemove = new Set<string>();
   const protectedPath = (name: string) => new IpcFailure("protected-file", `Restore would overwrite a file outside the snapshot: ${name}`);
@@ -200,23 +230,21 @@ function apply(root: string, changes: Change[], contents: Map<string, Buffer>): 
   }
 
   const undo: Array<() => void> = [];
-  const write = (path: string, entry: Entry) => {
-    const blob = contents.get(entry.oid)!;
-    if (entry.mode === "120000") symlinkSync(blob.toString("utf8"), path);
-    else {
-      const tmp = join(dirname(path), `.office-rewind-${randomUUID()}`);
-      try {
-        writeFileSync(tmp, blob, { flag: "wx", mode: entry.mode === "100755" ? 0o755 : 0o644 });
-        renameSync(tmp, path);
-      } finally { if (existsSync(tmp)) unlinkSync(tmp); }
-    }
+  const write = (source: string, path: string) => {
+    const tmp = join(dirname(path), `.office-rewind-${randomUUID()}`);
+    try {
+      copyEntry(source, tmp);
+      renameSync(tmp, path);
+    } finally { if (stat(tmp)) unlinkSync(tmp); }
   };
   try {
     for (const { path, before } of changes) {
       if (!before) continue;
       const file = target(root, path);
+      const saved = join(backup, String(undo.length));
+      copyEntry(file, saved);
       unlinkSync(file);
-      undo.push(() => write(file, before));
+      undo.push(() => write(saved, file));
     }
     for (const dir of dirsToRemove) {
       rmdirSync(dir);
@@ -234,7 +262,7 @@ function apply(root: string, changes: Change[], contents: Map<string, Buffer>): 
       }
       const file = target(root, path);
       if (stat(file)) throw protectedPath(path);
-      write(file, after);
+      write(target(checkout, path), file);
       undo.push(() => { unlinkSync(file); });
     }
   } catch (error) {
@@ -248,16 +276,30 @@ function apply(root: string, changes: Change[], contents: Map<string, Buffer>): 
 }
 
 export async function restoreSnapshot(root: string, session: string, message: string, expectedRevision: string): Promise<void> {
-  const { tree, snap, changes } = await compare(root, session, message);
-  if (`${tree}:${snap}` !== expectedRevision) throw new IpcFailure("snapshot-changed", "Project files changed after the preview. Open the preview again.");
-  const contents = new Map<string, Buffer>();
-  for (const { before, after } of changes) {
-    for (const entry of [before, after]) {
-      if (entry && !contents.has(entry.oid)) contents.set(entry.oid, await git(root, ["cat-file", "blob", entry.oid]));
+  const { current, snap, revision, changes } = await compare(root, session, message);
+  const changed = () => new IpcFailure("snapshot-changed", "Project files changed after the preview. Open the preview again.");
+  if (revision !== expectedRevision) throw changed();
+  if (!changes.length) return;
+  const dir = await mkdtemp(join(tmpdir(), "office-rewind-restore-"));
+  const index = join(dir, "index");
+  const checkout = join(dir, "checkout");
+  const backup = join(dir, "backup");
+  try {
+    mkdirSync(checkout);
+    mkdirSync(backup);
+    const paths = changes.filter(({ after }) => after).map(({ path }) => path);
+    for (const path of paths) target(checkout, path);
+    if (paths.length) {
+      await git(root, ["read-tree", snap], { index });
+      const prefix = `${checkout.replace(/\\/g, "/")}/`;
+      await git(root, ["checkout-index", "--ignore-skip-worktree-bits", `--prefix=${prefix}`, "-z", "--stdin"], {
+        index, attributes: snap, input: `${paths.join("\0")}\0`,
+      });
     }
-  }
-  if (changes.length) {
-    if (await workingTree(root) !== tree) throw new IpcFailure("snapshot-changed", "Project files changed after the preview. Open the preview again.");
-    apply(root, changes, contents);
+    const latest = await workingTree(root);
+    if (latest.tree !== current.tree || latest.omitted.join("\0") !== current.omitted.join("\0")) throw changed();
+    apply(root, changes, checkout, backup);
+  } finally {
+    await rm(dir, { recursive: true, force: true });
   }
 }

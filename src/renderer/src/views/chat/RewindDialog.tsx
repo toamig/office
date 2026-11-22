@@ -62,7 +62,11 @@ export function RewindDialog({ id, messages, initialMessage, terminal, onClose }
             <span className="break-all">{path}</span>
           </li>)}
         </ul>
-      </> : <p>The project files already match this snapshot.</p>)}
+      </> : <p>{preview.omitted.length ? "No restorable files need changes." : "The project files already match this snapshot."}</p>)}
+      {preview && preview.omitted.length > 0 && <details open>
+        <summary className="cursor-pointer">Not restorable (untracked and over 50 MB)</summary>
+        <ul>{preview.omitted.map((path) => <li key={path} className="break-all py-1">{path}</li>)}</ul>
+      </details>}
     </> : <>
       {messages.length ? <>
         <p>Choose a message to preview the files as they were before that turn.</p>
