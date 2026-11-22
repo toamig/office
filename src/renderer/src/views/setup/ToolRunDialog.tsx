@@ -29,7 +29,7 @@ function fixed(run: ToolRun, tools: ToolStatus[]): boolean {
  * words what is happening, keeps the program's raw output under Details (where a code can be typed if the program asks
  * for one), checks the tool when the program ends, closes by itself on success and stays open with Retry on failure.
  */
-export function ToolRunDialog({ run, onClose }: { run: ToolRun; onClose: () => void }) {
+export function ToolRunDialog({ run, onClose, onSuccess }: { run: ToolRun; onClose: () => void; onSuccess?: () => void }) {
   const [phase, setPhase] = useState<Phase>("running");
   const [url, setUrl] = useState<string | null>(null);
   const [details, setDetails] = useState(false);
@@ -57,26 +57,31 @@ export function ToolRunDialog({ run, onClose }: { run: ToolRun; onClose: () => v
   }, [phase, session.id]);
 
   // When the program ends, look at the tool again: that, not the exit code alone, says whether it worked.
-  useEffect(
-    () =>
-      office.on("session.status", (e) => {
+  useEffect(() => {
+    const check = (status?: string) => {
+      if (finished.current || (status !== "exited" && status !== "failed")) return;
+      finished.current = true;
+      setPhase("checking");
+      const verified = run.kind === "login"
+        ? office.invoke("setup.verifyLogin", { id: run.toolId })
+        : office.invoke("setup.recheckTools").then((tools) => fixed(run, tools));
+      void verified.then(
+        (ok) => setPhase(status === "exited" && ok ? "done" : "failed"),
+        () => setPhase("failed"),
+      );
+    };
+    const off = office.on("session.status", (e) => {
         const payload = e.payload as { id?: string; status?: string };
-        if (payload.id !== session.id || finished.current) return;
-        if (payload.status !== "exited" && payload.status !== "failed") return;
-        finished.current = true;
-        setPhase("checking");
-        void office.invoke("setup.recheckTools").then(
-          (tools) => setPhase(fixed(run, tools) ? "done" : "failed"),
-          () => setPhase("failed"),
-        );
-      }),
-    [run, session.id],
-  );
+        if (payload.id === session.id) check(payload.status);
+    });
+    void office.invoke("sessions.get", { id: session.id }).then((row) => check(row.status), () => undefined);
+    return off;
+  }, [run, session.id]);
 
   // Success closes the dialog by itself, after a moment to read it.
   useEffect(() => {
     if (phase !== "done") return;
-    const timer = setTimeout(close, 1400);
+    const timer = setTimeout(() => { close(); onSuccess?.(); }, 1000);
     return () => clearTimeout(timer);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [phase]);

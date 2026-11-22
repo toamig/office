@@ -1,293 +1,191 @@
-import { GitBranch, Square } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { GitBranch } from "lucide-react";
+import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { buildChat, reduceChat, type ChatState as Conversation } from "@shared/chat";
-import type { ChatLine, ChatState, SessionRow } from "@shared/models";
-import { AutonomyPicker } from "../../components/AutonomyPicker";
-import { PermissionRequests } from "../../components/PermissionRequests";
-import { OfficeConfirmations } from "../../components/OfficeConfirmations";
-import { Button, OverflowMenu, notifyError } from "../../ui";
+import type { ChatLine, ChatOptions, ChatState, SessionRow } from "@shared/models";
 import { isChatSession } from "@shared/roles";
+import { AutonomyPicker } from "../../components/AutonomyPicker";
+import { OfficeConfirmations } from "../../components/OfficeConfirmations";
+import { PermissionRequests } from "../../components/PermissionRequests";
+import { StatusChip } from "../../components/StatusChip";
 import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
+import { Button, Dropdown, OverflowMenu, notifyError } from "../../ui";
+import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
-import { Dropdown as Select } from "../../ui";
-import { StatusChip } from "../../components/StatusChip";
 
-/** Said once, where the terminal is offered: what it is for. */
-const TERMINAL_HINT = "For slash commands, logins and anything the chat does not show";
-
-/** The conversation of one chat session, built from its stored events and then from the live ones. */
 function useConversation(id: string): { conversation: Conversation; ready: boolean } {
   const [conversation, setConversation] = useState<Conversation>({ items: [], working: false });
   const [ready, setReady] = useState(false);
   useEffect(() => {
     let alive = true;
     let last = 0;
+    let loaded = false;
     const waiting: ChatLine[] = [];
-    const loaded = { current: false };
-    const apply = (line: ChatLine): void => {
+    const apply = (line: ChatLine) => {
       if (line.seq <= last) return;
       last = line.seq;
-      setConversation((c) => reduceChat(c, line.event));
+      setConversation((current) => reduceChat(current, line.event));
     };
-    const off = office.on("chat.event", (e) => {
-      const payload = e.payload as { sessionId: string; line: ChatLine };
+    const off = office.on("chat.event", (event) => {
+      const payload = event.payload as { sessionId: string; line: ChatLine };
       if (payload.sessionId !== id) return;
-      if (!loaded.current) waiting.push(payload.line);
-      else apply(payload.line);
+      if (loaded) apply(payload.line);
+      else waiting.push(payload.line);
     });
     void office.invoke("chat.history", { id }).then((lines) => {
       if (!alive) return;
-      setConversation(buildChat(lines.map((l) => l.event)));
+      setConversation(buildChat(lines.map((line) => line.event)));
       last = lines.at(-1)?.seq ?? 0;
-      loaded.current = true;
+      loaded = true;
       for (const line of waiting.splice(0)) apply(line);
       setReady(true);
     });
-    return () => {
-      alive = false;
-      off();
-    };
+    return () => { alive = false; off(); };
   }, [id]);
   return { conversation, ready };
 }
 
-/**
- * An agent conversation as a chat (spec 4.3): bubbles, streaming answers, tool cards, inline approvals and a
- * composer. The program underneath is still the real CLI; Open in terminal moves the same conversation into
- * an embedded terminal.
- */
-export function ChatView({
-  session,
-  onChanged,
-  headerActions,
-}: {
+function ChatChoices({ state, working, onChange }: {
+  state: ChatState | null;
+  working: boolean;
+  onChange: (patch: ChatOptions) => void;
+}) {
+  const model = state?.options.model ?? "";
+  const effort = state?.options.effort ?? "";
+  const choices = state?.models ?? [];
+  const efforts = model ? choices.find((choice) => choice.id === model)?.efforts ?? [] : state?.defaultModel?.efforts ?? [];
+  return <>
+    <Dropdown className="chat-select" aria-label="Model" data-testid="chat-model" value={model}
+      disabled={!state || working} onChange={(event) => onChange({ model: event.target.value, effort: "" })}>
+      <option value="">{state?.defaultModel
+        ? `Default (${state.defaultModel.label}, the tool's default)`
+        : "Default model"}</option>
+      {model && !choices.some((choice) => choice.id === model) && <option value={model}>{model}</option>}
+      {choices.map((choice) => <option key={choice.id} value={choice.id}>{choice.label}</option>)}
+    </Dropdown>
+    {efforts.length > 0 && <Dropdown className="chat-select" aria-label="Effort" value={efforts.includes(effort) ? effort : ""}
+      disabled={working} onChange={(event) => onChange({ effort: event.target.value as ChatOptions["effort"] })}>
+      <option value="">Default effort</option>
+      {efforts.map((level) => <option key={level} value={level}>{level === "xhigh" ? "Extra high" : level.charAt(0).toUpperCase() + level.slice(1)}</option>)}
+    </Dropdown>}
+  </>;
+}
+
+export function ChatView({ session, onChanged, headerActions }: {
   session: SessionRow;
   onChanged: () => void;
-  /** Buttons for the end of the header, from the view that owns the chat (Chat adds Close). */
   headerActions?: ReactNode;
 }) {
-  // A plain Chat has no wrap-up, terminal or autonomy picker.
+  const id = session.id;
   const plain = isChatSession(session);
-  const { conversation, ready } = useConversation(session.id);
+  const { conversation, ready } = useConversation(id);
+  const { items, working } = conversation;
   const [state, setState] = useState<ChatState | null>(null);
+  const [login, setLogin] = useState<{ messageId: string; run: ToolRun }>();
   const list = useRef<HTMLDivElement>(null);
   const pinned = useRef(true);
-  const revealConfirmation = useCallback(() => {
+  const reveal = useCallback(() => {
     const el = list.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
+  const { wrapUp } = useSessionActions();
 
   useEffect(() => {
-    let alive = true;
-    const load = (): void => {
-      void office.invoke("chat.state", { id: session.id }).then((s) => alive && setState(s));
+    let request = 0;
+    const load = () => {
+      const seq = ++request;
+      void office.invoke("chat.state", { id }).then((next) => {
+        if (request === seq) setState(next);
+      }, () => undefined);
     };
     load();
-    const off = office.on("chat.state", (e) => {
-      if ((e.payload as { sessionId?: string }).sessionId === session.id) load();
+    const off = office.on("chat.state", (event) => {
+      if ((event.payload as { sessionId?: string }).sessionId === id) load();
     });
-    return () => {
-      alive = false;
-      off();
-    };
-  }, [session.id, conversation.working]);
+    return () => { request++; off(); };
+  }, [id]);
 
-  // Stay at the bottom while the answer streams, unless the owner scrolled up to read.
-  useEffect(() => {
-    const el = list.current;
-    if (el && pinned.current) el.scrollTop = el.scrollHeight;
-  }, [conversation]);
+  useEffect(() => { if (pinned.current) reveal(); }, [conversation, reveal]);
 
-  const run = async (work: () => Promise<unknown>): Promise<void> => {
+  const act = async (work: () => Promise<unknown>) => {
     try {
       await work();
-    } catch (err) {
-      notifyError(err, "Could not send that to the agent", session.id, {
-        label: "Try again",
-        run: () => void run(work),
-      });
+      return true;
+    } catch (error) {
+      notifyError(error, "Could not complete the chat action", id);
+      return false;
     }
   };
-
-  const { wrapUp } = useSessionActions();
-  const options = state?.options ?? {};
-  // A narrow panel keeps the title and the status; model and Open in terminal go in a menu.
-  const header = useRef<HTMLElement>(null);
-  const [narrow, setNarrow] = useState(false);
-  useEffect(() => {
-    const el = header.current;
-    if (!el) return;
-    const watch = new ResizeObserver(([e]) => setNarrow((e?.contentRect.width ?? 0) < 640));
-    watch.observe(el);
-    return () => watch.disconnect();
-  }, []);
-  const items = useMemo(() => conversation.items, [conversation.items]);
-
+  const toolLabel = state?.kind === "codex" || session.provider === "codex" ? "Codex" : "Claude Code";
+  const resend = (messageId: string, text?: string, useDefault?: boolean) =>
+    act(() => office.invoke("chat.resend", { id, messageId, text, useDefault }));
+  const signIn = (messageId: string) => void act(async () => {
+    const loginSession = await office.invoke("setup.loginSession", { id: session.provider });
+    setLogin({ messageId, run: {
+      session: loginSession, kind: "login", toolId: session.provider, toolLabel,
+      again: () => signIn(messageId),
+    } });
+  });
+  const lastOwner = items.findLast((item) => item.kind === "user")?.id;
+  const retryTargets = new Map<number, string>();
+  let lastMessage: string | undefined;
+  for (const [index, item] of items.entries()) {
+    if (item.kind === "user") lastMessage = item.id;
+    if (item.kind === "error" && lastMessage) retryTargets.set(index, lastMessage);
+  }
   return (
-    <div className="chat" data-testid="chat" data-session={session.id}>
-      <header className="chat-header" data-testid="chat-header" ref={header}>
+    <div className="chat" data-testid="chat" data-session={id}>
+      <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>
         <StatusChip status={session.status} />
-        {session.branch && (
-          <span className="pane-branch">
-            <GitBranch size={12} />
-            {session.branch}
-          </span>
-        )}
+        {session.branch && <span className="pane-branch"><GitBranch size={12} />{session.branch}</span>}
         <div className="flex-1" />
-        {conversation.working && (
-          <button
-            className="chat-link"
-            aria-label="Stop"
-            title="Stop this turn"
-            onClick={() => void run(() => office.invoke("chat.stop", { id: session.id }))}
-            data-testid="chat-header-stop"
-          >
-            <Square size={12} /> Stop
-          </button>
-        )}
-        {!plain && session.autonomy && (
-          <AutonomyPicker
-            value={session.autonomy}
-            disabled={conversation.working}
-            onChange={(level) => office.invoke("sessions.setAutonomy", { id: session.id, level }).then(onChanged)}
-          />
-        )}
-        {!plain && (
-          <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">
-            Wrap up
-          </Button>
-        )}
-        {narrow && !plain ? (
-          <OverflowMenu
-            label="Model and more"
-            items={[
-              ...(state?.kind === "claude"
-                ? [
-                    ...["", ...state.models].map((m) => ({
-                      label: `Model: ${m === "" ? "Default model" : m}${(options.model ?? "") === m ? " (current)" : ""}`,
-                      onSelect: () => {
-                        setState({ ...state, options: { ...options, model: m || undefined } });
-                        void run(() =>
-                          office.invoke("chat.setOptions", {
-                            id: session.id,
-                            options: { model: m },
-                          }),
-                        );
-                      },
-                    })),
-                  ]
-                : []),
-              {
-                label: "Open in terminal",
-                hint: TERMINAL_HINT,
-                testId: "open-in-terminal",
-                onSelect: () =>
-                  void run(async () => {
-                    await office.invoke("chat.toTerminal", { id: session.id });
-                    onChanged();
-                  }),
-              },
-            ]}
-          />
-        ) : (
-          <>
-            {state && state.kind === "claude" && (
-              <>
-                <Select
-                  className="chat-select"
-                  aria-label="Model"
-                  data-testid="chat-model"
-                  value={options.model ?? ""}
-                  onChange={(e) => {
-                    setState({
-                      ...state,
-                      options: { ...options, model: e.target.value || undefined },
-                    });
-                    void run(() =>
-                      office.invoke("chat.setOptions", {
-                        id: session.id,
-                        options: { model: e.target.value },
-                      }),
-                    );
-                  }}
-                  title="Applies from the next message"
-                >
-                  <option value="">Default model</option>
-                  {state.models.map((m) => (
-                    <option key={m} value={m}>
-                      {m}
-                    </option>
-                  ))}
-                </Select>
-              </>
-            )}
-            {!plain && (
-              <OverflowMenu
-                label="More about this session"
-                testId="chat-more"
-                items={[
-                  {
-                    label: "Open in terminal",
-                    hint: TERMINAL_HINT,
-                    testId: "open-in-terminal",
-                    onSelect: () =>
-                      void run(async () => {
-                        await office.invoke("chat.toTerminal", { id: session.id });
-                        onChanged();
-                      }),
-                  },
-                ]}
-              />
-            )}
-          </>
-        )}
+        {!plain && <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">Wrap up</Button>}
         {headerActions}
       </header>
-      <div
-        className="chat-scroll"
-        ref={list}
-        onScroll={(e) => {
-          const el = e.currentTarget;
-          pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
-        }}
-        data-testid="chat-scroll"
-      >
+      <div className="chat-scroll" ref={list} data-testid="chat-scroll" onScroll={(event) => {
+        const el = event.currentTarget;
+        pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
+      }}>
         <div className="chat-column">
-          {ready && items.length === 0 && (
-            <div className="chat-empty" data-testid="chat-empty">
-              {plain
-                ? "Ask a question or request an Office action."
-                : "Ask the agent anything about this project."}
-            </div>
-          )}
-          {items.map((item, i) => (
-            <ChatMessage key={`${item.kind}-${"id" in item ? item.id : i}-${i}`} item={item} />
-          ))}
-          <PermissionRequests compact runId={session.id} />
-          {!session.incognito && <OfficeConfirmations sessionId={session.id} onReveal={revealConfirmation} />}
-          {conversation.working &&
-            !items.some((i) => i.kind === "assistant" && i.streaming && i.text !== "") && (
-              <div className="working-dots" data-testid="chat-working" aria-label="Working">
-                <span />
-                <span />
-                <span />
-              </div>
-            )}
+          {ready && items.length === 0 && <div className="chat-empty" data-testid="chat-empty">
+            {plain ? "Ask a question or request an Office action." : "Ask the agent anything about this project."}
+          </div>}
+          {items.map((item, index) => {
+            const messageId = retryTargets.get(index);
+            return <ChatMessage key={`${item.kind}-${"id" in item ? item.id : index}`} item={item} tool={toolLabel} working={working}
+              onEdit={item.kind === "user" && !item.brief && item.id === lastOwner
+                ? (text) => resend(item.id, text) : undefined}
+              onRecover={item.kind === "error" && messageId ? (kind) => {
+                if (kind === "login") signIn(messageId);
+                else void resend(messageId, undefined, kind === "model");
+              } : undefined} />;
+          })}
+          <PermissionRequests compact runId={id} />
+          {!session.incognito && <OfficeConfirmations sessionId={id} onReveal={reveal} />}
+          {working && !items.some((item) => item.kind === "assistant" && item.streaming && item.text) &&
+            <div className="working-dots" data-testid="chat-working" aria-label="Working"><span /><span /><span /></div>}
         </div>
       </div>
       <div className="chat-column pb-4">
-        <Composer
-          sessionId={session.id}
-          working={conversation.working}
-          onSend={(text, images) =>
-            void run(() => office.invoke("chat.send", { id: session.id, text, images }))
-          }
-          onStop={() => void run(() => office.invoke("chat.stop", { id: session.id }))}
-        />
+        <Composer sessionId={id} working={working}
+          onSend={(text, images) => void act(() => office.invoke("chat.send", { id, text, images }))}
+          onStop={() => void act(() => office.invoke("chat.stop", { id }))}
+          controls={<>
+            <ChatChoices state={state} working={working} onChange={(options) => {
+              void act(() => office.invoke("chat.setOptions", { id, options }));
+            }} />
+            {!plain && session.autonomy && <AutonomyPicker value={session.autonomy} disabled={working}
+              onChange={(level) => office.invoke("sessions.setAutonomy", { id, level }).then(onChanged)} />}
+            {!plain && <OverflowMenu label="More about this session" testId="chat-more" items={[{
+              label: "Open in terminal", testId: "open-in-terminal",
+              onSelect: () => void act(async () => { await office.invoke("chat.toTerminal", { id }); onChanged(); }),
+            }]} />}
+          </>} />
       </div>
+      {login && <ToolRunDialog key={login.run.session.id} run={login.run} onClose={() => setLogin(undefined)}
+        onSuccess={() => void resend(login.messageId)} />}
     </div>
   );
 }

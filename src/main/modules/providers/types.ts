@@ -1,4 +1,4 @@
-import type { Inventory } from "../../../shared/models";
+import type { ChatModel, Inventory } from "../../../shared/models";
 import type { Role } from "../../../shared/types";
 import type { BrainScope } from "../vault/scope";
 import type { ConversationMcp } from "../runs/mcp-config";
@@ -22,6 +22,7 @@ export interface RunOptions {
   cwd: string;
   role?: Role;
   officeSessionId: string;
+  effort?: string;
   addDirs?: string[];
   brain?: BrainScope;
   officeMcp?: ConversationMcp;
@@ -62,6 +63,8 @@ export interface CommandSpec {
   cmd: string;
   args: string[];
   env?: Record<string, string>;
+  prepare?: () => Promise<Record<string, string>>;
+  authFailure?: (message: string) => void;
 }
 
 export interface Detection {
@@ -81,6 +84,7 @@ export interface ChatCommandOptions {
   permission: RunPermission;
   /** The owner's picks in the chat header. */
   model?: string;
+  effort?: string;
   permissionMode?: string;
   /** Codex runs one process per turn, so each carries its message and the thread to continue. */
   message?: string;
@@ -109,6 +113,7 @@ export interface Provider {
   /** The command that logs in, for callers that open the terminal themselves. */
   loginCommand(): CommandSpec;
   models(): Promise<string[]>;
+  chatModels?(cwd: string): Promise<{ models: ChatModel[]; defaultModel?: ChatModel }>;
   interactiveCommand(o: RunOptions): CommandSpec;
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun;
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec;

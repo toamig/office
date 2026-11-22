@@ -8,6 +8,7 @@ import {
   nativeTheme,
   Notification,
   screen,
+  safeStorage,
   shell,
 } from "electron";
 import { join } from "node:path";
@@ -239,7 +240,7 @@ async function boot(): Promise<void> {
     (app.isPackaged
       ? join(process.resourcesPath, "relay", "office-relay.mjs")
       : join(app.getAppPath(), "resources", "relay", "office-relay.mjs"));
-  const context = await createContext(!app.isPackaged, relayScript);
+  const context = await createContext(!app.isPackaged, relayScript, safeStorage);
   ctx = context;
   registerHandlers(context);
   const preview = new PreviewPane(

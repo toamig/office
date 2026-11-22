@@ -1,4 +1,5 @@
 import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type {
   ChatEvent,
@@ -6,6 +7,7 @@ import type {
   ChatLine,
   ChatOptions,
   ChatState,
+  OfficeBrief,
   SessionRow,
 } from "../../../shared/models";
 import type { Bus } from "../../core/bus";
@@ -18,6 +20,9 @@ import type { ProviderRegistry } from "../providers/registry";
 import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
 import { ClaudeChatParser, CodexChatParser } from "./events";
+import { chatFailure } from "../../../shared/chat-failure";
+import { redactClaudeToken } from "../../core/claude-secret";
+import { ClaudeCodeProvider } from "../providers/claude-code";
 
 export interface ChatServiceDeps {
   bus: Bus;
@@ -46,6 +51,8 @@ interface Live {
   started: number;
   /** The message this process was started for, so a start with the wrong conversation flag can be redone. */
   turn?: { text: string; images: ChatImage[]; attempts: number };
+  authFailure?: (message: string) => void;
+  credentialRevision?: number;
 }
 
 /**
@@ -59,6 +66,7 @@ export class ChatService {
   private readonly seqs = new Map<string, number>();
   /** What an incognito chat has said: kept in memory only, never in a file. */
   private readonly memory = new Map<string, ChatLine[]>();
+  private readonly unsavedImages = new Map<string, Map<string, ChatImage[]>>();
   private readonly incognitoDirs = new Map<string, string[]>();
   /** Chats that were configured as incognito or restricted, by id (their config is not written for incognito). */
   private readonly secret = new Map<string, { restricted: boolean; incognito: boolean }>();
@@ -145,6 +153,9 @@ export class ChatService {
     this.secret.set(id, { restricted: flags.restricted, incognito: false });
     const dirs = this.incognitoDirs.get(id) ?? [];
     this.incognitoDirs.delete(id);
+    for (const [message, images] of this.unsavedImages.get(id) ?? [])
+      this.saveImages(id, message, images);
+    this.unsavedImages.delete(id);
     writeTextFile(
       join(this.dir(id), "config.json"),
       `${JSON.stringify({ addDirs: dirs, restricted: flags.restricted }, null, 2)}\n`,
@@ -156,6 +167,7 @@ export class ChatService {
   forget(id: string): void {
     this.stop(id);
     this.memory.delete(id);
+    this.unsavedImages.delete(id);
     this.secret.delete(id);
     this.incognitoDirs.delete(id);
     this.seqs.delete(id);
@@ -213,12 +225,19 @@ export class ChatService {
     const row = this.session(id);
     const provider = this.deps.providers.get(row.provider);
     const kind = provider?.chatKind ?? "claude";
+    const catalog = await provider?.chatModels?.(row.cwd);
+    const options = this.options(id);
+    const roleModel = options.model === undefined ? this.deps.sessions.roleForAgent(row).model : undefined;
+    const defaultModel = roleModel
+      ? catalog?.models.find((entry) => entry.id === roleModel) ?? { id: roleModel, label: roleModel, efforts: [] }
+      : catalog?.defaultModel;
     return {
       mode: row.mode,
       kind,
       working: this.working(id),
-      models: provider ? await provider.models() : [],
-      options: this.options(id),
+      models: catalog?.models ?? [],
+      defaultModel,
+      options,
     };
   }
 
@@ -233,15 +252,18 @@ export class ChatService {
   // ---------- sending ----------
 
   /** Sends the owner's message: starts the program if it is not running, and records the message. */
-  send(id: string, text: string, images: ChatImage[] = [], options?: ChatOptions): void {
+  send(id: string, text: string, images: ChatImage[] = [], options?: ChatOptions, brief?: OfficeBrief): void {
     const row = this.session(id);
     if (row.mode !== "chat") throw new IpcFailure("not-chat", "This session is open in a terminal");
     if (this.working(id)) throw new IpcFailure("busy", "A turn is still running. Stop it first.");
     const provider = this.deps.providers.get(row.provider);
     if (!provider?.chatCommand) throw new IpcFailure("no-chat", "This tool has no chat mode");
-    if (options) this.saveOptions(id, { ...this.options(id), ...options });
+    if (options) this.setOptions(id, options);
     const picked = this.options(id);
-    this.append(id, { t: "user", id: `u${Date.now()}`, text, images: images.length });
+    const message = randomUUID();
+    if (images.length) this.saveImages(id, message, images);
+    text = redactClaudeToken(text);
+    this.append(id, { t: "user", id: message, text, images: images.length, ...(brief ? { brief } : {}) });
     this.append(id, { t: "turn-start" });
     this.deps.sessions.setStatus(id, "working");
 
@@ -249,8 +271,14 @@ export class ChatService {
     const kind = provider.chatKind ?? "claude";
     if (kind === "claude") {
       let live = this.live.get(id);
+      if (live && provider instanceof ClaudeCodeProvider && live.credentialRevision !== provider.auth.revision) {
+        this.endIdle(id, live);
+        live = undefined;
+      }
       if (!live) live = this.startClaude(id, row, provider, { text, images, attempts: 1 });
       live.working = true;
+      live.started = Date.now();
+      live.turn = { text, images, attempts: 1 };
       live.handle.write(JSON.stringify(userMessage(text, images)));
       return;
     }
@@ -267,7 +295,8 @@ export class ChatService {
       permission: this.permission(row, kind),
       ...(brain ? { brain } : {}),
       ...(officeMcp ? { officeMcp } : {}),
-      ...(picked.model ? { model: picked.model } : {}),
+      model: picked.model,
+      effort: picked.effort,
       message: text,
       ...(threadId ? { threadId } : {}),
       runDir: this.dir(id),
@@ -279,6 +308,32 @@ export class ChatService {
     const live: Live = { handle, working: true, stopped: false, kind, started: Date.now() };
     this.live.set(id, live);
     void this.readCodex(id, live);
+  }
+
+  private saveImages(id: string, message: string, images: ChatImage[]): void {
+    if (this.memory.has(id)) {
+      const saved = this.unsavedImages.get(id) ?? new Map<string, ChatImage[]>();
+      saved.set(message, images);
+      this.unsavedImages.set(id, saved);
+      return;
+    }
+    writeTextFile(join(this.dir(id), `${message}.images.json`), JSON.stringify(images));
+  }
+
+  resend(id: string, messageId: string, text?: string, useDefault?: boolean): void {
+    const messages = this.history(id).flatMap(({ event }) => event.t === "user" ? [event] : []);
+    const message = messages.find((event) => event.id === messageId);
+    if (!message || (text !== undefined && (message.brief || messages.at(-1) !== message)))
+      throw new IpcFailure("no-message", "That message is unavailable to resend.");
+    let images = this.unsavedImages.get(id)?.get(messageId) ?? [];
+    if (message.images && !images.length && /^[0-9a-f-]{36}$/.test(messageId)) {
+      try {
+        images = JSON.parse(readFileSync(join(this.dir(id), `${messageId}.images.json`), "utf8")) as ChatImage[];
+      } catch { /* Older conversations saved only the count. */ }
+    }
+    if (message.images && !images.length)
+      throw new IpcFailure("no-images", "Attach the images again to resend this message.");
+    this.send(id, text ?? message.text, images, useDefault ? { model: "", effort: "" } : undefined, message.brief);
   }
 
   /** A saved chat is named by its first message, so the list reads as what each was about. */
@@ -314,7 +369,8 @@ export class ChatService {
       permission: this.permission(row, "claude", Boolean(officeMcp)),
       ...(brain ? { brain } : {}),
       ...(officeMcp ? { officeMcp } : {}),
-      ...(picked.model ? { model: picked.model } : {}),
+      model: picked.model,
+      effort: picked.effort,
       runDir: this.dir(id),
       addDirs: this.addDirs(id),
     });
@@ -322,6 +378,7 @@ export class ChatService {
       cwd: row.cwd,
       ...(spec.env ? { env: spec.env } : {}),
       keepStdin: true,
+      prepare: spec.prepare,
     });
     const live: Live = {
       handle,
@@ -330,6 +387,8 @@ export class ChatService {
       kind: "claude",
       started: Date.now(),
       turn,
+      authFailure: spec.authFailure,
+      credentialRevision: provider instanceof ClaudeCodeProvider ? provider.auth.revision : undefined,
     };
     this.live.set(id, live);
     // A process for this conversation has run, so from now on it is resumed, never started again.
@@ -363,11 +422,11 @@ export class ChatService {
     if (!sawResult && !live.stopped) {
       this.take(id, live, {
         t: "result",
-        ok: exit.code === 0,
+        ok: exit.code === 0 && !parser.failed,
         durationMs: Date.now() - live.started,
-        ...(exit.code === 0
+        ...(exit.code === 0 && !parser.failed
           ? {}
-          : { error: exit.stderr.trim().split("\n").pop() || `exit ${exit.code}` }),
+          : { error: parser.failed || exit.stderr.trim().slice(-4000) || `exit ${exit.code}` }),
       });
     }
     await this.ended(id, live);
@@ -375,13 +434,21 @@ export class ChatService {
 
   /** Records one event; a result ends the turn. */
   private take(id: string, live: Live, event: ChatEvent): void {
-    if (live.stopped) return;
+    if (live.stopped || !live.working) return;
     this.append(id, event);
     if (event.t === "result" || event.t === "error") {
       live.working = false;
+      const failure = event.t === "error" ? event.message : !event.ok ? event.error : undefined;
+      if (failure) this.authFailure(id, live, failure);
       if (event.t === "result") this.deps.sessions.setStatus(id, "idle");
       else this.deps.sessions.setStatus(id, "idle", event.message);
     }
+  }
+
+  private authFailure(id: string, live: Live, failure: string): void {
+    if (chatFailure(failure, "Claude Code").kind !== "login") return;
+    live.authFailure?.(failure);
+    if (live.kind === "claude") this.endIdle(id, live);
   }
 
   /** The program ended: report it if it ended in the middle of a turn, and free the slot. */
@@ -416,11 +483,9 @@ export class ChatService {
     }
     this.deps.broker.cancelRun(id);
     if (live.working && !live.stopped) {
-      this.append(id, {
-        t: "error",
-        message:
-          exit.stderr.trim().split("\n").pop() || `The program stopped (exit code ${exit.code}).`,
-      });
+      const message = exit.stderr.trim().slice(-4000) || `The program stopped (exit code ${exit.code}).`;
+      this.authFailure(id, live, message);
+      this.append(id, { t: "error", message });
       this.deps.sessions.setStatus(id, "idle");
     }
     this.deps.bus.emit("chat.state", { sessionId: id });
@@ -431,18 +496,21 @@ export class ChatService {
    * program is ended quietly and the next message starts it again, with --resume, under the new flags.
    */
   setOptions(id: string, options: ChatOptions): void {
+    this.session(id);
+    if (this.working(id)) throw new IpcFailure("busy", "Stop the current turn before changing options.");
     const before = this.options(id);
     const next: ChatOptions = { ...before, ...options };
-    // An empty model means "the default".
-    if (next.model === "") delete next.model;
+    if (before.model !== next.model && options.effort === undefined) next.effort = "";
     this.saveOptions(id, next);
     const live = this.live.get(id);
-    if (live && !live.working && live.kind === "claude") {
-      live.stopped = true;
-      this.live.delete(id);
-      live.handle.kill();
-    }
+    if (live?.kind === "claude") this.endIdle(id, live);
     this.deps.bus.emit("chat.state", { sessionId: id });
+  }
+
+  private endIdle(id: string, live: Live): void {
+    live.stopped = true;
+    if (this.live.get(id) === live) this.live.delete(id);
+    live.handle.kill();
   }
 
   /** Stop ends the program and its children; the next message starts it again with --resume. */

@@ -2,6 +2,8 @@ import { appendFileSync, existsSync, mkdirSync, renameSync, statSync, unlinkSync
 import { join } from "node:path";
 import * as pty from "node-pty";
 import type { CommandSpec } from "../providers/types";
+import { CLAUDE_TOKEN_ENV, claudeTerminalOutput } from "../../core/claude-secret";
+import { stripVTControlCharacters } from "node:util";
 
 const HISTORY_CHARS = 1_000_000;
 const LOG_LIMIT_BYTES = 5 * 1024 * 1024;
@@ -65,14 +67,27 @@ export class PtyManager {
       exited: false,
     };
     this.entries.set(id, entry);
-    proc.onData((data) => {
+    const redact = claudeTerminalOutput(opts.env?.[CLAUDE_TOKEN_ENV] ?? spec.env?.[CLAUDE_TOKEN_ENV]);
+    let tail = "";
+    const accept = (data: string) => {
+      if (!data) return;
+      if (spec.authFailure) {
+        tail = (tail + stripVTControlCharacters(data)).slice(-1500);
+        const failure = /(?:oauth session expired[^\r\n]*|not (?:logged|signed) in[^\r\n]*|(?:api error: )?401[^\r\n]*(?:authentication|unauthorized)[^\r\n]*)/i.exec(tail);
+        if (failure) {
+          spec.authFailure(failure[0]);
+          tail = "";
+        }
+      }
       entry.history += data;
       entry.total += data.length;
       if (entry.history.length > HISTORY_CHARS) entry.history = entry.history.slice(-HISTORY_CHARS);
       this.log(entry, data);
       this.events.onData(id, data, entry.total);
-    });
+    };
+    proc.onData((data) => accept(redact(data)));
     proc.onExit(({ exitCode }) => {
+      accept(redact("", true));
       entry.exited = true;
       this.events.onExit(id, exitCode);
     });

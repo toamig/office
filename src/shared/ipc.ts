@@ -225,6 +225,14 @@ export const channels = {
   "setup.complete": { req: z.void(), res: z.void() },
   /** Opens the tool's login in a terminal and answers with its session, so a step can show it in place. */
   "setup.loginSession": { req: z.object({ id: z.string() }), res: SessionRow },
+  "setup.verifyLogin": { req: z.object({ id: z.string() }), res: z.boolean() },
+  "setup.claudeTokenStatus": { req: z.void(), res: z.object({
+    available: z.boolean(), saved: z.boolean(), phase: z.enum(["idle", "waiting", "saved", "failed"]), url: z.string().optional(),
+  }) },
+  "setup.startClaudeToken": { req: z.void(), res: z.void() },
+  "setup.submitClaudeCode": { req: z.object({ code: z.string().trim().max(2048) }), res: z.void() },
+  "setup.cancelClaudeToken": { req: z.void(), res: z.void() },
+  "setup.removeClaudeToken": { req: z.void(), res: z.void() },
   /** Opens the install command of a missing tool in a terminal and answers with its session. */
   "setup.installSession": { req: z.object({ id: z.string() }), res: SessionRow },
   /** Opens the tool's own login in a terminal tab. */
@@ -457,6 +465,9 @@ export const channels = {
   },
   /** The model and permission mode picked in the chat header; they apply from the next message. */
   "chat.setOptions": { req: z.object({ id: z.string(), options: ChatOptions }), res: z.void() },
+  "chat.resend": { req: z.object({
+    id: z.string(), messageId: z.string(), text: z.string().trim().min(1).optional(), useDefault: z.boolean().optional(),
+  }), res: z.void() },
   "chat.stop": { req: z.object({ id: z.string() }), res: z.void() },
   /** Project files that match what the owner typed after @ in the composer. */
   "chat.files": { req: z.object({ id: z.string(), query: z.string() }), res: z.array(z.string()) },

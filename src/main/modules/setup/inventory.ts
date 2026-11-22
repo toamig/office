@@ -92,13 +92,13 @@ export function parseClaudeMcpList(text: string): InventoryItem[] {
   return items;
 }
 
-export async function claudeInventory(projectPath?: string, bin = "claude"): Promise<Inventory> {
+export async function claudeInventory(projectPath?: string, bin = "claude", env?: Record<string, string>): Promise<Inventory> {
   const items: InventoryItem[] = [
     ...settingsItems(readJson(claudeSettingsPath()), "user"),
     ...skillsIn(join(claudeDir(), "skills"), "user"),
   ];
   if (resolveTool(bin)) {
-    const mcp = await run(bin, ["mcp", "list"], { timeoutMs: 45_000, cwd: projectPath });
+    const mcp = await run(bin, ["mcp", "list"], { timeoutMs: 45_000, cwd: projectPath, env });
     if (mcp.code === 0) items.push(...parseClaudeMcpList(mcp.stdout));
   }
   if (projectPath) {
@@ -144,6 +144,6 @@ export function codexInventory(): Inventory {
   return { provider: "codex", label: "Codex", items };
 }
 
-export async function readInventories(projectPath?: string): Promise<Inventory[]> {
-  return [await claudeInventory(projectPath), codexInventory()];
+export async function readInventories(projectPath?: string, env?: Record<string, string>): Promise<Inventory[]> {
+  return [await claudeInventory(projectPath, "claude", env), codexInventory()];
 }

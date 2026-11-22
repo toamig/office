@@ -6,6 +6,7 @@ import { Banner, Button, Skeleton, StatusBadge, notifyError } from "../../ui";
 import { office } from "../../lib/ipc";
 import { useQuery } from "../../lib/hooks";
 import { ToolRunDialog, type ToolRun } from "./ToolRunDialog";
+import { ClaudeSignInDialog } from "./ClaudeSignInDialog";
 
 /** Which of the tools a first run cannot do without, as a short note next to each row. */
 const NEEDED: Record<string, string> = {
@@ -25,10 +26,30 @@ function fixCommand(t: ToolStatus): string | null {
  * run in a terminal shown right here, so the owner never has to find it; when it ends the tools are checked
  * again. Used by the welcome flow and by Setup.
  */
-export function ToolsStep() {
+export function ToolsStep({ staySignedIn = false }: { staySignedIn?: boolean }) {
   const tools = useQuery("setup.detectTools", undefined, ["setup.changed"]);
   const [checking, setChecking] = useState(false);
   const [run, setRun] = useState<ToolRun | null>(null);
+  const [signingIn, setSigningIn] = useState(false);
+  const [tokenBusy, setTokenBusy] = useState(false);
+  const token = useQuery("setup.claudeTokenStatus", undefined, ["setup.changed"]);
+  const saved = token.data?.saved;
+
+  const changeSignIn = async () => {
+    setTokenBusy(true);
+    try {
+      if (saved) await office.invoke("setup.removeClaudeToken");
+      else {
+        await office.invoke("setup.startClaudeToken");
+        setSigningIn(true);
+      }
+      token.reload();
+    } catch (error) {
+      notifyError(error, "Could not change Claude Code sign-in", "claude-sign-in");
+    } finally {
+      setTokenBusy(false);
+    }
+  };
 
   const recheck = async (): Promise<void> => {
     setChecking(true);
@@ -113,6 +134,11 @@ export function ToolsStep() {
                   Log in
                 </Button>
               )}
+              {staySignedIn && t.id === "claude-code" && token.data && (saved || (t.installed && token.data.available)) && (
+                <Button disabled={tokenBusy || signingIn} onClick={() => void changeSignIn()}>
+                  {saved ? "Remove saved sign-in" : "Stay signed in"}
+                </Button>
+              )}
               {quickFix && (
                 <Button
                   onClick={() => void start("run", t)}
@@ -152,6 +178,7 @@ export function ToolsStep() {
           }}
         />
       )}
+      {signingIn && <ClaudeSignInDialog onClose={() => { setSigningIn(false); token.reload(); }} />}
     </div>
   );
 }

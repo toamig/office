@@ -105,7 +105,7 @@ export class SessionService {
   private timer: NodeJS.Timeout | undefined;
   /** The chat side of a session, set by the app: sending a message, stopping, and whether it is alive. */
   chat: {
-    send: (id: string, text: string) => void;
+    send: (id: string, text: string, images?: undefined, options?: undefined, brief?: StartSession["brief"]) => void;
     /** Folders the chat's program may read besides its own (Explore reads the brain). */
     configure: (
       id: string,
@@ -173,7 +173,7 @@ export class SessionService {
       archivedAt: r.archived_at,
       lastOutputAt: r.last_output_at,
       capturedAt: r.captured_at,
-      running: r.mode === "chat" ? (this.chat?.running(r.id) ?? false) : this.pty.isRunning(r.id),
+      running: r.mode === "chat" ? (this.chat?.running(r.id) ?? false) : this.pty.isRunning(r.id) || this.starting.has(r.id),
       mode: r.mode === "chat" ? "chat" : "terminal",
       conversationStarted: r.conversation_started === 1,
       idle: this.isIdle(r),
@@ -368,7 +368,7 @@ export class SessionService {
           ...(extra.incognito ? { incognito: true } : {}),
         });
       // The first prompt is the first message of the conversation.
-      if (input.prompt) this.chat?.send(id, input.prompt);
+      if (input.prompt) this.chat?.send(id, input.prompt, undefined, undefined, input.brief);
       return chat;
     }
     const officeMcp = !extra.incognito ? this.deps.officeMcp?.(id) : undefined;
@@ -470,6 +470,8 @@ export class SessionService {
     });
   }
 
+  private readonly starting = new Map<string, Runtime>();
+
   private launch(o: {
     id: string;
     provider: string;
@@ -502,7 +504,7 @@ export class SessionService {
           o.title,
           now,
           now,
-          o.started ? 1 : 0,
+          o.started && !o.spec.prepare ? 1 : 0,
           o.autonomy ?? null,
           o.brainRoot ?? null,
         );
@@ -522,11 +524,27 @@ export class SessionService {
       ...(o.prompt ? { pendingPrompt: o.prompt } : {}),
     };
     this.runtime.set(o.id, state);
-    try {
-      this.pty.spawn(o.id, o.spec, { cwd: o.cwd });
-    } catch (err) {
-      this.setStatus(o.id, "failed", (err as Error).message);
-      throw new IpcFailure("spawn-failed", `Could not start ${o.title}: ${(err as Error).message}`);
+    if (o.spec.prepare) {
+      this.starting.set(o.id, state);
+      void o.spec.prepare().then((env) => {
+        if (this.starting.get(o.id) !== state) return;
+        this.pty.spawn(o.id, o.spec, { cwd: o.cwd, env });
+        this.starting.delete(o.id);
+        if (o.started) this.markStarted(o.id);
+        this.emitStatus(o.id);
+      }).catch((err: unknown) => {
+        if (this.starting.get(o.id) === state) {
+          this.starting.delete(o.id);
+          this.setStatus(o.id, "failed", err instanceof Error ? err.message : String(err));
+        }
+      });
+    } else {
+      try {
+        this.pty.spawn(o.id, o.spec, { cwd: o.cwd });
+      } catch (err) {
+        this.setStatus(o.id, "failed", (err as Error).message);
+        throw new IpcFailure("spawn-failed", `Could not start ${o.title}: ${(err as Error).message}`);
+      }
     }
     this.deps.bus.emit(
       "session.status",
@@ -556,7 +574,7 @@ export class SessionService {
     const spec = row.conversationStarted
       ? provider.resumeCommand(providerSessionId, options)
       : provider.interactiveCommand(options);
-    if (!row.conversationStarted) this.markStarted(id);
+    if (!row.conversationStarted && !spec.prepare) this.markStarted(id);
     this.pty.release(id);
     return this.launch({
       id,
@@ -567,6 +585,7 @@ export class SessionService {
       roleId: row.role,
       title: row.title ?? provider.label,
       existing: true,
+      started: !row.conversationStarted,
     });
   }
 
@@ -604,6 +623,7 @@ export class SessionService {
     if (this.find(id)?.mode === "chat") return this.chat?.stop(id);
     const rt = this.runtime.get(id);
     if (rt) rt.killedByUser = true;
+    if (this.starting.delete(id)) this.setStatus(id, "exited");
     this.pty.kill(id);
   }
 
@@ -740,6 +760,7 @@ export class SessionService {
   private tick(): void {
     const now = Date.now();
     for (const [id, rt] of this.runtime) {
+      if (this.starting.has(id)) continue;
       const next = statusOnTick(rt, now);
       if (next) {
         this.setStatus(id, next);
@@ -881,5 +902,6 @@ export class SessionService {
   shutdown(): void {
     this.stopTimer();
     this.pty.killAll();
+    this.starting.clear();
   }
 }

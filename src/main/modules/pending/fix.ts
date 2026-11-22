@@ -4,6 +4,7 @@ import { fixKeyOf } from "../../../shared/fix";
 import type {
   FixEntry,
   FixSubject,
+  OfficeBrief,
   PendingItem,
   RunInfo,
   SessionRow,
@@ -14,10 +15,10 @@ import { IpcFailure } from "../../core/ipc";
 import { nowIso } from "../../core/util";
 import {
   buildFixBrief,
+  failedRunDetails,
   filesFromText,
   fixTitle,
   runIdOf,
-  trimFailedLog,
   type FixFacts,
 } from "./fix-brief";
 
@@ -55,6 +56,7 @@ export interface FixDeps {
     cwd: string;
     title: string;
     prompt: string;
+    brief?: OfficeBrief;
   }) => SessionRow;
 }
 
@@ -66,11 +68,11 @@ export interface FixPlan {
   projectId?: string;
   /** The first message. */
   brief: string;
+  briefMeta: OfficeBrief;
   /** How the problem is tracked while it is being fixed. */
   key: string;
 }
 
-const firstLine = (s: string): string => s.trim().split(/\r?\n/)[0] ?? "";
 const tail = (text: string, max = 4000): string =>
   text.length > max ? `...${text.slice(-max)}` : text;
 
@@ -186,7 +188,8 @@ export class FixService {
     }
     if (!existsSync(folder))
       throw new IpcFailure("no-folder", `The folder for this problem is not there: ${folder}`);
-    return { title, folder, ...(projectId ? { projectId } : {}), brief: buildFixBrief(facts), key };
+    return { title, folder, ...(projectId ? { projectId } : {}), brief: buildFixBrief(facts),
+      briefMeta: { title: facts.what, where: facts.where, done: facts.done }, key };
   }
 
   private folderFor(projectId: string | undefined, folder: string | undefined): string {
@@ -208,16 +211,9 @@ export class FixService {
         if (!item.projectId || !dir)
           throw new IpcFailure("no-folder", "Office does not know where this project lives");
         const id = run ? runIdOf(run.url) : null;
-        let output = "";
-        let step: string | null = null;
-        if (id) {
-          const log = await deps.exec("gh", ["run", "view", id, "--log-failed"], dir);
-          if (log.code === 0) {
-            const trimmed = trimFailedLog(log.stdout);
-            step = trimmed.step;
-            output = trimmed.text;
-          } else output = `gh could not read the log: ${firstLine(log.stderr)}`;
-        }
+        const { step, text: output } = id
+          ? await failedRunDetails(deps.exec, id, dir)
+          : { step: null, text: "" };
         const branch = run?.headBranch || "the branch";
         return {
           title: fixTitle(`CI failed in ${project}`),
@@ -321,6 +317,7 @@ export class FixService {
       cwd: plan.folder,
       title: plan.title,
       prompt: plan.brief,
+      brief: plan.briefMeta,
     });
     this.deps.db
       .prepare(

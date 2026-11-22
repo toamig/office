@@ -1,5 +1,5 @@
 import { ArrowUp, Square } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import type { ChatImage } from "@shared/models";
 import { office } from "../../lib/ipc";
 import { OverflowMenu } from "../../ui";
@@ -45,11 +45,13 @@ export function Composer({
   working,
   onSend,
   onStop,
+  controls,
 }: {
   sessionId: string;
   working: boolean;
   onSend: (text: string, images: ChatImage[]) => void;
   onStop: () => void;
+  controls?: ReactNode;
 }) {
   const [text, setText] = useState("");
   const [images, setImages] = useState<ChatImage[]>([]);
@@ -195,6 +197,10 @@ export function Composer({
             );
           }}
         />
+      </div>
+      <div className="composer-bar">
+        {controls}
+        <span className="flex-1" />
         {working ? (
           <button
             className="send-button"

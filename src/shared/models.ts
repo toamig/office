@@ -566,12 +566,16 @@ export type ChatImage = z.infer<typeof ChatImage>;
  * provider's stream into these, stores them as JSON lines in the session's folder, and sends them to the
  * chat view; the view builds its messages from them with the reducer in shared/chat.ts.
  */
+export const OfficeBrief = z.object({ title: z.string(), where: z.string(), done: z.string() });
+export type OfficeBrief = z.infer<typeof OfficeBrief>;
+
 export const ChatEvent = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("user"),
     id: z.string(),
     text: z.string(),
     images: z.number().default(0),
+    brief: OfficeBrief.optional(),
   }),
   z.object({ t: z.literal("turn-start") }),
   /** A new assistant message begins (its text streams in as text-delta events). */
@@ -625,8 +629,12 @@ export type ChatLine = z.infer<typeof ChatLine>;
 /** What the chat's header lets the owner choose. */
 export const ChatOptions = z.object({
   model: z.string().optional(),
+  effort: z.enum(["", "none", "minimal", "low", "medium", "high", "xhigh", "max"]).optional(),
 });
 export type ChatOptions = z.infer<typeof ChatOptions>;
+
+export const ChatModel = z.object({ id: z.string(), label: z.string(), efforts: z.array(z.string()) });
+export type ChatModel = z.infer<typeof ChatModel>;
 
 export const ChatState = z.object({
   mode: SessionMode,
@@ -634,7 +642,8 @@ export const ChatState = z.object({
   kind: z.enum(["claude", "codex"]),
   /** True while a turn runs. */
   working: z.boolean(),
-  models: z.array(z.string()),
+  models: z.array(ChatModel),
+  defaultModel: ChatModel.optional(),
   options: ChatOptions,
 });
 export type ChatState = z.infer<typeof ChatState>;
@@ -685,6 +694,7 @@ export const StartSession = z.object({
   cwd: z.string().optional(),
   title: z.string().optional(),
   prompt: z.string().optional(),
+  brief: OfficeBrief.optional(),
   /** Chat or terminal; the machine setting decides when this is left out. */
   mode: SessionMode.optional(),
 });

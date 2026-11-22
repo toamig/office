@@ -49,6 +49,7 @@ import {
 } from "./modules/setup/workspace-setup";
 import { installSession, installTool, loginSession, loginTool } from "./modules/setup/tool-actions";
 import { rememberCodexModel } from "./modules/providers/codex";
+import { ClaudeCodeProvider } from "./modules/providers/claude-code";
 
 /** Registers every IPC handler, one group at a time. */
 export function registerHandlers(ctx: AppContext): void {
@@ -196,7 +197,7 @@ function registerSetupHandlers(ctx: AppContext): void {
   const inventory = new BackgroundCache<string | undefined, Inventory[]>(
     (projectId) => {
       const project = projectId ? ctx.projects.find(projectId) : undefined;
-      return readInventories(project ? ctx.projects.absPath(project) : undefined);
+      return readInventories(project ? ctx.projects.absPath(project) : undefined, ctx.claudeEnv());
     },
     {
       keyOf: (id) => id ?? "",
@@ -220,6 +221,19 @@ function registerSetupHandlers(ctx: AppContext): void {
   ctx.ipc.handle("setup.login", (req) => loginTool(toolActions, req.id));
   ctx.ipc.handle("setup.install", (req) => installTool(toolActions, req.id));
   ctx.ipc.handle("setup.loginSession", (req) => loginSession(toolActions, req.id));
+  ctx.ipc.handle("setup.verifyLogin", async (req) => {
+    const provider = ctx.providers.get(req.id);
+    if (!provider) return (await ctx.toolsMonitor.check()).some((tool) => tool.id === req.id && tool.loggedIn);
+    const status = await provider.detect();
+    if (status.loggedIn && provider instanceof ClaudeCodeProvider) provider.auth.reset();
+    void ctx.toolsMonitor.check().catch(() => undefined);
+    return status.loggedIn;
+  });
+  ctx.ipc.handle("setup.claudeTokenStatus", () => ctx.claudeSignIn.status());
+  ctx.ipc.handle("setup.startClaudeToken", () => ctx.claudeSignIn.start());
+  ctx.ipc.handle("setup.submitClaudeCode", (req) => ctx.claudeSignIn.submit(req.code));
+  ctx.ipc.handle("setup.cancelClaudeToken", () => ctx.claudeSignIn.cancel());
+  ctx.ipc.handle("setup.removeClaudeToken", () => ctx.claudeSignIn.remove());
   ctx.ipc.handle("setup.installSession", (req) => installSession(toolActions, req.id));
   // Asking a provider runs its program, so the list is kept and refreshed behind the answer.
   const providerList = new BackgroundCache<null, ProviderStatus[]>(
@@ -601,6 +615,7 @@ function registerTaskHandlers(ctx: AppContext): void {
   );
   ctx.ipc.handle("chat.stop", (req) => ctx.chat.stop(req.id));
   ctx.ipc.handle("chat.setOptions", (req) => ctx.chat.setOptions(req.id, req.options));
+  ctx.ipc.handle("chat.resend", (req) => ctx.chat.resend(req.id, req.messageId, req.text, req.useDefault));
   ctx.ipc.handle("chat.files", (req) => ctx.chat.files(req.id, req.query));
   ctx.ipc.handle("chat.toTerminal", (req) => ctx.chat.toTerminal(req.id));
   ctx.ipc.handle("chat.toChat", (req) => ctx.chat.toChat(req.id));

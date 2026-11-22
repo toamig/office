@@ -17,6 +17,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "notes.read",
   "search.items",
   "setup.detectTools",
+  "setup.claudeTokenStatus",
   "setup.state",
   "setup.inspect",
   "setup.inventory",

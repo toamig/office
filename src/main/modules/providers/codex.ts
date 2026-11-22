@@ -7,6 +7,7 @@ import type { Role } from "../../../shared/types";
 import { OFFICE_TOOL_GUIDANCE } from "../../../shared/office-tools";
 import { PERMISSION_TOOL_TIMEOUT_MS } from "../runs/mcp-config";
 import { resolveCommand, resolveTool, spawnStream } from "../../core/exec";
+import { codexChatModels } from "./chat-models";
 import { codexConfigPath, dataDir } from "../../core/paths";
 import { writeTextFile } from "../../core/settings";
 import { detectCodex } from "../setup/detect";
@@ -115,7 +116,8 @@ export function codexHeadlessArgs(
 ): string[] {
   const flags = ["--json"];
   if (o.role?.model) flags.push("-m", o.role.model);
-  if (o.role?.effort) flags.push("-c", `model_reasoning_effort="${codexEffort(o.role.effort)}"`);
+  const effort = o.effort ?? (o.role?.effort ? codexEffort(o.role.effort) : undefined);
+  if (effort) flags.push("-c", `model_reasoning_effort=${JSON.stringify(effort)}`);
   const sandbox = o.permission?.kind === "readonly" || o.role?.autonomy === "ask-first"
     ? "read-only"
     : o.role
@@ -185,6 +187,19 @@ export class CodexProvider implements Provider {
     return knownCodexModels();
   }
 
+  private catalog?: { cwd: string; until: number; value: ReturnType<typeof codexChatModels> };
+
+  async chatModels(cwd: string) {
+    if (this.catalog?.cwd !== cwd || this.catalog.until < Date.now()) {
+      this.catalog = {
+        cwd, until: Date.now() + 5 * 60_000,
+        value: codexChatModels(this.command(["app-server"]), cwd, configuredModel())
+          .catch(() => ({ models: [], defaultModel: undefined })),
+      };
+    }
+    return this.catalog.value;
+  }
+
   private interactiveArgs(o: RunOptions): string[] {
     const args: string[] = [];
     if (o.role?.model) args.push("-m", o.role.model);
@@ -242,7 +257,8 @@ export class CodexProvider implements Provider {
         permission: o.permission,
         ...(o.brain ? { brain: o.brain } : {}),
         ...(o.officeMcp ? { officeMcp: o.officeMcp } : {}),
-        role: { ...role, ...(o.model ? { model: o.model } : {}) },
+        role: { ...role, ...(o.model !== undefined ? { model: o.model || undefined } : {}) },
+        effort: o.effort,
         ...(o.resume && o.threadId ? { resumeId: o.threadId } : {}),
       },
       join(o.runDir, "turn-result.md"),

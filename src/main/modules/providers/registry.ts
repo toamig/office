@@ -1,6 +1,7 @@
 import { resolveTool } from "../../core/exec";
 import { ClaudeCodeProvider } from "./claude-code";
 import { CodexProvider } from "./codex";
+import type { ClaudeTokenStore } from "./claude-auth";
 import type { Provider, TerminalOpener } from "./types";
 
 /** Knows every provider by id. A "fake" provider appears when OFFICE_BIN_FAKE_CLAUDE is set (tests, dev). */
@@ -8,9 +9,9 @@ export class ProviderRegistry {
   private readonly providers = new Map<string, Provider>();
   private opener: TerminalOpener | null = null;
 
-  constructor() {
+  constructor(tokens?: ClaudeTokenStore) {
     const openTerminal = (): TerminalOpener | null => this.opener;
-    this.add(new ClaudeCodeProvider({ openTerminal }));
+    this.add(new ClaudeCodeProvider({ openTerminal, tokens }));
     this.add(new CodexProvider({ openTerminal }));
     if (resolveTool("fake-claude")) {
       this.add(

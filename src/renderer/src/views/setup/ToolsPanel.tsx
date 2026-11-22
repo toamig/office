@@ -5,7 +5,7 @@ import { ToolsStep } from "./ToolsStep";
 export function ToolsPanel() {
   return (
     <Card title="Tools" testId="panel-tools">
-      <ToolsStep />
+      <ToolsStep staySignedIn />
     </Card>
   );
 }

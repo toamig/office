@@ -1,6 +1,7 @@
 import { spawn, type ChildProcess } from "node:child_process";
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { delimiter, dirname, extname, join, resolve } from "node:path";
+import { CLAUDE_TOKEN_ENV, redactClaudeToken } from "./claude-secret";
 
 export interface RunOptions {
   cwd?: string;
@@ -9,6 +10,7 @@ export interface RunOptions {
   input?: string;
   /** Keep the process's stdin open, so lines can be written to it while it runs (see spawnStream). */
   keepStdin?: boolean;
+  prepare?: () => Promise<Record<string, string>>;
 }
 
 export interface RunResult {
@@ -141,8 +143,8 @@ export function run(cmd: string, args: string[], opts: RunOptions = {}): Promise
       clearTimeout(timer);
       resolvePromise({
         code,
-        stdout: Buffer.concat(out).toString("utf8"),
-        stderr: Buffer.concat(err).toString("utf8") + extra,
+        stdout: redactClaudeToken(Buffer.concat(out).toString("utf8"), opts.env?.[CLAUDE_TOKEN_ENV]),
+        stderr: redactClaudeToken(Buffer.concat(err).toString("utf8") + extra, opts.env?.[CLAUDE_TOKEN_ENV]),
         timedOut,
       });
     };
@@ -181,6 +183,8 @@ export interface StreamHandle {
 
 /** Starts a command and yields its stdout line by line (for JSON-lines output). */
 export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}): StreamHandle {
+  if (opts.prepare) return preparedStream(cmd, args, opts, opts.prepare);
+  const redact = (value: string) => redactClaudeToken(value, opts.env?.[CLAUDE_TOKEN_ENV]);
   const child = spawnResolved(cmd, args, opts);
   const queue: string[] = [];
   let wake: (() => void) | null = null;
@@ -188,7 +192,7 @@ export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}):
   let buffer = "";
   let stderr = "";
   const push = (line: string): void => {
-    queue.push(line);
+    queue.push(redact(line));
     wake?.();
   };
   child.stdout?.setEncoding("utf8");
@@ -208,7 +212,7 @@ export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}):
       buffer = "";
       ended = true;
       wake?.();
-      done({ code, stderr: stderr + extra });
+      done({ code, stderr: redact(stderr + extra) });
     };
     child.on("error", (e) => end(-1, e.message));
     child.on("close", (code) => end(code ?? -1));
@@ -235,5 +239,30 @@ export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}):
     write: (line) => {
       if (child.stdin && !child.stdin.destroyed) child.stdin.write(`${line}\n`);
     },
+  };
+}
+
+function preparedStream(cmd: string, args: string[], opts: RunOptions, prepare: NonNullable<RunOptions["prepare"]>): StreamHandle {
+  let stopped = false;
+  let child: StreamHandle | undefined;
+  const queued: string[] = [];
+  let cancel!: () => void;
+  const cancelled = new Promise<void>((resolve) => { cancel = resolve; });
+  const prepared = Promise.race([Promise.resolve().then(prepare), cancelled]).then((env) => {
+    if (stopped || !env) return undefined;
+    child = spawnStream(cmd, args, { ...opts, prepare: undefined, env: { ...opts.env, ...env } });
+    for (const line of queued.splice(0)) child.write(line);
+    return child;
+  });
+  return {
+    lines: (async function* () {
+      const stream = await prepared.catch(() => undefined);
+      if (stream) yield* stream.lines;
+    })(),
+    exit: prepared.then((stream) => stream?.exit ?? { code: -1, stderr: "" }, (error: unknown) => ({
+      code: -1, stderr: redactClaudeToken(error instanceof Error ? error.message : String(error)),
+    })),
+    write: (line) => { if (child) child.write(line); else if (!stopped) queued.push(line); },
+    kill: () => { stopped = true; queued.length = 0; cancel(); child?.kill(); },
   };
 }

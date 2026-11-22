@@ -515,7 +515,18 @@ button,
   padding: 8px 13px;
   border-radius: 16px 16px 4px 16px;
   background: var(--hover);
-  white-space: pre-wrap;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.bubble .markdown > :first-child { margin-top: 0; }
+.bubble .markdown > :last-child { margin-bottom: 0; }
+.office-brief {
+  display: grid;
+  gap: 6px;
+  margin: 14px 0;
+  padding: 10px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
   overflow-wrap: anywhere;
 }
 .bubble-note {
@@ -556,10 +567,8 @@ button,
   white-space: pre-wrap;
 }
 .tool-card {
-  margin: 6px 0;
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  background: var(--bg);
+  margin: 3px 0;
+  border-bottom: 1px solid var(--line);
   overflow: hidden;
 }
 .tool-head {
@@ -567,7 +576,7 @@ button,
   width: 100%;
   align-items: center;
   gap: 7px;
-  padding: 6px 10px;
+  padding: 4px 8px;
   border: 0;
   background: transparent;
   color: var(--muted);
@@ -688,18 +697,30 @@ button,
 /* The composer. */
 .composer {
   position: relative;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: var(--bg);
 }
 .composer-box {
   display: flex;
   align-items: flex-end;
   gap: 8px;
   padding: 8px 8px 8px 14px;
-  border: 1px solid var(--line);
-  border-radius: 14px;
-  background: var(--bg);
 }
-.composer-box:focus-within {
+.composer:focus-within {
   border-color: var(--accent);
+}
+.composer-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 0 8px 8px;
+}
+.composer-bar .ui-select {
+  max-width: min(48ch, 100%);
+  min-height: 28px;
+  font-size: var(--text-xs);
 }
 .composer-box textarea {
   max-height: 200px;

@@ -20,8 +20,11 @@ export function buildFixBrief(f: FixFacts): string {
     `What failed: ${f.what}`,
     `Where: ${f.where}`,
   ];
-  if (f.output?.trim())
-    parts.push("", "The exact error or output:", "", "```", f.output.trim(), "```");
+  if (f.output?.trim()) {
+    const longest = Math.max(2, ...(f.output.match(/`+/g) ?? []).map((run) => run.length));
+    const fence = "`".repeat(longest + 1);
+    parts.push("", "The exact error or output:", "", fence, f.output.trim(), fence);
+  }
   if (f.files && f.files.length > 0)
     parts.push("", "Files involved:", ...f.files.map((file) => `- ${file}`));
   parts.push(
@@ -31,6 +34,33 @@ export function buildFixBrief(f: FixFacts): string {
     "You are in the folder where the problem lives. Make the smallest change that fixes it, ask me before anything you are unsure about, and tell me what you changed.",
   );
   return parts.join("\n");
+}
+
+export async function failedRunDetails(
+  exec: (cmd: string, args: string[], cwd: string) => Promise<{ code: number; stdout: string; stderr: string }>,
+  id: string,
+  dir: string,
+): Promise<{ step: string | null; text: string }> {
+  const logs = await exec("gh", ["run", "view", id, "--log-failed"], dir);
+  if (logs.code === 0) return trimFailedLog(logs.stdout);
+  const missing = "GitHub no longer has this run's log";
+  try {
+    const result = await exec("gh", ["run", "view", id, "--json", "jobs"], dir);
+    if (result.code !== 0) return { step: null, text: missing };
+    const data = JSON.parse(result.stdout) as { jobs?: Array<{
+      name?: string; conclusion?: string; steps?: Array<{ name?: string; conclusion?: string }>;
+    }> };
+    const failed = (state?: string) => state === "failure" || state === "timed_out" || state === "startup_failure";
+    const jobs = (data.jobs ?? []).filter((job) => failed(job.conclusion)).slice(0, 20);
+    const steps = jobs.flatMap((job) => {
+      const name = job.name || "Unnamed job";
+      const failedSteps = job.steps?.filter((step) => failed(step.conclusion)) ?? [];
+      return failedSteps.length ? failedSteps.map((step) => `${name} / ${step.name || "Unnamed step"}`) : [name];
+    });
+    return { step: steps[0] ?? null, text: [missing, ...steps.slice(0, 40).map((step) => `- ${step}`)].join("\n").slice(0, 6000) };
+  } catch {
+    return { step: null, text: missing };
+  }
 }
 
 /** The goal of a Fix session: "Fix: the problem in a few words", at most about 70 characters. */

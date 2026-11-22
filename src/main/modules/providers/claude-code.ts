@@ -5,6 +5,8 @@ import { resolveCommand, resolveTool, spawnStream } from "../../core/exec";
 import { detectClaude } from "../setup/detect";
 import { claudeInventory } from "../setup/inventory";
 import { parseClaudeLine, startAgentRun } from "./stream";
+import { ClaudeAuth, type ClaudeTokenStore } from "./claude-auth";
+import { claudeChatModel } from "./chat-models";
 import type {
   AgentRun,
   ChatCommandOptions,
@@ -134,6 +136,7 @@ export interface ClaudeProviderConfig {
   /** Name of the executable to look up (the fake provider uses another name). */
   bin?: string;
   openTerminal?: () => TerminalOpener | null;
+  tokens?: ClaudeTokenStore;
 }
 
 /** Claude Code through its official CLI (plan 7.2). */
@@ -143,12 +146,14 @@ export class ClaudeCodeProvider implements Provider {
   readonly canResumeHeadless = true;
   private readonly bin: string;
   private readonly openTerminal: () => TerminalOpener | null;
+  readonly auth: ClaudeAuth;
 
   constructor(config: ClaudeProviderConfig = {}) {
     this.id = config.id ?? "claude-code";
     this.label = config.label ?? "Claude Code";
     this.bin = config.bin ?? "claude";
     this.openTerminal = config.openTerminal ?? (() => null);
+    this.auth = new ClaudeAuth((args) => this.command(args), config.tokens);
   }
 
   private command(args: string[], env?: Record<string, string>): CommandSpec {
@@ -156,8 +161,17 @@ export class ClaudeCodeProvider implements Provider {
     return { cmd: resolved.file, args: resolved.args, ...(env ? { env } : {}) };
   }
 
+  private work(args: string[], env?: Record<string, string>): CommandSpec {
+    const revision = this.auth.revision;
+    return {
+      ...this.command(args, env),
+      prepare: () => this.auth.prepare(),
+      authFailure: (message) => { if (revision === this.auth.revision) this.auth.failed(message); },
+    };
+  }
+
   async detect(): Promise<Detection> {
-    const status = await detectClaude(this.bin, this.id);
+    const status = await detectClaude(this.bin, this.id, this.auth.env());
     return {
       installed: status.installed,
       loggedIn: status.loggedIn === true,
@@ -167,7 +181,12 @@ export class ClaudeCodeProvider implements Provider {
   }
 
   loginCommand(): CommandSpec {
+    this.auth.loginStarting();
     return this.command(["auth", "login"]);
+  }
+
+  setupTokenCommand(): CommandSpec {
+    return this.command(["setup-token"]);
   }
 
   async login(): Promise<void> {
@@ -178,6 +197,12 @@ export class ClaudeCodeProvider implements Provider {
 
   async models(): Promise<string[]> {
     return CLAUDE_MODELS;
+  }
+
+  async chatModels() {
+    const id = await this.auth.model();
+    const defaultModel = id ? claudeChatModel(id) : undefined;
+    return { models: this.auth.models.length ? this.auth.models : CLAUDE_MODELS.map(claudeChatModel), defaultModel };
   }
 
   /** Flags that carry a role: model, effort, permission mode and standing instructions. */
@@ -207,7 +232,7 @@ export class ClaudeCodeProvider implements Provider {
 
   /** The Office session id is the Claude session id, so hook events map straight back (plan 7.2). */
   interactiveCommand(o: RunOptions): CommandSpec {
-    return this.command(["--session-id", o.officeSessionId, ...this.terminalFlags(o)], o.env);
+    return this.work(["--session-id", o.officeSessionId, ...this.terminalFlags(o)], o.env);
   }
 
   headless(o: RunOptions & { prompt: string; resumeId?: string }): AgentRun {
@@ -217,12 +242,17 @@ export class ClaudeCodeProvider implements Provider {
       o,
       this.roleFlags(o, o.permission?.kind === "allowlist" || o.tools !== undefined ? "dontAsk" : undefined),
     );
-    const spec = this.command(args, o.env);
+    const spec = this.work(args, o.env);
     const stream = spawnStream(spec.cmd, spec.args, {
       cwd: o.cwd,
       ...(spec.env ? { env: spec.env } : {}),
+      prepare: spec.prepare,
     });
-    return startAgentRun(stream, parseClaudeLine);
+    const run = startAgentRun(stream, parseClaudeLine);
+    void run.done.then((result) => {
+      if (!result.ok) spec.authFailure?.(result.error ?? result.resultText);
+    });
+    return run;
   }
 
   readonly chatKind = "claude" as const;
@@ -236,7 +266,8 @@ export class ClaudeCodeProvider implements Provider {
     const role = o.role
       ? {
           ...o.role,
-          ...(o.model ? { model: o.model } : {}),
+          ...(o.model !== undefined ? { model: o.model || undefined } : {}),
+          ...(o.effort !== undefined ? { effort: undefined } : {}),
           ...(o.permissionMode ? { permissionMode: o.permissionMode } : {}),
         }
       : {
@@ -268,19 +299,20 @@ export class ClaudeCodeProvider implements Provider {
       // An incognito conversation is never saved, so there is nothing to resume.
       o.resume && !o.incognito ? "--resume" : "--session-id",
       o.officeSessionId,
+      ...(o.effort ? ["--effort", o.effort] : []),
       ...(o.restricted
         ? [...chatToolFlags(o.addDirs ?? [], runOptions.role?.model, o.officeMcp), ...this.roleFlags({ ...runOptions, role: undefined, addDirs: undefined })]
         : [...this.roleFlags(runOptions), ...permissionFlags(runOptions)]),
       ...(o.incognito ? ["--no-session-persistence"] : []),
     ];
-    return this.command(args);
+    return this.work(args);
   }
 
   resumeCommand(providerSessionId: string, o: RunOptions): CommandSpec {
-    return this.command(["--resume", providerSessionId, ...this.terminalFlags(o)], o.env);
+    return this.work(["--resume", providerSessionId, ...this.terminalFlags(o)], o.env);
   }
 
   inventory(projectPath?: string): Promise<Inventory> {
-    return claudeInventory(projectPath, this.bin);
+    return claudeInventory(projectPath, this.bin, this.auth.env());
   }
 }

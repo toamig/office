@@ -33,6 +33,7 @@ function resultText(content: unknown): string {
 export class ClaudeChatParser {
   private messageId = "";
   private readonly subagents = new Set<string>();
+  private failure = "";
 
   parse(line: string): ChatEvent[] {
     const message = asJson(line);
@@ -41,7 +42,14 @@ export class ClaudeChatParser {
     const parent = str(message["parent_tool_use_id"]);
     if (parent) return this.subagentMessage(parent, type, message);
     if (type === "stream_event") return this.partial(obj(message["event"]));
-    if (type === "assistant") return this.assistant(obj(message["message"]));
+    if (type === "assistant") {
+      const body = obj(message["message"]);
+      if (message["error"] || body["error"]) {
+        this.failure = resultText(body["content"]) || str(message["error"]) || str(body["error"]);
+        return [];
+      }
+      return this.assistant(body);
+    }
     if (type === "user") return this.toolResults(obj(message["message"]));
     if (type === "system") {
       const id = str(message["tool_use_id"]);
@@ -57,13 +65,16 @@ export class ClaudeChatParser {
       }
     }
     if (type === "result") {
-      const failed = message["is_error"] === true;
+      const failed = message["is_error"] === true || Boolean(this.failure);
+      const errors = Array.isArray(message["errors"]) ? message["errors"].map(str).filter(Boolean).join("\n") : "";
+      const error = this.failure || str(message["result"]) || errors || "The turn failed";
+      this.failure = "";
       return [
         {
           t: "result",
           ok: !failed,
           durationMs: typeof message["duration_ms"] === "number" ? message["duration_ms"] : null,
-          ...(failed ? { error: str(message["result"]) || "The turn failed" } : {}),
+          ...(failed ? { error } : {}),
         },
       ];
     }
@@ -169,7 +180,7 @@ export class ClaudeChatParser {
 export class CodexChatParser {
   /** The thread id, once Codex reports it. */
   threadId: string | undefined;
-  private failed: string | undefined;
+  failed: string | undefined;
   private started = Date.now();
 
   parse(line: string): ChatEvent[] {
@@ -183,10 +194,10 @@ export class CodexChatParser {
     if (type === "turn.failed" || type === "error") {
       this.failed =
         str(obj(event["error"])["message"]) || str(event["message"]) || "The turn failed";
-      return [{ t: "error", message: this.failed }];
+      return type === "turn.failed" ? [{ t: "result", ok: false, durationMs: Date.now() - this.started, error: this.failed }] : [];
     }
     if (type === "turn.completed") {
-      return [{ t: "result", ok: !this.failed, durationMs: Date.now() - this.started }];
+      return [{ t: "result", ok: true, durationMs: Date.now() - this.started }];
     }
     const item = obj(event["item"]);
     const id = str(item["id"]) || `i${Date.now()}`;

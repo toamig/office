@@ -43,6 +43,9 @@ import { ChatService } from "./modules/chat/service";
 import { OfficeTools } from "./modules/chat/office-tools";
 import { RunService } from "./modules/runs/service";
 import { WorkflowResults } from "./modules/runs/workflow-results";
+import { ClaudeTokenStore, type SecretStorage } from "./modules/providers/claude-auth";
+import { ClaudeCodeProvider } from "./modules/providers/claude-code";
+import { ClaudeSignIn } from "./modules/setup/claude-sign-in";
 import { workflowDiscussion } from "./modules/runs/workflow-discussion";
 import { ConversationBridge, writePermissionMcpConfig } from "./modules/runs/mcp-config";
 import { PermissionBroker } from "./modules/runs/permissions";
@@ -84,6 +87,8 @@ export interface AppContext {
   tasks: TaskEngine;
   scheduler: Scheduler;
   workflowResults: WorkflowResults;
+  claudeSignIn: ClaudeSignIn;
+  claudeEnv: () => Record<string, string>;
   modules: ModuleManager;
   ntfy: NtfyChannel;
   relay: RelayServer;
@@ -225,10 +230,10 @@ const cheapestProvider = () => resolveTool("claude") ? "claude-code"
   : resolveTool("codex") ? "codex" : "claude-code";
 
 /** Agents: providers, headless runs, interactive sessions, hooks, Ask, the brief and Explore. */
-function createAgents(base: Base, notes: Notes, relayScript: string) {
+function createAgents(base: Base, notes: Notes, relayScript: string, tokens: ClaudeTokenStore) {
   const { box, bus, db, store, notifier } = base;
   const { writer, projects } = notes;
-  const providers = new ProviderRegistry();
+  const providers = new ProviderRegistry(tokens);
   // The task engine is built later; the broker reaches it through this hook.
   const permissionHook: { listeners: Array<(runId: string, waiting: boolean) => void> } = {
     listeners: [],
@@ -445,7 +450,11 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
       const session = agents.explore.start(cheapestProvider(), false, projectId);
       agents.sessions.rename(session.id, item.title);
       try {
-        agents.chat.send(session.id, prompt);
+        agents.chat.send(session.id, prompt, [], undefined, {
+          title: item.title,
+          where: projectId ? store.state.workspace?.projects.find((project) => project.id === projectId)?.name ?? projectId : item.workflowName,
+          done: "Decide whether to pursue the suggestion and agree on a first step.",
+        });
       } catch (error) {
         agents.sessions.archive(session.id);
         throw error;
@@ -558,6 +567,7 @@ function createFix(
         cwd: input.cwd,
         title: input.title,
         prompt: input.prompt,
+        brief: input.brief,
         // A chat that asks before it acts: the permission mode of a chat is Ask first until the owner changes it.
         mode: "chat",
       }),
@@ -668,11 +678,13 @@ function createLifecycle(
 export async function createContext(
   checkResponses: boolean,
   relayScript: string,
+  storage?: SecretStorage,
 ): Promise<AppContext> {
   mkdirSync(dataDir(), { recursive: true });
   const base = createBase();
   const notes = createNotes(base);
-  const agents = createAgents(base, notes, relayScript);
+  const tokens = new ClaudeTokenStore(storage);
+  const agents = createAgents(base, notes, relayScript, tokens);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
   const officeTools = new OfficeTools({
@@ -715,7 +727,15 @@ export async function createContext(
     templateDir: () => join(dirname(relayScript), "..", "brain-template"),
     notesRepo: (name, domain, stack) => agents.explore.notesRepo(name, domain, stack),
   });
-  const toolsMonitor = new ToolsMonitor(detectTools, () => bus.emit("setup.changed", {}));
+  const claude = agents.providers.get("claude-code") as ClaudeCodeProvider;
+  const claudeEnv = () => {
+    try { return claude.auth.env(); } catch { return {}; }
+  };
+  const toolsMonitor = new ToolsMonitor(() => detectTools(claudeEnv()), () => bus.emit("setup.changed", {}));
+  const claudeSignIn = new ClaudeSignIn(tokens, claude, () => {
+    bus.emit("setup.changed", {});
+    void toolsMonitor.check().catch(() => undefined);
+  });
   const toolConfig = new ToolConfigService({
     home: userHome,
     backups: () => join(dataDir(), "tool-backups"),
@@ -754,6 +774,7 @@ export async function createContext(
   agents.github.onChange = () => pending.changed();
   // The brief says what waits on the owner, from the same list as the bell.
   agents.brief.needsYou = () => pending.list().map((i) => i.title);
+  const lifecycle = createLifecycle(base, notes, agents, orch, toolsMonitor, pending);
   return {
     settings: () => box.current,
     patchSettings: (patch) => (box.current = updateSettings(patch)),
@@ -771,6 +792,8 @@ export async function createContext(
     toolConfig,
     requestRouter,
     officeTools,
+    claudeSignIn,
+    claudeEnv,
     permissions: agents.broker,
     pending,
     fix,
@@ -785,7 +808,8 @@ export async function createContext(
     onboarding,
     toolsMonitor,
     setupState,
-    ...createLifecycle(base, notes, agents, orch, toolsMonitor, pending),
+    ...lifecycle,
+    stop: async () => { claudeSignIn.cancel(); await lifecycle.stop(); },
   };
 }
 

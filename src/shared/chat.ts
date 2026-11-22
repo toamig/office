@@ -1,8 +1,8 @@
-import type { ChatEvent } from "./models";
+import type { ChatEvent, OfficeBrief } from "./models";
 
 /** What the chat view draws, in order. */
 export type ChatItem =
-  | { kind: "user"; id: string; text: string; images: number }
+  | { kind: "user"; id: string; text: string; images: number; brief?: OfficeBrief }
   | { kind: "assistant"; id: string; text: string; thinking: string; streaming: boolean }
   | {
       kind: "tool";
@@ -39,6 +39,23 @@ function settle(items: ChatItem[], toolStatus: "done" | "error"): ChatItem[] {
   });
 }
 
+function failedTurn(items: ChatItem[], message: string): ChatState {
+  const last = items.at(-1);
+  const text = message.trim();
+  if (last?.kind === "error") {
+    if (!text || last.message === text || last.message.length >= text.length)
+      return { items, working: false };
+    return { items: [...items.slice(0, -1), { kind: "error", message: text }], working: false };
+  }
+  const assistant = last?.kind === "assistant" ? last.text.trim() : "";
+  const repeats = assistant.length >= 12 && text.length >= 12 &&
+    (text.includes(assistant) || assistant.includes(text));
+  return {
+    items: [...settle(repeats ? items.slice(0, -1) : items, "error"), { kind: "error", message: text }],
+    working: false,
+  };
+}
+
 /**
  * Builds the conversation from its events, one at a time. Pure, so the live view, a reopened chat and the
  * tests all agree. A streamed message is replaced by its final text when that arrives, and a repeated
@@ -49,7 +66,7 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
   switch (event.t) {
     case "user":
       return {
-        items: [...items, { kind: "user", id: event.id, text: event.text, images: event.images }],
+        items: [...items, { kind: "user", id: event.id, text: event.text, images: event.images, brief: event.brief }],
         working: true,
       };
     case "turn-start":
@@ -140,6 +157,8 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
       };
     }
     case "result":
+      if (!event.ok) return failedTurn(items, event.error ?? "");
+      if (!state.working && items.at(-1)?.kind === "error") return state;
       return {
         items: [
           ...settle(items, event.ok ? "done" : "error"),
@@ -148,10 +167,7 @@ export function reduceChat(state: ChatState, event: ChatEvent): ChatState {
         working: false,
       };
     case "error":
-      return {
-        items: [...settle(items, "error"), { kind: "error", message: event.message }],
-        working: false,
-      };
+      return failedTurn(items, event.message);
     case "stopped":
       return { items: [...settle(items, "done"), { kind: "stopped" }], working: false };
   }

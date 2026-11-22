@@ -61,13 +61,13 @@ export function parseLoggedIn(stdout: string): boolean {
 }
 
 /** Claude Code (plan 7.2): `claude --version` and `claude auth status` (JSON with loggedIn). */
-export async function detectClaude(bin = "claude", id = "claude-code"): Promise<ToolStatus> {
+export async function detectClaude(bin = "claude", id = "claude-code", env?: Record<string, string>): Promise<ToolStatus> {
   const fix =
     "Install Claude Code from https://claude.com/claude-code, then run: claude auth login";
   const version = await probe(bin, ["--version"]);
   if (!version || version.code !== 0) return missing(id, "Claude Code", fix);
   const v = versionOf(version.stdout);
-  const auth = await run(bin, ["auth", "status"], { timeoutMs: 20_000 });
+  const auth = await run(bin, ["auth", "status"], { timeoutMs: 20_000, env });
   const loggedIn = parseLoggedIn(auth.stdout);
   return {
     id,
@@ -110,12 +110,12 @@ export async function detectCodex(bin = "codex"): Promise<ToolStatus> {
 }
 
 /** Everything Setup shows in its tools table. */
-export async function detectTools(): Promise<ToolStatus[]> {
+export async function detectTools(claudeEnv?: Record<string, string>): Promise<ToolStatus[]> {
   return Promise.all([
     detectSimple("git", "Git", "git", "Install Git from https://git-scm.com"),
     detectGh(),
     detectSimple("node", "Node.js", "node", "Install Node.js 22 or newer from https://nodejs.org"),
-    detectClaude(),
+    detectClaude("claude", "claude-code", claudeEnv),
     detectCodex(),
   ]);
 }
