@@ -37,7 +37,8 @@ export function WrapUpDialog({ session, onClose }: { session: SessionRow; onClos
       {!done && <p className="m-0">Ending the session and recording what matters...</p>}
       {failure && <Banner tone="danger">{failure}</Banner>}
       {result?.error && <Banner tone="danger">Session ended. The recorder reported {result.error}</Banner>}
-      {result && !result.error && (
+      {result?.stopped && <p>Session ended. The recorder was stopped.</p>}
+      {result && !result.error && !result.stopped && (
         <div>
           <p className="mt-0">{result.saved ? `Saved ${result.saved} ${result.saved === 1 ? "note" : "notes"} to Brain.` : "No new notes were saved."}</p>
           {result.proposed > 0 && <p className="mb-0">{result.proposed} {result.proposed === 1 ? "proposal is" : "proposals are"} in Needs you.</p>}

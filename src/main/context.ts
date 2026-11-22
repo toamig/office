@@ -342,6 +342,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
       const providerId = session.provider;
       const handle = runs.start({
         kind: "recorder", providerId, cwd: dataDir(), prompt, tools: "",
+        ...(session.title ? { title: `Recorder for ${session.title}` } : {}),
         ...(session.projectId ? { projectId: session.projectId } : {}),
         role: {
           provider: providerId,
@@ -350,6 +351,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
         },
       });
       const result = await handle.result;
+      if (result.error === "cancelled") return null;
       if (!result.ok) throw new Error(result.error || "The recorder run failed.");
       return result.resultText;
     },

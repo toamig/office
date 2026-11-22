@@ -60,7 +60,7 @@ export class FanOut {
 
   /**
    * Starts `count` builders, one worktree each, branched from the task branch, and waits for all of them.
-   * Returns how many succeeded.
+   * Returns how many finished successfully and whether any were stopped.
    */
   async run(o: {
     taskId: string;
@@ -73,14 +73,15 @@ export class FanOut {
     projectId: string;
     prompt: string;
     providerId: string;
-  }): Promise<number> {
+  }): Promise<{ succeeded: number; stopped: boolean }> {
     const handles: RunHandle[] = [];
     this.handles.set(o.taskId, handles);
     const insert = this.deps.db.prepare(
-      "INSERT INTO task_variants (task_id, stage_idx, n, branch, worktree, run_id, status) VALUES (?, ?, ?, ?, ?, ?, 'running')",
+      "INSERT INTO task_variants (task_id, stage_idx, n, branch, worktree, run_id, status) VALUES (?, ?, ?, ?, ?, ?, ?)",
     );
-    const pending: Array<Promise<boolean>> = [];
+    const pending: Array<Promise<TaskVariant["status"]>> = [];
     for (let n = 1; n <= o.count; n++) {
+      if (this.handles.get(o.taskId) !== handles) break;
       let made: { path: string; branch: string };
       try {
         made = await createWorktree(o.repo, `${o.slug} v${n}`, o.taskBranch);
@@ -94,9 +95,15 @@ export class FanOut {
         this.deps.changed(o.taskId);
         continue;
       }
+      if (this.handles.get(o.taskId) !== handles) {
+        insert.run(o.taskId, o.stageIdx, n, made.branch, made.path, null, "cancelled");
+        this.deps.changed(o.taskId);
+        break;
+      }
       const prompt = `${o.prompt}\n\nYou are builder ${n} of ${o.count}, working in parallel with the others. Work only in this folder and commit your work here.`;
       const handle = this.deps.runs.start({
         kind: "stage",
+        title: `Builder ${n} of ${o.count} for ${o.slug}`,
         providerId: o.providerId,
         role: o.role,
         cwd: made.path,
@@ -105,28 +112,31 @@ export class FanOut {
         taskId: o.taskId,
       });
       handles.push(handle);
-      insert.run(o.taskId, o.stageIdx, n, made.branch, made.path, handle.id);
+      insert.run(o.taskId, o.stageIdx, n, made.branch, made.path, handle.id, "running");
       this.deps.changed(o.taskId);
       pending.push(
         handle.result.then((result) => {
+          const status = result.ok ? "done" : result.error === "cancelled" ? "cancelled" : "failed";
           this.setStatus(
             o.taskId,
             o.stageIdx,
             n,
-            result.ok ? "done" : "failed",
-            result.ok ? null : (result.error ?? "The run failed"),
+            status,
+            status === "failed" ? result.error ?? "The run failed" : null,
           );
-          return result.ok;
+          return status;
         }),
       );
     }
     const outcomes = await Promise.all(pending);
-    this.handles.delete(o.taskId);
-    return outcomes.filter(Boolean).length;
+    if (this.handles.get(o.taskId) === handles) this.handles.delete(o.taskId);
+    return { succeeded: outcomes.filter((status) => status === "done").length, stopped: outcomes.includes("cancelled") };
   }
 
   cancel(taskId: string): void {
-    for (const h of this.handles.get(taskId) ?? []) h.run.cancel();
+    const handles = this.handles.get(taskId) ?? [];
+    this.handles.delete(taskId);
+    for (const handle of handles) this.deps.runs.cancel(handle.id);
   }
 
   /**
@@ -214,7 +224,7 @@ export class FanOut {
       let files: string[] = [];
       let additions = 0;
       let deletions = 0;
-      if (taskBranch && (v.status === "done" || v.status === "failed")) {
+      if (taskBranch && (v.status === "done" || v.status === "failed" || v.status === "cancelled")) {
         const count = await git(repo, ["rev-list", "--count", `${taskBranch}..${v.branch}`]);
         commits = Number(count.stdout.trim()) || 0;
         const names = await git(repo, ["diff", "--name-only", `${taskBranch}...${v.branch}`]);

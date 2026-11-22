@@ -28,6 +28,8 @@ export const STATUS: Record<string, Entry> = {
   failed: t("danger", "Failed"),
   // Tasks and their stages
   running: t("working", "Running"),
+  stopping: t("working", "Stopping"),
+  stopped: t("neutral", "Stopped"),
   "waiting-gate": t("attention", "Waiting for you"),
   "waiting-permission": t("attention", "Waiting for you"),
   done: t("success", "Done"),

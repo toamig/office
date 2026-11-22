@@ -110,13 +110,14 @@ function unwrapCmdShim(shim: string): string | null {
   }
 }
 
-function spawnResolved(cmd: string, args: string[], opts: RunOptions): ChildProcess {
+function spawnResolved(cmd: string, args: string[], opts: RunOptions, group = false): ChildProcess {
   const tool = cmd.includes("/") || cmd.includes("\\") ? cmd : (resolveTool(cmd) ?? cmd);
   const resolved = resolveCommand(tool, args);
   return spawn(resolved.file, resolved.args, {
     cwd: opts.cwd,
     env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
     windowsHide: true,
+    detached: group && process.platform !== "win32",
     windowsVerbatimArguments:
       process.platform === "win32" && resolved.file.toLowerCase().endsWith("cmd.exe"),
     stdio: ["pipe", "pipe", "pipe"],
@@ -168,10 +169,15 @@ export function runBytes(cmd: string, args: string[], opts: RunOptions = {}): Pr
   });
 }
 
-function killTree(child: ChildProcess): void {
+function killTree(child: ChildProcess, group = false): void {
   if (!child.pid) return;
   if (process.platform === "win32") {
-    spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true });
+    const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });
+    killer.on("error", () => { child.kill(); });
+    killer.on("close", (code) => { if (code) child.kill(); });
+  } else if (group) {
+    try { process.kill(-child.pid, "SIGKILL"); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code !== "ESRCH") child.kill("SIGKILL"); }
   } else {
     child.kill("SIGKILL");
   }
@@ -191,7 +197,7 @@ export interface StreamHandle {
 export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}): StreamHandle {
   if (opts.prepare) return preparedStream(cmd, args, opts, opts.prepare);
   const redact = (value: string) => redactClaudeToken(value, opts.env?.[CLAUDE_TOKEN_ENV]);
-  const child = spawnResolved(cmd, args, opts);
+  const child = spawnResolved(cmd, args, opts, true);
   const queue: string[] = [];
   let wake: (() => void) | null = null;
   let ended = false;
@@ -241,7 +247,7 @@ export function spawnStream(cmd: string, args: string[], opts: RunOptions = {}):
   return {
     lines: iterate(),
     exit,
-    kill: () => killTree(child),
+    kill: () => { if (!ended) killTree(child, true); },
     write: (line) => {
       if (child.stdin && !child.stdin.destroyed) child.stdin.write(`${line}\n`);
     },

@@ -15,6 +15,7 @@ import { migration014 } from "./014_workflows";
 import { migration015 } from "./015_workflow_runs";
 import { migration016 } from "./016_workflow_items";
 import { migration017 } from "./017_recorder_decisions";
+import { migration018 } from "./018_run_titles";
 
 export interface Migration {
   id: number;
@@ -41,4 +42,5 @@ export const migrations: Migration[] = [
   migration015,
   migration016,
   migration017,
+  migration018,
 ];

@@ -22,7 +22,7 @@ interface RecorderDeps {
   chatsDir: string;
   terminalsDir: string;
   settings: () => { enabled: boolean; learning: boolean; idleMinutes: number };
-  complete: (session: SessionRow, prompt: string) => Promise<string>;
+  complete: (session: SessionRow, prompt: string) => Promise<string | null>;
   changed: () => void;
   afterSave?: (root: string) => Promise<void>;
 }
@@ -68,7 +68,7 @@ export class Recorder {
       if (now - updated < age || (this.nextIdle.get(session.id) ?? 0) > now) continue;
       this.nextIdle.set(session.id, now + age);
       const result = await this.record(session);
-      if (result.saved || result.proposed || result.error) break;
+      if (result.saved || result.proposed || result.error || result.stopped) break;
     }
   }
 
@@ -106,6 +106,7 @@ export class Recorder {
     const pack = readRulePack(root);
     const result = await this.deps.complete(session, recordingPrompt(delta.text, general, learning,
       pack ? ruleBody(root, pack.placement) : "", !!pack));
+    if (result === null) return { ...empty(), stopped: true };
     if (this.deps.root() !== root || !this.deps.settings().enabled) return empty();
     const entries = parseRecording(result).flatMap((entry) => {
       if ((entry.destination === "lesson" || entry.destination === "profile") && !learning) return [];

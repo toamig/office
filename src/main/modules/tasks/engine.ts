@@ -399,6 +399,9 @@ export class TaskEngine {
     const stage = this.stages(id).find((s) => s.idx === t.stage_index);
     if (stage?.run_id) this.deps.runs.cancel(stage.run_id);
     this.fanout.cancel(id);
+    if (stage?.status === "running" || stage?.status === "waiting-permission") {
+      this.setStage(id, stage.idx, { status: "cancelled" });
+    }
     this.setTask(id, { status: "cancelled" });
   }
 
@@ -490,7 +493,7 @@ export class TaskEngine {
         return this.fail(t, idx, `Could not remove the earlier builders: ${left.join("; ")}`);
     }
     this.deps.db.prepare("DELETE FROM task_variants WHERE task_id = ?").run(t.id);
-    const succeeded = await this.fanout.run({
+    const { succeeded, stopped } = await this.fanout.run({
       taskId: t.id,
       stageIdx: idx,
       count: o.current.fanout,
@@ -503,6 +506,7 @@ export class TaskEngine {
       providerId: o.role.provider,
     });
     if (this.task(t.id).status === "cancelled") return "stop";
+    if (succeeded === 0 && stopped) return this.stopStage(t.id, idx);
     if (succeeded === 0) return this.fail(t, idx, "Every builder failed");
     writeTextFile(
       o.outputPath,
@@ -565,11 +569,13 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
       if (feedback)
         prompt += `\n\nThe owner rejected the previous attempt with this feedback. Address it:\n${feedback}`;
 
+      if (this.task(t.id).status === "cancelled") return "stop";
       if (stage.worktree && current.fanout > 1 && current.branch) {
         return this.runFanout(t, idx, { current, repo, role, prompt, outputPath });
       }
       const handle = this.deps.runs.start({
         kind: "stage",
+        title: `${current.title}: ${stage.id}`,
         providerId: role.provider,
         role,
         cwd: current.worktree ?? repo,
@@ -579,6 +585,10 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
       });
       this.setStage(t.id, idx, { run_id: handle.id });
       const result = await handle.result;
+      if (result.error === "cancelled") {
+        this.setStage(t.id, idx, { output_path: existsSync(outputPath) ? outputPath : join(handle.dir, "result.md") });
+        return this.stopStage(t.id, idx);
+      }
       if (this.task(t.id).status === "cancelled") return "stop";
       if (!result.ok) return this.fail(t, idx, result.error ?? "The run failed");
       // The output file is how the next stage reads this one: write the answer if the agent did not.
@@ -601,5 +611,11 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
     } catch (err) {
       return this.fail(t, idx, (err as Error).message);
     }
+  }
+
+  private stopStage(id: string, idx: number): "stop" {
+    this.setStage(id, idx, { status: "cancelled" });
+    this.setTask(id, { status: "cancelled" });
+    return "stop";
   }
 }

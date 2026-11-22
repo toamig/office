@@ -26,6 +26,12 @@ export const RunSummary = z.object({
 });
 export type RunSummary = z.infer<typeof RunSummary>;
 
+export const BackgroundRun = z.object({
+  id: z.string(), title: z.string(), status: z.enum(["running", "stopping", "stopped"]),
+  startedAt: z.string(), endedAt: z.string().nullable(),
+});
+export type BackgroundRun = z.infer<typeof BackgroundRun>;
+
 export const GitFile = z.object({
   path: z.string(),
   origPath: z.string().optional(),
@@ -292,6 +298,7 @@ export const WrapUpResult = z.object({
   saved: z.number(),
   proposed: z.number(),
   error: z.string().optional(),
+  stopped: z.boolean().optional(),
 });
 export type WrapUpResult = z.infer<typeof WrapUpResult>;
 
@@ -981,7 +988,7 @@ export const TaskVariant = z.object({
   branch: z.string(),
   worktree: z.string(),
   /** running, done (finished, not chosen yet), failed, kept or discarded. */
-  status: z.enum(["running", "done", "failed", "kept", "discarded"]),
+  status: z.enum(["running", "done", "failed", "cancelled", "kept", "discarded"]),
   error: z.string().nullable(),
   /** Check results: the run's outcome and what the builder changed against the task branch. */
   commits: z.number(),
@@ -1006,6 +1013,7 @@ export const TaskStageView = z.object({
     "approved",
     "done",
     "failed",
+    "cancelled",
   ]),
   runId: z.string().nullable(),
   outputPath: z.string().nullable(),

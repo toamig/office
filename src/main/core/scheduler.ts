@@ -100,6 +100,7 @@ export function workflowRequest(
     : "Return the result as concise Markdown.";
   return {
     kind: "workflow",
+    title: workflow.name,
     providerId: provider,
     cwd,
     prompt: `${workflow.prompt}\n\n${output}`,
@@ -194,7 +195,6 @@ export class Scheduler {
     if (this.inFlight.has(key)) return null;
     this.inFlight.add(key);
     let logId: string | undefined;
-    let cancelled = false;
     try {
       logId = this.mark(root, id, at, "running");
       this.deps.changed?.();
@@ -208,11 +208,19 @@ export class Scheduler {
       const handle = this.deps.runs.start(request);
       this.deps.db.prepare("UPDATE automations_log SET run_id = ? WHERE id = ?").run(handle.id, logId);
       const result = await handle.result;
-      cancelled = result.error === "cancelled";
+      if (result.error === "cancelled") {
+        this.finish(logId, "cancelled", result.resultText);
+        return handle.id;
+      }
       if (!result.ok) throw new Error(result.error ?? "The agent run failed.");
       const output: WorkflowOutputRun = { id: handle.id, text: result.resultText };
-      if (workflow.output === "worth-a-look" && this.deps.root() === root)
-        await this.collectItems(output, request, new Set(projects.map((entry) => entry.id)));
+      if (workflow.output === "worth-a-look" && this.deps.root() === root) {
+        const stopped = await this.collectItems(output, request, new Set(projects.map((entry) => entry.id)));
+        if (stopped) {
+          this.finish(logId, "cancelled", stopped.text || output.text);
+          return stopped.id;
+        }
+      }
       if (this.deps.root() === root) await this.deps.output(root, workflow, output);
       const summary = output.items
         ? output.items.map((item) => item.title).join("\n") || "No items suggested."
@@ -221,7 +229,7 @@ export class Scheduler {
       return handle.id;
     } catch (error) {
       const description = error instanceof Error ? error.message : String(error);
-      if (logId) this.finish(logId, cancelled ? "cancelled" : "failed", description);
+      if (logId) this.finish(logId, "failed", description);
       this.deps.notifier.notify({
         kind: "automation.done",
         ...(workflow.projectId ? { projectId: workflow.projectId } : {}),
@@ -250,7 +258,7 @@ export class Scheduler {
     request.prompt += `\n\nBrain validation size warnings\n${summary}`;
   }
 
-  private async collectItems(output: WorkflowOutputRun, request: RunRequest, projects: ReadonlySet<string>): Promise<void> {
+  private async collectItems(output: WorkflowOutputRun, request: RunRequest, projects: ReadonlySet<string>): Promise<{ id: string; text: string } | undefined> {
     output.items = parseWorkflowItems(output.text, projects);
     if (output.items !== null) return;
     try {
@@ -258,6 +266,7 @@ export class Scheduler {
         ...request,
         prompt: `${request.prompt}\n\nThe first response did not match the required shape. Check the JSON, required fields and project IDs before replying.`,
       }).result;
+      if (retry.error === "cancelled") return { id: retry.id, text: retry.resultText };
       if (retry.ok) {
         output.text = retry.resultText.trim() ? retry.resultText : output.text;
         output.items = parseWorkflowItems(retry.resultText, projects);

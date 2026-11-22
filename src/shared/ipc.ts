@@ -66,6 +66,7 @@ import {
   WriteResult,
   WrapUpResult,
   RunSummary,
+  BackgroundRun,
   PermissionRequest,
   ChatImage,
   ChatLine,
@@ -89,6 +90,8 @@ export const eventTypes = [
   "session.output-idle",
   "run.progress",
   "run.done",
+  "run.started",
+  "run.stopping",
   "pending.changed",
   "fix.changed",
   "brief.changed",
@@ -165,6 +168,8 @@ export const channels = {
   "projects.openFolder": { req: z.object({ id: z.string() }), res: z.void() },
   /** The newest headless agent runs of a project (briefs, captures, task stages). */
   "projects.runs": { req: z.object({ id: z.string() }), res: z.array(RunSummary) },
+  "runs.background": { req: z.object({ includeStopped: z.boolean().default(false) }), res: z.array(BackgroundRun) },
+  "runs.stop": { req: z.object({ id: z.string() }), res: z.void() },
   /** The path of the project's .uproject file, or null when it is not an Unreal project. */
   "projects.unrealFile": { req: z.object({ id: z.string() }), res: z.string().nullable() },
   "projects.openUnreal": { req: z.object({ id: z.string() }), res: z.void() },

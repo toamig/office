@@ -13,6 +13,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "vault.openItems",
   "vault.waiting",
   "projects.runs",
+  "runs.background",
   "projects.unrealFile",
   "notes.read",
   "search.items",

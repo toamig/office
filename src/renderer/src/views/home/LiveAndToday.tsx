@@ -1,4 +1,5 @@
 import { StatusChip } from "../../components/StatusChip";
+import { BackgroundRuns, useBackgroundRuns } from "../../components/BackgroundRuns";
 import { useQuery } from "../../lib/hooks";
 import { useUi } from "../../stores/ui";
 import { Card, EmptyState, LinkButton, StatusBadge } from "../../ui";
@@ -7,6 +8,7 @@ import { Card, EmptyState, LinkButton, StatusBadge } from "../../ui";
 export function LiveAgentsPanel() {
   const navigate = useUi((s) => s.navigate);
   const sessions = useQuery("sessions.list", {}, ["session.status", "session.activity"]);
+  const runs = useBackgroundRuns();
   const all = sessions.data ?? [];
   const live = all.filter((s) => s.running);
   const idle = all.filter((s) => s.idle);
@@ -14,9 +16,9 @@ export function LiveAgentsPanel() {
     (s) => !s.running && (s.status === "exited" || s.status === "failed"),
   );
   return (
-    <Card title="Live sessions" testId="panel-live">
-      {live.length === 0 && finished.length === 0 && (
-        <EmptyState title="No sessions running">Start one from a project page.</EmptyState>
+    <Card title="Live" testId="panel-live">
+      {live.length === 0 && runs.length === 0 && finished.length === 0 && (
+        <EmptyState title="Nothing running">Start a session from a project page.</EmptyState>
       )}
       {live.map((s) => (
         <div key={s.id} className="ui-line" data-testid="live-agent">
@@ -27,6 +29,7 @@ export function LiveAgentsPanel() {
           </div>
         </div>
       ))}
+      <BackgroundRuns runs={runs} />
       {finished.length > 0 && (
         <div className="ui-line-sub pt-2" data-testid="finished-agents">
           {finished.length} finished {finished.length === 1 ? "session" : "sessions"} to wrap up in

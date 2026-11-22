@@ -231,6 +231,7 @@ export class BriefService {
           prompt: buildBriefPrompt(activities, needsYou),
         });
         const result = await handle.result;
+        if (result.error === "cancelled") return { date, count: 0 };
         if (result.ok) lines = parseBriefLines(result.resultText);
       } catch {
         /* the plain lines below are used */

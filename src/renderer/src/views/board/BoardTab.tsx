@@ -32,7 +32,7 @@ const columns: Array<{ id: string; title: string; match: (t: TaskView) => boolea
   { id: "done", title: "Done", match: (t) => t.status === "done" },
   {
     id: "failed",
-    title: "Failed",
+    title: "Failed or stopped",
     match: (t) => t.status === "failed" || t.status === "cancelled",
   },
 ];

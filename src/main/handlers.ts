@@ -333,7 +333,7 @@ function registerSessionHandlers(ctx: AppContext): void {
     await ctx.sessions.stop(req.id);
     if (ctx.sessions.get(req.id).running) throw new IpcFailure("busy", "The session is still stopping.");
     const result = await ctx.recorder.record(ctx.sessions.get(req.id));
-    if (!result.error) ctx.sessions.markCaptured(req.id);
+    if (!result.error && !result.stopped) ctx.sessions.markCaptured(req.id);
     ctx.sessions.archive(req.id);
     return result;
   });
@@ -532,6 +532,8 @@ function registerConfigHandlers(ctx: AppContext): void {
     ctx.editor.setOverride(req.projectId, req.role, req.target),
   );
   ctx.ipc.handle("workflows.list", () => ctx.scheduler.list());
+  ctx.ipc.handle("runs.background", (req) => ctx.runs.background(req.includeStopped));
+  ctx.ipc.handle("runs.stop", (req) => ctx.runs.cancel(req.id));
   ctx.ipc.handle("workflows.save", (req) => ctx.editor.saveWorkflow(req));
   ctx.ipc.handle("workflows.create", (req) => ctx.editor.saveWorkflow(req, { absent: true }));
   ctx.ipc.handle("workflows.setEnabled", (req) => ctx.editor.setWorkflowEnabled(req.id, req.enabled));

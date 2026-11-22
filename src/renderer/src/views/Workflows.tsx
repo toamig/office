@@ -1,12 +1,13 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
 import { brainUpkeepTemplate, describeSchedule, workflowOutputLabels, type Workflow, type WorkflowView } from "@shared/workflow";
+import { BackgroundRuns, useBackgroundRuns } from "../components/BackgroundRuns";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { Banner, Button, Card, Dialog, EmptyState, OverflowMenu, Page, Time, notifyError } from "../ui";
 import { WorkflowForm } from "./workflows/WorkflowForm";
 
-const runLabels = { running: "Running", done: "Completed", failed: "Failed", cancelled: "Cancelled" };
+const runLabels = { running: "Running", done: "Completed", failed: "Failed", cancelled: "Stopped" };
 const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
 
 function WorkflowTimes({ workflow }: { workflow: WorkflowView }) {
@@ -35,6 +36,7 @@ function WorkflowTimes({ workflow }: { workflow: WorkflowView }) {
 
 export function Workflows() {
   const list = useQuery("workflows.list", undefined, ["workspace.changed", "workflow.changed"]);
+  const runs = useBackgroundRuns(true);
   const projects = useQuery("projects.list", undefined, ["workspace.changed"]);
   const providers = useQuery("providers.list");
   const workspace = useQuery("workspace.get", undefined, ["workspace.changed"]);
@@ -66,6 +68,7 @@ export function Workflows() {
       <Button variant="primary" onClick={() => { setTemplate(false); setEditor(null); }}><Plus /> New workflow</Button>
     }>
       {list.error && <Banner tone="danger">{list.error}</Banner>}
+      {runs.length > 0 && <Card title="Background runs"><BackgroundRuns runs={runs} /></Card>}
       {list.data?.length === 0 && <EmptyState title="No workflows yet" />}
       {list.data?.map((workflow) => {
         const running = workflow.lastRun?.status === "running";

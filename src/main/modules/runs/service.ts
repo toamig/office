@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { appendFileSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import { applyAutonomy, effectiveAutonomy } from "../../../shared/autonomy";
+import type { BackgroundRun } from "../../../shared/models";
 import type { Role } from "../../../shared/types";
 import type { Bus } from "../../core/bus";
 import type { Db } from "../../core/db";
@@ -17,6 +18,7 @@ export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" 
 
 export interface RunRequest {
   kind: RunKind;
+  title?: string;
   providerId: string;
   role?: Role;
   cwd: string;
@@ -60,9 +62,18 @@ export interface RunServiceDeps {
 /** Runs that only read: they get read tools and nothing ever asks. */
 const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route", "workflow"];
 
+const TITLES: Record<RunKind, string> = {
+  ask: "Ask Brain", brief: "Morning brief", stage: "Builder", capture: "Session capture",
+  "explore-summary": "Chat summary", automation: "Automation", recorder: "Recorder", route: "Request routing", workflow: "Workflow",
+};
+
+function runTitle(kind: string): string {
+  return Object.hasOwn(TITLES, kind) ? TITLES[kind as RunKind] : kind;
+}
+
 /** Runs headless agent tasks and records each one: a database row plus events.jsonl and result.md. */
 export class RunService {
-  private readonly active = new Map<string, AgentRun>();
+  private readonly active = new Map<string, { run: AgentRun; info: BackgroundRun }>();
 
   constructor(private readonly deps: RunServiceDeps) {
     // A run that was going when the app closed did not finish.
@@ -78,6 +89,8 @@ export class RunService {
     if (!provider) throw new IpcFailure("no-provider", `Unknown provider "${req.providerId}"`);
     const id = randomUUID();
     const dir = join(this.deps.runsDir, id);
+    const title = req.title || runTitle(req.kind);
+    const startedAt = nowIso();
     const role = req.kind === "stage" && req.role?.autonomy
       ? applyAutonomy(req.role, effectiveAutonomy(req.role.autonomy, this.deps.fullAutoConfirmed?.() === true))
       : req.role;
@@ -85,8 +98,8 @@ export class RunService {
     mkdirSync(dir, { recursive: true });
     this.deps.db
       .prepare(
-        `INSERT INTO runs (id, kind, provider, model, project_id, task_id, status, started_at, output_path)
-         VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?)`,
+        `INSERT INTO runs (id, kind, provider, model, project_id, task_id, status, started_at, output_path, title)
+         VALUES (?, ?, ?, ?, ?, ?, 'running', ?, ?, ?)`,
       )
       .run(
         id,
@@ -95,8 +108,9 @@ export class RunService {
         req.role?.model ?? null,
         req.projectId ?? null,
         req.taskId ?? null,
-        nowIso(),
+        startedAt,
         join(dir, "result.md"),
+        title,
       );
 
     const run = provider.headless({
@@ -111,10 +125,13 @@ export class RunService {
       ...(req.brain ? { brain: req.brain } : {}),
       ...(req.addDirs ? { addDirs: req.addDirs } : {}),
     });
-    this.active.set(id, run);
+    const info: BackgroundRun = { id, title, startedAt, endedAt: null, status: "running" };
+    const active = { run, info };
+    this.active.set(id, active);
+    this.deps.bus.emit("run.started", { runId: id, kind: req.kind }, req.projectId);
 
     const log = join(dir, "events.jsonl");
-    void (async () => {
+    const recorded = (async () => {
       for await (const event of run.events) {
         appendFileSync(log, `${JSON.stringify(event)}\n`);
         req.onEvent?.(event);
@@ -122,21 +139,23 @@ export class RunService {
       }
     })().catch(() => undefined);
 
-    const result = run.done.then((done) => {
+    const result = run.done.then(async (done) => {
+      await recorded;
+      const cancelled = active.info.status === "stopping" || done.error === "cancelled";
+      const outcome = cancelled ? { ...done, ok: false, error: "cancelled" } : done;
       this.active.delete(id);
       this.deps.permissions?.broker.cancelRun(id);
-      writeTextFile(join(dir, "result.md"), `${done.resultText}\n`);
-      const cancelled = done.error === "cancelled";
+      writeTextFile(join(dir, "result.md"), `${outcome.resultText}\n`);
       this.deps.db
         .prepare("UPDATE runs SET status = ?, ended_at = ?, error = ? WHERE id = ?")
         .run(
-          done.ok ? "done" : cancelled ? "cancelled" : "failed",
+          outcome.ok ? "done" : cancelled ? "cancelled" : "failed",
           nowIso(),
-          done.error ?? null,
+          outcome.error ?? null,
           id,
         );
-      this.deps.bus.emit("run.done", { runId: id, kind: req.kind, ok: done.ok }, req.projectId);
-      return { ...done, id };
+      this.deps.bus.emit("run.done", { runId: id, kind: req.kind, ok: outcome.ok, cancelled }, req.projectId);
+      return { ...outcome, id };
     });
     return { id, dir, run, result };
   }
@@ -158,8 +177,25 @@ export class RunService {
   }
 
   cancel(id: string): void {
-    this.active.get(id)?.cancel();
+    const active = this.active.get(id);
+    if (active?.info.status === "running") {
+      active.info.status = "stopping";
+      active.run.cancel();
+      this.deps.bus.emit("run.stopping", { runId: id });
+    }
     this.deps.permissions?.broker.cancelRun(id);
+  }
+
+  background(includeStopped: boolean): BackgroundRun[] {
+    const active = [...this.active.values()].map(({ info }) => info).reverse();
+    if (!includeStopped) return active;
+    const stopped = this.deps.db.prepare(`SELECT id, kind, title, started_at AS startedAt, ended_at AS endedAt
+      FROM runs WHERE status = 'cancelled' ORDER BY ended_at DESC LIMIT 10`).all() as Array<{
+        id: string; kind: string; title: string | null; startedAt: string; endedAt: string | null;
+      }>;
+    return [...active, ...stopped.map(({ kind, title, ...row }): BackgroundRun => ({
+      ...row, title: title ?? runTitle(kind), status: "stopped",
+    }))];
   }
 
   /** Recent runs, newest first, optionally of one kind. */

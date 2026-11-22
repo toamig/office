@@ -142,12 +142,9 @@ export function startAgentRun(
     const fromFile = finalText?.() ?? null;
     const text = resultText || fromFile || lastText;
     const ok = !cancelled && exit.code === 0 && resultOk && !error;
-    if (!ok && !error)
-      error = cancelled
-        ? "cancelled"
-        : (sawResult && !resultOk ? resultText : "") ||
-          exit.stderr.trim().split("\n").pop() ||
-          `exit code ${exit.code}`;
+    if (cancelled) error = "cancelled";
+    else if (!ok && !error) error = (sawResult && !resultOk ? resultText : "") ||
+      exit.stderr.trim().split("\n").pop() || `exit code ${exit.code}`;
     if (!sawResult) queue.push({ kind: "result", text, ok });
     finished = true;
     wake?.();
