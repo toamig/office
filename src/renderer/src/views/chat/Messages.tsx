@@ -3,7 +3,7 @@ import { useState } from "react";
 import { formatDuration, type ChatItem } from "@shared/chat";
 import { chatFailure } from "@shared/chat-failure";
 import { Markdown } from "../../components/Markdown";
-import { Button, Textarea } from "../../ui";
+import { Button, OverflowMenu, Textarea } from "../../ui";
 import { ToolCard } from "./ToolCard";
 
 /** Thinking is folded away under a toggle. */
@@ -21,16 +21,17 @@ function Thinking({ text }: { text: string }) {
 }
 
 /** One thing in the conversation: a bubble, an answer, a tool card, a quiet error, a turn footer. */
-export function ChatMessage({ item, tool, working, onRecover, onEdit }: {
+export function ChatMessage({ item, tool, working, onRecover, onEdit, onRewind }: {
   item: ChatItem;
   tool: string;
   working: boolean;
   onRecover?: (kind: ReturnType<typeof chatFailure>["kind"]) => void;
   onEdit?: (value: string) => Promise<boolean>;
+  onRewind?: () => void;
 }) {
   switch (item.kind) {
     case "user":
-      return <OwnerMessage item={item} onEdit={onEdit} working={working} />;
+      return <OwnerMessage item={item} onEdit={onEdit} onRewind={onRewind} working={working} />;
     case "assistant":
       // A message that has not said anything yet is not drawn; the working dots stand in for it.
       if (!item.text && !item.thinking) return null;
@@ -89,17 +90,22 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit }: {
   }
 }
 
-function OwnerMessage({ item, working, onEdit }: {
+function OwnerMessage({ item, working, onEdit, onRewind }: {
   item: Extract<ChatItem, { kind: "user" }>;
   working: boolean;
   onEdit?: (value: string) => Promise<boolean>;
+  onRewind?: () => void;
 }) {
   const [draft, setDraft] = useState<string>();
   const [sending, setSending] = useState(false);
+  const rewind = onRewind && !working && <OverflowMenu label="Message actions" items={[{
+    label: "Restore files to before this", onSelect: onRewind,
+  }]} />;
   if (item.brief) {
     return (
       <section className="office-brief text-selectable" data-testid="chat-user">
         <p className="ui-muted">Brief from Office</p>
+        {rewind}
         <h3 className="font-semibold">{item.brief.title}</h3>
         <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
           <dt className="ui-muted">Where</dt><dd className="break-words">{item.brief.where}</dd>
@@ -119,6 +125,7 @@ function OwnerMessage({ item, working, onEdit }: {
           <Textarea label="Edit message" value={draft} rows={4} onChange={(event) => setDraft(event.target.value)} />
         )}
         {item.images > 0 && <div className="bubble-note">{item.images} image{item.images > 1 ? "s" : ""} attached</div>}
+        {rewind}
         {onEdit && (draft === undefined
           ? <Button variant="ghost" size="sm" disabled={working} onClick={() => setDraft(item.text)}>Edit and resend</Button>
           : <div className="flex justify-end gap-2 pt-2">

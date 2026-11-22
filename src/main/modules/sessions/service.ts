@@ -112,6 +112,7 @@ export class SessionService {
       extra: { addDirs?: string[]; restricted?: boolean; incognito?: boolean },
     ) => void;
     stop: (id: string) => void;
+    archive: (id: string) => void;
     running: (id: string) => boolean;
     activity: (id: string) => string | undefined;
     /** Turns incognito off for a chat, writing what was said so far to its log. */
@@ -664,6 +665,7 @@ export class SessionService {
     this.deps.db
       .prepare("UPDATE sessions SET archived_at = ?, updated_at = ? WHERE id = ?")
       .run(nowIso(), nowIso(), id);
+    this.chat?.archive(id);
     this.emitStatus(id);
   }
 

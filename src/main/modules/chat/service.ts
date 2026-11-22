@@ -9,6 +9,7 @@ import type {
   ChatState,
   OfficeBrief,
   QueuedMessage,
+  RewindPreview,
   SessionRow,
 } from "../../../shared/models";
 import type { Bus } from "../../core/bus";
@@ -22,9 +23,10 @@ import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
 import { ClaudeChatParser, CodexChatParser, initializationCommands } from "./events";
 import { chatFailure } from "../../../shared/chat-failure";
-import { activityLabel, emptyActivity, trackActivity, trackQueue, type TurnActivity } from "../../../shared/chat";
+import { activityLabel, emptyActivity, REWIND_LIMIT, trackActivity, trackQueue, type TurnActivity } from "../../../shared/chat";
 import { redactClaudeToken } from "../../core/claude-secret";
 import { ClaudeCodeProvider } from "../providers/claude-code";
+import { dropSnapshot, previewSnapshot, pruneSnapshots, restoreSnapshot, rewindRoot, saveSnapshot } from "./rewind";
 
 export interface ChatServiceDeps {
   bus: Bus;
@@ -72,6 +74,9 @@ export class ChatService {
   private readonly activities = new Map<string, TurnActivity>();
   private readonly queues = new Map<string, QueuedMessage[]>();
   private readonly commandProbes = new Map<string, Promise<string[]>>();
+  private readonly preparing = new Map<string, string>();
+  private readonly restoring = new Set<string>();
+  private readonly rewindHints = new Map<string, string | null>();
   /** What an incognito chat has said: kept in memory only, never in a file. */
   private readonly memory = new Map<string, ChatLine[]>();
   private readonly unsavedImages = new Map<string, Map<string, ChatImage[]>>();
@@ -136,7 +141,7 @@ export class ChatService {
 
   visibleHistory(id: string): ChatLine[] {
     const history = this.history(id);
-    if (this.live.has(id)) return history;
+    if (this.live.has(id) || this.preparing.has(id)) return history;
     const last = history.findLast(({ event }) =>
       event.t === "user" || event.t === "result" || event.t === "error" || event.t === "stopped" || event.t === "cleared");
     if (last?.event.t !== "user") return history;
@@ -198,6 +203,7 @@ export class ChatService {
     this.incognitoDirs.delete(id);
     this.seqs.delete(id);
     this.queues.delete(id);
+    this.rewindHints.delete(id);
     this.live.delete(id);
   }
 
@@ -241,7 +247,7 @@ export class ChatService {
   }
 
   running(id: string): boolean {
-    return this.live.has(id);
+    return this.live.has(id) || this.preparing.has(id);
   }
 
   activity(id: string): string | undefined {
@@ -250,7 +256,7 @@ export class ChatService {
   }
 
   private working(id: string): boolean {
-    return this.live.get(id)?.working ?? false;
+    return this.preparing.has(id) || Boolean(this.live.get(id)?.working);
   }
 
   async state(id: string): Promise<ChatState> {
@@ -334,6 +340,45 @@ export class ChatService {
     this.append(id, { t: "cleared" });
   }
 
+  private projectRoot(row: SessionRow): string | undefined {
+    if (row.incognito) return;
+    return rewindRoot(row.cwd);
+  }
+
+  private rewindProject(id: string): string {
+    const row = this.session(id);
+    const root = this.projectRoot(row);
+    if (!root || row.mode !== "chat" || row.archivedAt) throw new IpcFailure("no-snapshot", "This session has no file snapshots.");
+    if (this.restoring.has(root) || [...this.activities.keys()].some((key) => {
+      const active = this.deps.sessions.find(key);
+      return active && this.projectRoot(active) === root;
+    })) throw new IpcFailure("busy", "Finish or stop the active turns in this project before restoring files.");
+    return root;
+  }
+
+  async rewindPreview(id: string, messageId: string): Promise<RewindPreview> {
+    return previewSnapshot(this.rewindProject(id), id, messageId);
+  }
+
+  async rewindFiles(id: string, messageId: string, revision: string): Promise<void> {
+    const root = this.rewindProject(id);
+    this.restoring.add(root);
+    try {
+      await restoreSnapshot(root, id, messageId, revision);
+      this.append(id, { t: "rewound", id: messageId });
+      this.rewindHints.set(id, messageId);
+    } finally {
+      this.restoring.delete(root);
+    }
+  }
+
+  archive(id: string): void {
+    const row = this.deps.sessions.find(id);
+    const root = row && this.projectRoot(row);
+    if (root) void pruneSnapshots(root, id, []).catch(() => undefined);
+    this.rewindHints.delete(id);
+  }
+
   // ---------- sending ----------
 
   private queue(id: string): QueuedMessage[] {
@@ -408,6 +453,8 @@ export class ChatService {
     if (this.working(id)) throw new IpcFailure("busy", "A turn is still running. Stop it first.");
     const provider = this.deps.providers.get(row.provider);
     if (!provider?.chatCommand) throw new IpcFailure("no-chat", "This tool has no chat mode");
+    const root = this.projectRoot(row);
+    if (root && this.restoring.has(root)) throw new IpcFailure("busy", "Wait for the file restore to finish.");
     if (options) this.setOptions(id, options);
     if (images.length) this.saveImages(id, message, images);
     text = redactClaudeToken(text);
@@ -415,9 +462,46 @@ export class ChatService {
     this.append(id, { t: "turn-start" });
     this.deps.sessions.setStatus(id, "working");
 
+    if (root) {
+      this.preparing.set(id, message);
+      void this.prepareTurn(root, row, provider, message, text, images);
+    } else this.launchTurn(row, provider, text, images);
+  }
+
+  private async prepareTurn(root: string, row: SessionRow, provider: Provider, message: string, text: string, images: ChatImage[]): Promise<void> {
+    const id = row.id;
+    try {
+      await saveSnapshot(root, id, message);
+      if (this.preparing.get(id) !== message) {
+        await dropSnapshot(root, id, message);
+        return;
+      }
+      this.append(id, { t: "snapshot", id: message });
+      const keep = this.history(id).flatMap(({ event }) => event.t === "user" ? [event.id] : []).slice(-REWIND_LIMIT);
+      await pruneSnapshots(root, id, keep);
+    } catch {
+      // A missing Git tool or an unavailable working tree still lets the owner send a message.
+    }
+    if (this.preparing.get(id) !== message) return;
+    this.preparing.delete(id);
+    this.launchTurn(row, provider, text, images);
+  }
+
+  private launchTurn(row: SessionRow, provider: Provider, text: string, images: ChatImage[]): void {
+    const id = row.id;
     try {
       this.nameFromFirstMessage(row, text);
-      this.startTurn(row, provider, text, images);
+      if (!this.rewindHints.has(id)) {
+        const hint = this.history(id).findLast(({ event }) => event.t === "rewound" || event.t === "rewind-notified")?.event;
+        this.rewindHints.set(id, hint?.t === "rewound" ? hint.id : null);
+      }
+      const hint = this.rewindHints.get(id);
+      const message = hint ? `Office restored the project files to their state before message ${hint}. Check the current files before continuing.\n\n${text}` : text;
+      this.startTurn(row, provider, message, images);
+      if (hint) {
+        this.append(id, { t: "rewind-notified" });
+        this.rewindHints.set(id, null);
+      }
     } catch (error) {
       this.append(id, { t: "error", message: error instanceof Error ? error.message : String(error) });
       this.deps.sessions.setStatus(id, "idle");
@@ -694,6 +778,7 @@ export class ChatService {
 
   /** Interrupts a turn while retaining Claude's input stream and the work it has already done. */
   interrupt(id: string): Promise<void> {
+    if (this.cancelPreparation(id)) return Promise.resolve();
     const live = this.live.get(id);
     if (!live?.working) return Promise.resolve();
     if (live.interruption) return live.interruption.done;
@@ -734,6 +819,7 @@ export class ChatService {
 
   /** Stop ends the program and its children; the next message starts it again with --resume. */
   stop(id: string): void {
+    this.cancelPreparation(id);
     const live = this.live.get(id);
     if (!live) return;
     const wasWorking = live.working;
@@ -744,6 +830,13 @@ export class ChatService {
       this.deps.sessions.setStatus(id, "idle");
       this.deps.bus.emit("chat.state", { sessionId: id });
     }
+  }
+
+  private cancelPreparation(id: string): boolean {
+    if (!this.preparing.delete(id)) return false;
+    this.append(id, { t: "stopped", detail: "recording the file snapshot" });
+    this.deps.sessions.setStatus(id, "idle");
+    return true;
   }
 
   /** An approval card opened or was answered: the chat needs the owner while one is open. */

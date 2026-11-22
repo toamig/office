@@ -69,6 +69,7 @@ import {
   PermissionRequest,
   ChatImage,
   ChatLine,
+  RewindPreview,
   ChatOptions,
   ChatState,
 } from "./models";
@@ -458,6 +459,8 @@ export const channels = {
   "chat.history": { req: z.object({ id: z.string() }), res: z.array(ChatLine) },
   "chat.commands": { req: z.object({ id: z.string() }), res: z.array(z.string()) },
   "chat.clear": { req: z.object({ id: z.string() }), res: z.void() },
+  "chat.rewindPreview": { req: z.object({ id: z.string(), messageId: z.string() }), res: RewindPreview },
+  "chat.rewindFiles": { req: z.object({ id: z.string(), messageId: z.string(), revision: z.string() }), res: z.void() },
   "chat.send": {
     req: z.object({
       id: z.string(),

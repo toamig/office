@@ -26,7 +26,10 @@ export interface ChatState {
   activity: TurnActivity;
   queue: QueuedMessage[];
   commands: string[];
+  snapshots: string[];
 }
+
+export const REWIND_LIMIT = 50;
 
 interface RunningTool { id: string; label: string }
 
@@ -38,7 +41,7 @@ export interface TurnActivity {
 }
 
 export const emptyActivity = (): TurnActivity => ({ plan: [], tools: [] });
-export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity(), queue: [], commands: [] });
+export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity(), queue: [], commands: [], snapshots: [] });
 
 export function trackQueue(queue: QueuedMessage[], event: ChatEvent): QueuedMessage[] {
   if (event.t === "user" || event.t === "queue-remove") return queue.filter((message) => message.id !== event.id);
@@ -169,15 +172,23 @@ export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): Ch
       return { ...state, commands: event.names };
     case "cleared":
       return { ...emptyChat(), queue: state.queue, commands: state.commands };
+    case "snapshot":
+      return { ...state, snapshots: [...state.snapshots, event.id] };
+    case "rewound":
+    case "rewind-notified":
+      return state;
     case "queued":
     case "queue-remove":
       return state;
-    case "user":
+    case "user": {
+      const recent = new Set(items.filter((item) => item.kind === "user").slice(1 - REWIND_LIMIT).map((item) => item.id));
       return {
         ...state,
+        snapshots: state.snapshots.filter((id) => recent.has(id)),
         items: [...items, { kind: "user", id: event.id, text: event.text, images: event.images, brief: event.brief }],
         working: true,
       };
+    }
     case "turn-start":
       return { ...state, working: true };
     case "plan":

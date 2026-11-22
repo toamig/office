@@ -7,7 +7,7 @@ export interface RunOptions {
   cwd?: string;
   env?: Record<string, string | undefined>;
   timeoutMs?: number;
-  input?: string;
+  input?: string | Buffer;
   /** Keep the process's stdin open, so lines can be written to it while it runs (see spawnStream). */
   keepStdin?: boolean;
   prepare?: () => Promise<Record<string, string>>;
@@ -124,13 +124,19 @@ function spawnResolved(cmd: string, args: string[], opts: RunOptions): ChildProc
 }
 
 /** Runs a command without a shell. Never rejects: failures come back as code -1 with a message. */
-export function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<RunResult> {
+export async function run(cmd: string, args: string[], opts: RunOptions = {}): Promise<RunResult> {
+  const result = await runBytes(cmd, args, opts);
+  return { ...result, stdout: redactClaudeToken(result.stdout.toString("utf8"), opts.env?.[CLAUDE_TOKEN_ENV]) };
+}
+
+/** Raw stdout for binary-producing commands such as git cat-file. */
+export function runBytes(cmd: string, args: string[], opts: RunOptions = {}): Promise<Omit<RunResult, "stdout"> & { stdout: Buffer }> {
   return new Promise((resolvePromise) => {
     let child: ChildProcess;
     try {
       child = spawnResolved(cmd, args, opts);
     } catch (err) {
-      resolvePromise({ code: -1, stdout: "", stderr: (err as Error).message, timedOut: false });
+      resolvePromise({ code: -1, stdout: Buffer.alloc(0), stderr: (err as Error).message, timedOut: false });
       return;
     }
     const out: Buffer[] = [];
@@ -143,7 +149,7 @@ export function run(cmd: string, args: string[], opts: RunOptions = {}): Promise
       clearTimeout(timer);
       resolvePromise({
         code,
-        stdout: redactClaudeToken(Buffer.concat(out).toString("utf8"), opts.env?.[CLAUDE_TOKEN_ENV]),
+        stdout: Buffer.concat(out),
         stderr: redactClaudeToken(Buffer.concat(err).toString("utf8") + extra, opts.env?.[CLAUDE_TOKEN_ENV]),
         timedOut,
       });

@@ -576,6 +576,12 @@ export type PlanStep = z.infer<typeof PlanStep>;
 export const QueuedMessage = z.object({ id: z.string(), text: z.string(), images: z.number() });
 export type QueuedMessage = z.infer<typeof QueuedMessage>;
 
+export const RewindPreview = z.object({
+  revision: z.string(),
+  files: z.array(z.object({ path: z.string(), action: z.enum(["create", "modify", "delete"]) })),
+});
+export type RewindPreview = z.infer<typeof RewindPreview>;
+
 export const ChatEvent = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("user"),
@@ -589,6 +595,9 @@ export const ChatEvent = z.discriminatedUnion("t", [
   z.object({ t: z.literal("turn-start") }),
   z.object({ t: z.literal("commands"), names: z.array(z.string()) }),
   z.object({ t: z.literal("cleared") }),
+  z.object({ t: z.literal("snapshot"), id: z.string() }),
+  z.object({ t: z.literal("rewound"), id: z.string() }),
+  z.object({ t: z.literal("rewind-notified") }),
   z.object({ t: z.literal("plan"), id: z.string(), steps: z.array(PlanStep) }),
   /** A new assistant message begins (its text streams in as text-delta events). */
   z.object({ t: z.literal("assistant-start"), id: z.string() }),

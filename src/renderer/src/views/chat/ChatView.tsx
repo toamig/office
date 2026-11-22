@@ -10,13 +10,14 @@ import { StatusChip } from "../../components/StatusChip";
 import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
-import { Button, Dialog, Dropdown, OverflowMenu, notifyError } from "../../ui";
+import { Button, Dropdown, OverflowMenu, notifyError } from "../../ui";
 import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
 import { LivePlan, ToolGroup, TurnStatus } from "./Activity";
 import { Composer } from "./Composer";
 import { slashMenu, type SlashCommand } from "./commands";
 import { ChatMessage } from "./Messages";
 import { QueuedMessage } from "./QueuedMessage";
+import { RewindDialog } from "./RewindDialog";
 
 function useConversation(id: string): { conversation: Conversation; ready: boolean } {
   const [conversation, setConversation] = useState(emptyChat);
@@ -103,7 +104,7 @@ export function ChatView({ session, onChanged, headerActions }: {
   const [state, setState] = useState<ChatState | null>(null);
   const [login, setLogin] = useState<{ messageId: string; run: ToolRun }>();
   const [discovered, setDiscovered] = useState<string[]>();
-  const [rewind, setRewind] = useState(false);
+  const [rewind, setRewind] = useState<{ messageId?: string }>();
   const navigate = useUi((store) => store.navigate);
   const chat = useRef<HTMLDivElement>(null);
   const list = useRef<HTMLDivElement>(null);
@@ -169,7 +170,7 @@ export function ChatView({ session, onChanged, headerActions }: {
           navigate("agents");
           break;
         case "rewind":
-          setRewind(true);
+          setRewind({});
           break;
       }
     });
@@ -184,6 +185,7 @@ export function ChatView({ session, onChanged, headerActions }: {
     } });
   });
   const lastOwner = items.findLast((item) => item.kind === "user")?.id;
+  const snapshots = new Set(conversation.snapshots);
   const retryTargets = new Map<number, string>();
   let lastMessage: string | undefined;
   for (const [index, item] of items.entries()) {
@@ -215,6 +217,7 @@ export function ChatView({ session, onChanged, headerActions }: {
             const { item, index } = group;
             const messageId = retryTargets.get(index);
             return <ChatMessage key={`${item.kind}-${"id" in item ? item.id : index}`} item={item} tool={toolLabel} working={working}
+              onRewind={item.kind === "user" && snapshots.has(item.id) ? () => setRewind({ messageId: item.id }) : undefined}
               onEdit={item.kind === "user" && !item.brief && item.id === lastOwner
                 ? (text) => resend(item.id, text) : undefined}
               onRecover={item.kind === "error" && messageId ? (kind) => {
@@ -258,14 +261,9 @@ export function ChatView({ session, onChanged, headerActions }: {
       </div>
       {login && <ToolRunDialog key={login.run.session.id} run={login.run} onClose={() => setLogin(undefined)}
         onSuccess={() => void resend(login.messageId)} />}
-      {rewind && <Dialog title="Rewind" onClose={() => setRewind(false)} footer={<>
-        <Button onClick={() => setRewind(false)}>Close</Button>
-        {claude && !plain && <Button variant="primary" disabled={working} onClick={() => {
-          void openTerminal().then((opened) => { if (opened) setRewind(false); });
-        }}>Rewind the conversation</Button>}
-      </>}>
-        {claude && !plain ? <p>Open this conversation in the terminal and run /rewind.</p> : <p>No file snapshots are available.</p>}
-      </Dialog>}
+      {rewind && <RewindDialog id={id} initialMessage={rewind.messageId}
+        messages={items.filter((item) => item.kind === "user").filter((item) => snapshots.has(item.id)).reverse()}
+        terminal={claude && !plain && !working ? openTerminal : undefined} onClose={() => setRewind(undefined)} />}
     </div>
   );
 }

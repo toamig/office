@@ -46,6 +46,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "chat.state",
   "chat.history",
   "chat.commands",
+  "chat.rewindPreview",
   "chat.files",
   "permissions.list",
   "app.chrome",
