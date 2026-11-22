@@ -417,7 +417,7 @@ export type Inventory = z.infer<typeof Inventory>;
 
 /** One step of the welcome flow. */
 export const SetupStep = z.object({
-  id: z.enum(["workspace", "projects", "tools", "add", "notifications"]),
+  id: z.enum(["workspace", "projects", "tools", "add", "instructions", "notifications"]),
   label: z.string(),
   /** A required step has to be met before the app opens; the notification step is optional. */
   required: z.boolean(),

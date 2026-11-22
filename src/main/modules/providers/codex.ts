@@ -8,6 +8,7 @@ import { OFFICE_TOOL_GUIDANCE } from "../../../shared/office-tools";
 import { PERMISSION_TOOL_TIMEOUT_MS } from "../runs/mcp-config";
 import { resolveCommand, resolveTool, spawnStream } from "../../core/exec";
 import { codexChatModels } from "./chat-models";
+import { brainInstructions } from "../vault/scope";
 import { codexConfigPath, dataDir } from "../../core/paths";
 import { writeTextFile } from "../../core/settings";
 import { detectCodex } from "../setup/detect";
@@ -138,7 +139,7 @@ export function codexHeadlessArgs(
     if (!o.tools) flags.push("-c", "features.shell_tool=false");
   }
   flags.push("--skip-git-repo-check", "-o", resultFile);
-  const instructions = [o.role?.instructions.trim(), o.brain?.instructions, o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
+  const instructions = [o.role?.instructions.trim(), brainInstructions(o.brain, "codex"), o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
   const prompt = instructions ? `${instructions}\n\n${o.prompt}` : o.prompt;
   const exec = o.role?.autonomy || o.permission?.kind === "readonly" ? ["-a", "never", "exec"] : ["exec"];
   return o.resumeId ? [...exec, "resume", ...flags, o.resumeId, prompt] : [...exec, ...flags, prompt];
@@ -215,7 +216,7 @@ export class CodexProvider implements Provider {
     }[o.role.autonomy]);
     for (const dir of o.addDirs ?? []) args.push("--add-dir", dir);
     args.push(...officeMcpFlags(o));
-    const instructions = [o.role?.instructions, o.brain?.instructions, o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
+    const instructions = [o.role?.instructions, brainInstructions(o.brain, "codex"), o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
     if (instructions) args.push("-c", `developer_instructions=${JSON.stringify(instructions)}`);
     args.push("-C", o.cwd);
     return args;

@@ -25,6 +25,7 @@ export interface PointerInfo {
   notesFolder: string;
   /** The brain's git remote, when it has one. */
   remote: string | null;
+  rules?: string[];
 }
 
 /** The block, without the lead marker. */
@@ -37,6 +38,7 @@ export function pointerBlock(info: PointerInfo): string {
     ...(info.remote ? [`The brain's git remote is \`${info.remote}\`.`] : []),
     "Read `Overview.md` there first. Record decisions in it, and what is left to do in `OpenItems.md`; what waits on",
     'the owner goes under its "Waiting on you" heading.',
+    ...(info.rules?.length ? ["", ...info.rules] : []),
     POINTER_END,
     "",
   ].join("\n");

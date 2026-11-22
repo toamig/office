@@ -7,6 +7,7 @@ import { claudeInventory } from "../setup/inventory";
 import { parseClaudeLine, startAgentRun } from "./stream";
 import { ClaudeAuth, type ClaudeTokenStore } from "./claude-auth";
 import { claudeChatModel } from "./chat-models";
+import { brainInstructions } from "../vault/scope";
 import type {
   AgentRun,
   ChatCommandOptions,
@@ -213,7 +214,7 @@ export class ClaudeCodeProvider implements Provider {
     if (role?.effort) flags.push("--effort", role.effort);
     const chosen = mode ?? role?.permissionMode;
     if (chosen) flags.push("--permission-mode", chosen);
-    const instructions = [role?.instructions, o.brain?.instructions, o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
+    const instructions = [role?.instructions, brainInstructions(o.brain, "claude-code"), o.officeMcp && OFFICE_TOOL_GUIDANCE].filter(Boolean).join("\n\n");
     if (instructions) flags.push("--append-system-prompt", instructions);
     for (const dir of new Set([...(o.addDirs ?? []), ...(o.brain?.writable ?? [])]))
       flags.push("--add-dir", dir);

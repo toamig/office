@@ -5,6 +5,7 @@ import type { Project, Workspace } from "../../../shared/types";
 import type { Bus } from "../../core/bus";
 import { parseOpenItems, waitingIsDue } from "./openitems";
 import { notesPath } from "./scope";
+import { readRulePack } from "./rule-pack";
 
 export interface VaultServiceDeps {
   bus: Bus;
@@ -80,6 +81,11 @@ export class VaultService {
     const files = (this.deps.workspace()?.projects ?? [])
       .map((p) => this.openItemsFile(p.id))
       .filter((f): f is string => f !== null);
+    const root = this.deps.workspaceRoot();
+    for (const path of ["Common/rules.json", "Rules/rules.json", ...(readRulePack(root)?.load.map((entry) => entry.file) ?? [])]) {
+      const file = notesPath(root, path);
+      if (file) files.push(file);
+    }
     if (files.length === 0) return;
     this.watcher = chokidar.watch(files, { ignoreInitial: true });
     this.watcher.on("all", (_event, path) => {

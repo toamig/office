@@ -9,6 +9,7 @@ import { PreferencesPanel } from "./setup/PreferencesPanel";
 import { ProjectsStep } from "./setup/ProjectsStep";
 import { ToolsPanel } from "./setup/ToolsPanel";
 import { RulePackPanel } from "./setup/RulePackPanel";
+import { GlobalRulesPanel } from "./setup/GlobalRulesPanel";
 import { WorkspaceStep } from "./setup/WorkspaceStep";
 import { PermissionsTab } from "./board/PermissionsTab";
 
@@ -61,6 +62,7 @@ export function Setup() {
         )}
         <ToolsPanel />
         {w?.configured && <RulePackPanel />}
+        {w?.configured && <GlobalRulesPanel />}
         <HooksPanel />
         <PreferencesPanel />
         {w?.configured && <BackgroundAiPanel />}

@@ -113,7 +113,12 @@ export default function App() {
   );
   useEffect(() => {
     return office.on("rules.changed", (event) => {
-      const { starter } = event.payload as { starter?: string[] };
+      const { starter, global } = event.payload as { starter?: string[]; global?: string[] };
+      if (global?.length) notify({
+        tone: "info", title: "Updated agent instructions", detail: global.join(", "), subject: "agent-rules",
+        action: { label: "Undo", run: () => void office.invoke("rules.globalUndo").catch((error: unknown) =>
+          notifyError(error, "Could not undo the instruction update", "agent-rules")) },
+      });
       if (!starter?.length) return;
       notify({ tone: "info", title: "Starter rules updated", detail: starter.join(", "), subject: "starter-rules",
         action: { label: "Undo", run: () => void office.invoke("rules.undo").catch((error: unknown) =>

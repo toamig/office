@@ -566,6 +566,15 @@ export const channels = {
   "rules.add": { req: z.object({ files: z.array(z.string()) }), res: z.void() },
   "rules.answer": { req: z.object({ path: z.string(), before: z.string(), after: z.string(), accept: z.boolean() }), res: z.void() },
   "rules.undo": { req: z.void(), res: z.void() },
+  "rules.globalStatus": { req: z.void(), res: z.object({
+    available: z.boolean(), undo: z.boolean(),
+    tools: z.array(z.object({ id: z.string(), label: z.string(), installed: z.boolean(), conflict: z.boolean() })),
+  }) },
+  "rules.globalPreview": { req: z.object({ remove: z.boolean() }), res: z.object({
+    id: z.string(), changes: z.array(z.object({ label: z.string(), file: z.string(), diff: z.string() })),
+  }) },
+  "rules.globalApply": { req: z.object({ id: z.string() }), res: z.void() },
+  "rules.globalUndo": { req: z.void(), res: z.void() },
   /** What is uncommitted in one of the brain's repos ("." is the hub), with each file's changes. */
   "health.changes": { req: z.object({ folder: z.string() }), res: DiffResult },
   "health.commit": {

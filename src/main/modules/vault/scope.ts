@@ -3,6 +3,7 @@ import type { Workspace } from "../../../shared/types";
 import { frontmatterValue, stripFrontmatter } from "../notes/notes";
 import { readHub } from "./hub";
 import { brainPath as notesPath, brainText as readText, readRulePack, ruleBody, ruleReferences } from "./rule-pack";
+import { availableGlobalRules } from "../setup/global-rules";
 export { notesPath, readText };
 
 export interface BrainScope {
@@ -12,6 +13,15 @@ export interface BrainScope {
   readOnly: string[];
   private: string[];
   restrictedRead?: boolean;
+  rules?: Array<{ text: string; location: "global" | "project" }>;
+}
+
+export function brainInstructions(scope: BrainScope | undefined, provider: string): string {
+  if (!scope) return "";
+  const loaded = scope.rules?.length ? availableGlobalRules(scope.root, provider) : "";
+  return [scope.instructions, ...(scope.rules ?? [])
+    .filter(({ text, location }) => location === "project" || !loaded.includes(text.replaceAll("\r\n", "\n")))
+    .map(({ text }) => text)].filter(Boolean).join("\n\n");
 }
 
 
@@ -58,17 +68,23 @@ export function brainScope(ws: Workspace | null, root: string, projectId?: strin
   const overview = read("Overview.md");
   const rules = readRulePack(root);
   const domain = frontmatterValue(overview, "domain");
+  if (rules) {
+    scope.rules = [
+      { text: ruleReferences(rules, root), location: "global" },
+      ...rules.load.filter((entry) => (!entry.domain || entry.domain === domain) && (entry.where !== "project" || !!project))
+        .flatMap((entry) => {
+          const path = notesPath(root, entry.file);
+          if (!path || scope.private.some((hidden) => path === hidden || path.startsWith(hidden + sep))) return [];
+          const text = ruleBody(root, entry.file);
+          return text ? [{ text, location: entry.where ?? "global" }] : [];
+        }),
+    ];
+  }
   scope.instructions = [
-    rules ? ruleReferences(rules, root) : "Brain context. Read the root router and then the project's router. Open the one file that answers the question. Do not scan the Brain.",
+    rules ? "" : "Brain context. Read the root router and then the project's router. Open the one file that answers the question. Do not scan the Brain.",
     `Root router: ${join(root, "_index.md")}`,
     owner ? `Your notes: ${owner}. Write only in this notes folder.` : "Brain notes are read-only in this conversation.",
     "You may read declared dependencies and use the routers to find other public notes. Never read another project's private notes, even if a router names them.",
-    ...(rules?.load.filter((entry) => !entry.domain || entry.domain === domain)
-      .flatMap((entry) => {
-        const path = notesPath(root, entry.file);
-        if (!path || scope.private.some((hidden) => path === hidden || path.startsWith(hidden + sep))) return [];
-        return ruleBody(root, entry.file);
-      }) ?? []),
     packPart("Project overview", frontmatterValue(overview, "summary") ?? stripFrontmatter(overview), 450),
     packPart("Open items", stripFrontmatter(read(ws.vault.openItemsFile)), 850),
     packPart("Recent decisions", tailEntries(read("Decisions.md"), 5), 850),

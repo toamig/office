@@ -56,6 +56,7 @@ import { HealthService } from "./modules/vault/health-service";
 import { OnboardingService } from "./modules/onboarding/service";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 import { commitStarterFiles, detectRuleDomain, StarterPack } from "./modules/vault/starter-pack";
+import { GlobalRules } from "./modules/setup/global-rules";
 import { notesPath, readText } from "./modules/vault/scope";
 import { frontmatterValue } from "./modules/notes/notes";
 import { detectTools } from "./modules/setup/detect";
@@ -91,6 +92,7 @@ export interface AppContext {
   scheduler: Scheduler;
   workflowResults: WorkflowResults;
   starterPack: () => StarterPack;
+  globalRules: GlobalRules;
   changeStarterRules: (work: (pack: StarterPack) => string[], message: string, digest?: boolean) => Promise<void>;
   starterDomains: () => string[];
   claudeSignIn: ClaudeSignIn;
@@ -735,6 +737,22 @@ export async function createContext(
   });
   const starterPack = () => new StarterPack(box.current.workspaceRoot, join(dirname(relayScript), "..", "brain-template"),
     store.state.workspace?.vault.kind === "folder");
+  const globalRules = new GlobalRules(() => box.current.workspaceRoot, userHome, join(dataDir(), "global-rules.json"));
+  const refreshGlobal = () => {
+    try {
+      const global = globalRules.refresh();
+      bus.emit("rules.changed", { global });
+    } catch (error) {
+      notes.warnings.unshift({ at: new Date().toISOString(), message: error instanceof Error ? error.message : String(error) });
+      notes.warnings.length = Math.min(notes.warnings.length, 20);
+      bus.emit("vault.health", {});
+    }
+  };
+  bus.on("vault.changed", (event) => {
+    const file = (event.payload as { file?: string }).file;
+    if (file?.replaceAll("\\", "/").endsWith("/rules.json")) void notes.vault.watch();
+    refreshGlobal();
+  });
   const starterDomains = () => (store.state.workspace?.projects ?? []).flatMap((project) => {
     const root = box.current.workspaceRoot;
     const domain = project.vault ? frontmatterValue(readText(notesPath(root, `${project.vault}/Overview.md`)), "domain") : null;
@@ -747,6 +765,10 @@ export async function createContext(
       if (root !== box.current.workspaceRoot) throw new Error("The Brain changed. Review it again.");
       const paths = work(starterPack());
       await commitStarterFiles(root, paths, message);
+      if (paths.length) {
+        await notes.vault.watch();
+        refreshGlobal();
+      }
       bus.emit("rules.changed", { starter: digest ? paths : [] });
     });
   };
@@ -778,6 +800,7 @@ export async function createContext(
       tools,
       hooksInstalled: hooks.claude.installed || hooks.codex.installed,
       projectCount: store.state.workspace?.projects.length ?? 0,
+      ...(globalRules.status().available ? { instructionsInstalled: globalRules.status().tools.every((tool) => tool.installed && !tool.conflict) } : {}),
     });
   };
   // A machine that was set up before the welcome flow existed has nothing to be welcomed to.
@@ -795,7 +818,7 @@ export async function createContext(
       projects: () => notes.projects.list(),
       waiting: () => notes.vault.allWaiting(),
       github: () => agents.github.pendingState(),
-      proposals: () => [...agents.recorder.pending(), ...orch.workflowResults.pending(), ...starterPack().pending()],
+      proposals: () => [...agents.recorder.pending(), ...orch.workflowResults.pending(), ...starterPack().pending(), ...globalRules.pending()],
     },
   });
   const fix = createFix(base, notes, agents, orch, pending);
@@ -821,6 +844,7 @@ export async function createContext(
     requestRouter,
     officeTools,
     starterPack,
+    globalRules,
     changeStarterRules,
     starterDomains,
     claudeSignIn,
@@ -840,8 +864,8 @@ export async function createContext(
     toolsMonitor,
     setupState,
     ...lifecycle,
-    start: async () => { await lifecycle.start(); void updateStarter(); },
-    sync: async () => { const result = await lifecycle.sync(); await updateStarter(); return result; },
+    start: async () => { await lifecycle.start(); refreshGlobal(); void updateStarter(); },
+    sync: async () => { const result = await lifecycle.sync(); await updateStarter(); refreshGlobal(); return result; },
     stop: async () => { claudeSignIn.cancel(); await lifecycle.stop(); },
   };
 }

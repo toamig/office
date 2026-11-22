@@ -64,6 +64,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "git.show",
   "vault.health",
   "rules.status",
+  "rules.globalStatus",
   "health.changes",
   "notes.list",
 ];

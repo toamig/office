@@ -672,6 +672,17 @@ function registerVaultHandlers(ctx: AppContext): void {
   ctx.ipc.handle("rules.answer", (req) => ctx.changeStarterRules(
     (pack) => pack.answer(req.path, req.before, req.after, req.accept), "Update Brain rules"));
   ctx.ipc.handle("rules.undo", () => ctx.changeStarterRules((pack) => pack.undo(), "Undo the starter rules update"));
+  ctx.ipc.handle("rules.globalStatus", () => ctx.globalRules.status());
+  ctx.ipc.handle("rules.globalPreview", (req) => ctx.globalRules.preview(req.remove));
+  ctx.ipc.handle("rules.globalApply", (req) => {
+    ctx.globalRules.apply(req.id);
+    ctx.bus.emit("rules.changed", {});
+    ctx.bus.emit("setup.changed", {});
+  });
+  ctx.ipc.handle("rules.globalUndo", () => {
+    ctx.globalRules.undo();
+    ctx.bus.emit("rules.changed", {});
+  });
   ctx.ipc.handle("health.changes", (req) => ctx.healthActions.changes(req.folder));
   ctx.ipc.handle("health.commit", async (req) => ({
     hash: await ctx.healthActions.commit(req.folder, req.message),

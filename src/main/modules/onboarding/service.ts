@@ -12,7 +12,8 @@ import { git } from "../git/run";
 import type { VaultWriter } from "../vault/writer";
 import { updateStarterRouter, writeProjectLayout } from "../vault/starter-layout";
 import { detectRuleDomain, registerStarterDomain } from "../vault/starter-pack";
-import { readRulePack } from "../vault/rule-pack";
+import { brainPath, brainText, readRulePack, ruleBody } from "../vault/rule-pack";
+import { frontmatterValue } from "../notes/notes";
 import { createBrain, type BrainResult } from "./brain";
 import {
   defaultTarget,
@@ -329,6 +330,10 @@ export class OnboardingService {
     const dir = projectFolder(this.deps.projectsRoot(), project, this.deps.projectPaths());
     const notesFolder = project.vault ?? `Projects/${folderName(project.name)}`;
     const notesPath = this.notesPath(notesFolder);
+    const root = this.deps.workspaceRoot();
+    const domain = frontmatterValue(brainText(brainPath(root, `${notesFolder}/Overview.md`)), "domain");
+    const rules = readRulePack(root)?.load.filter((entry) =>
+      entry.where === "project" && (!entry.domain || entry.domain === domain)).map((entry) => ruleBody(root, entry.file)).filter(Boolean);
     const [remote, visibility] = await Promise.all([
       this.brainRemote(notesPath),
       this.visibilityOf(dir),
@@ -337,7 +342,7 @@ export class OnboardingService {
       name: project.name,
       dir,
       visibility,
-      info: { name: project.name, notesPath, notesFolder, remote },
+      info: { name: project.name, notesPath, notesFolder, remote, rules },
     };
   }
 

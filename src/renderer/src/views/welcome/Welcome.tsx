@@ -6,6 +6,7 @@ import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
 import { AddProjects } from "../onboarding/AddProjects";
 import { HooksPanel } from "../setup/HooksPanel";
+import { GlobalRulesPanel } from "../setup/GlobalRulesPanel";
 import { ProjectsStep } from "../setup/ProjectsStep";
 import { ToolsStep } from "../setup/ToolsStep";
 import { WorkspaceStep } from "../setup/WorkspaceStep";
@@ -32,6 +33,10 @@ const COPY: Record<StepId, { title: string; lead: string }> = {
   notifications: {
     title: "Agent notifications",
     lead: "Optional. Lets Office know the moment an agent needs you.",
+  },
+  instructions: {
+    title: "Agent instructions",
+    lead: "Review the Brain rules Office can add to Claude Code and Codex.",
   },
 };
 
@@ -97,6 +102,7 @@ export function Welcome({ state }: { state: SetupState }) {
             {step === "tools" && <ToolsStep />}
             {step === "add" && <AddProjects />}
             {step === "notifications" && <HooksPanel title="" />}
+            {step === "instructions" && <GlobalRulesPanel onboarding />}
           </div>
           <footer className="welcome-footer">
             <Button
