@@ -1,24 +1,27 @@
-import { ExternalLink, Wrench } from "lucide-react";
+import { Wrench } from "lucide-react";
 import type { FixEntry, FixSubject } from "@shared/models";
 import { useFix } from "../lib/fix";
 import { useUi } from "../stores/ui";
 import { Button, type MoreItem } from "../ui";
 
-/** "Being fixed in <session>" with Open, shown where the Fix in a session button would be. */
+/**
+ * "Being fixed", shown where the Fix in a session button would be: one compact button that opens the fixing
+ * session, named in its tooltip. A long session title in the row squeezed and overlapped the item's own text, and a
+ * second Open next to the item's Open was ambiguous.
+ */
 export function BeingFixed({ entry }: { entry: FixEntry }) {
   const navigate = useUi((s) => s.navigate);
   return (
-    <span className="inline-flex items-center gap-2" data-testid="fix-being">
-      <span className="ui-muted">Being fixed in {entry.title}</span>
-      <Button
-        size="sm"
-        variant="ghost"
-        onClick={() => navigate("agents", { session: entry.sessionId })}
-        data-testid="fix-open"
-      >
-        <ExternalLink /> Open
-      </Button>
-    </span>
+    <Button
+      size="sm"
+      variant="ghost"
+      className="shrink-0"
+      title={`Open the session fixing this: ${entry.title}`}
+      onClick={() => navigate("agents", { session: entry.sessionId })}
+      data-testid="fix-being"
+    >
+      <Wrench /> Being fixed
+    </Button>
   );
 }
 
