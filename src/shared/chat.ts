@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatLine, OfficeBrief, PlanStep } from "./models";
+import type { ChatEvent, ChatLine, OfficeBrief, PlanStep, QueuedMessage } from "./models";
 
 /** What the chat view draws, in order. */
 export type ChatItem =
@@ -17,13 +17,14 @@ export type ChatItem =
   | { kind: "error"; message: string }
   | { kind: "subagent"; id: string; task: string; progress: string; verdict: string; status: "working" | "done" | "error" }
   | { kind: "turn"; ok: boolean; durationMs: number | null; error: string | undefined }
-  | { kind: "stopped" };
+  | { kind: "stopped"; detail?: string };
 
 export interface ChatState {
   items: ChatItem[];
   /** True from the owner's message until the turn's result (or a stop or an error). */
   working: boolean;
   activity: TurnActivity;
+  queue: QueuedMessage[];
 }
 
 interface RunningTool { id: string; label: string }
@@ -36,7 +37,16 @@ export interface TurnActivity {
 }
 
 export const emptyActivity = (): TurnActivity => ({ plan: [], tools: [] });
-export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity() });
+export const emptyChat = (): ChatState => ({ items: [], working: false, activity: emptyActivity(), queue: [] });
+
+export function trackQueue(queue: QueuedMessage[], event: ChatEvent): QueuedMessage[] {
+  if (event.t === "user" || event.t === "queue-remove") return queue.filter((message) => message.id !== event.id);
+  if (event.t !== "queued") return queue;
+  const { id, text, images } = event;
+  const message = { id, text, images };
+  return queue.some((entry) => entry.id === id)
+    ? queue.map((entry) => entry.id === id ? message : entry) : [...queue, message];
+}
 
 export function planSteps(value: unknown): PlanStep[] {
   if (!Array.isArray(value)) return [];
@@ -150,9 +160,13 @@ function failedTurn(items: ChatItem[], message: string): ChatItem[] {
 export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): ChatState {
   const event = planEvent(raw);
   const activity = trackActivity(previous.activity, event, at);
-  const state = activity === previous.activity ? previous : { ...previous, activity };
+  const queue = trackQueue(previous.queue, event);
+  const state = activity === previous.activity && queue === previous.queue ? previous : { ...previous, activity, queue };
   const items = state.items;
   switch (event.t) {
+    case "queued":
+    case "queue-remove":
+      return state;
     case "user":
       return {
         ...state,
@@ -264,7 +278,7 @@ export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): Ch
     case "error":
       return { ...state, items: failedTurn(items, event.message), working: false };
     case "stopped":
-      return { ...state, items: [...settle(items, "done"), { kind: "stopped" }], working: false };
+      return { ...state, items: [...settle(items, "done"), { kind: "stopped", detail: event.detail }], working: false };
   }
 }
 

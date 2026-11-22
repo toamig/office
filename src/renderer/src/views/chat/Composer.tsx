@@ -38,7 +38,7 @@ const readImage = (file: File): Promise<ChatImage> =>
 
 /**
  * The message box: Enter sends and Shift+Enter starts a new line, @ mentions a project file, a pasted image
- * is attached, and while a turn runs the send button becomes Stop.
+ * is attached, and messages composed during a turn can be queued.
  */
 export function Composer({
   sessionId,
@@ -49,7 +49,7 @@ export function Composer({
 }: {
   sessionId: string;
   working: boolean;
-  onSend: (text: string, images: ChatImage[]) => void;
+  onSend: (text: string, images: ChatImage[]) => Promise<boolean>;
   onStop: () => void;
   controls?: ReactNode;
 }) {
@@ -58,6 +58,7 @@ export function Composer({
   const [mention, setMention] = useState<{ from: number; query: string } | null>(null);
   const [files, setFiles] = useState<string[]>([]);
   const [pick, setPick] = useState(0);
+  const [sending, setSending] = useState(false);
   const area = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -92,10 +93,14 @@ export function Composer({
 
   const send = (): void => {
     const body = text.trim();
-    if (!body || working) return;
-    onSend(body, images);
-    setText("");
-    setImages([]);
+    if (!body || sending) return;
+    setSending(true);
+    void onSend(body, images).then((sent) => {
+      if (!sent) return;
+      setText((current) => current === text ? "" : current);
+      setImages((current) => current.filter((image) => !images.includes(image)));
+      setMention(null);
+    }).finally(() => setSending(false));
   };
 
   return (
@@ -156,7 +161,7 @@ export function Composer({
           value={text}
           rows={1}
           spellCheck
-          placeholder="Message the agent. Enter sends, Shift+Enter adds a line, @ mentions a file."
+          placeholder={working ? "Enter queues a message. Shift+Enter adds a line." : "Message the agent. Enter sends, Shift+Enter adds a line, @ mentions a file."}
           aria-label="Message"
           data-testid="composer-input"
           onChange={(e) => {
@@ -201,7 +206,7 @@ export function Composer({
       <div className="composer-bar">
         {controls}
         <span className="flex-1" />
-        {working ? (
+        {working && (
           <button
             className="send-button"
             aria-label="Stop"
@@ -211,18 +216,17 @@ export function Composer({
           >
             <Square size={14} />
           </button>
-        ) : (
+        )}
           <button
             className="send-button"
-            aria-label="Send"
-            title="Send (Enter)"
-            disabled={!text.trim()}
+            aria-label={working ? "Queue message" : "Send"}
+            title={working ? "Queue message (Enter)" : "Send (Enter)"}
+            disabled={!text.trim() || sending}
             onClick={send}
             data-testid="chat-send"
           >
             <ArrowUp size={16} />
           </button>
-        )}
       </div>
     </div>
   );

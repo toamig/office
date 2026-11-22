@@ -83,7 +83,7 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit }: {
     case "stopped":
       return (
         <div className="turn-footer" data-testid="chat-stopped">
-          Stopped
+          {item.detail ? `Stopped while ${item.detail}` : "Stopped"}
         </div>
       );
   }

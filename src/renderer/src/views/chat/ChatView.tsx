@@ -14,6 +14,7 @@ import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
 import { LivePlan, ToolGroup, TurnStatus } from "./Activity";
 import { Composer } from "./Composer";
 import { ChatMessage } from "./Messages";
+import { QueuedMessage } from "./QueuedMessage";
 
 function useConversation(id: string): { conversation: Conversation; ready: boolean } {
   const [conversation, setConversation] = useState(emptyChat);
@@ -96,7 +97,7 @@ export function ChatView({ session, onChanged, headerActions }: {
   const id = session.id;
   const plain = isChatSession(session);
   const { conversation, ready } = useConversation(id);
-  const { items, working, activity } = conversation;
+  const { items, working, activity, queue } = conversation;
   const [state, setState] = useState<ChatState | null>(null);
   const [login, setLogin] = useState<{ messageId: string; run: ToolRun }>();
   const list = useRef<HTMLDivElement>(null);
@@ -186,13 +187,17 @@ export function ChatView({ session, onChanged, headerActions }: {
           {!session.incognito && <OfficeConfirmations sessionId={id} onReveal={reveal} />}
           {working && !items.some((item) => item.kind === "assistant" && item.streaming && item.text) &&
             <div className="working-dots" data-testid="chat-working" aria-label="Working"><span /><span /><span /></div>}
+          {queue.map((message) => <QueuedMessage key={message.id} message={message} working={working}
+            onEdit={(text) => act(() => office.invoke("chat.queueEdit", { id, messageId: message.id, text }))}
+            onRemove={() => act(() => office.invoke("chat.queueRemove", { id, messageId: message.id }))}
+            onSend={() => act(() => office.invoke("chat.queueSend", { id, messageId: message.id }))} />)}
         </div>
       </div>
       <div className="chat-column pb-4">
         <LivePlan steps={activity.plan} />
         <TurnStatus activity={activity} />
         <Composer sessionId={id} working={working}
-          onSend={(text, images) => void act(() => office.invoke("chat.send", { id, text, images }))}
+          onSend={(text, images) => act(() => office.invoke("chat.send", { id, text, images }))}
           onStop={() => void act(() => office.invoke("chat.stop", { id }))}
           controls={<>
             <ChatChoices state={state} working={working} onChange={(options) => {

@@ -1,4 +1,4 @@
-import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
+import { appendFileSync, existsSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { randomUUID } from "node:crypto";
 import { join } from "node:path";
 import type {
@@ -8,6 +8,7 @@ import type {
   ChatOptions,
   ChatState,
   OfficeBrief,
+  QueuedMessage,
   SessionRow,
 } from "../../../shared/models";
 import type { Bus } from "../../core/bus";
@@ -21,7 +22,7 @@ import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
 import { ClaudeChatParser, CodexChatParser } from "./events";
 import { chatFailure } from "../../../shared/chat-failure";
-import { activityLabel, emptyActivity, trackActivity, type TurnActivity } from "../../../shared/chat";
+import { activityLabel, emptyActivity, trackActivity, trackQueue, type TurnActivity } from "../../../shared/chat";
 import { redactClaudeToken } from "../../core/claude-secret";
 import { ClaudeCodeProvider } from "../providers/claude-code";
 
@@ -41,6 +42,7 @@ export const NEW_CHAT = "New chat";
 
 /** How many times a start that the program refuses over the conversation flag is tried, flipping the flag each time. */
 const MAX_START_ATTEMPTS = 3;
+const INTERRUPT_TIMEOUT_MS = 5000;
 
 interface Live {
   handle: StreamHandle;
@@ -54,6 +56,8 @@ interface Live {
   turn?: { text: string; images: ChatImage[]; attempts: number };
   authFailure?: (message: string) => void;
   credentialRevision?: number;
+  succeeded?: boolean;
+  interruption?: { done: Promise<void>; finish: () => void; timer: NodeJS.Timeout; detail?: string };
 }
 
 /**
@@ -66,6 +70,7 @@ export class ChatService {
   private readonly live = new Map<string, Live>();
   private readonly seqs = new Map<string, number>();
   private readonly activities = new Map<string, TurnActivity>();
+  private readonly queues = new Map<string, QueuedMessage[]>();
   /** What an incognito chat has said: kept in memory only, never in a file. */
   private readonly memory = new Map<string, ChatLine[]>();
   private readonly unsavedImages = new Map<string, Map<string, ChatImage[]>>();
@@ -110,19 +115,32 @@ export class ChatService {
 
   private append(id: string, event: ChatEvent): void {
     const session = this.deps.sessions.find(id);
-    const seq = (this.seqs.get(id) ?? this.history(id).length) + 1;
-    this.seqs.set(id, seq);
+    const known = this.seqs.get(id);
+    const seq = (known ?? this.history(id).at(-1)?.seq ?? 0) + 1;
     const line: ChatLine = { seq, at: nowIso(), event };
     const memory = this.memory.get(id);
+    const queue = this.queue(id);
     // An incognito chat's words stay in memory; nothing about it is written to a file.
     if (memory) memory.push(line);
-    else appendFileSync(this.logFile(id), `${JSON.stringify(line)}\n`);
+    else appendFileSync(this.logFile(id), `${known === undefined && seq > 1 ? "\n" : ""}${JSON.stringify(line)}\n`);
+    this.seqs.set(id, seq);
+    this.queues.set(id, trackQueue(queue, event));
     const previous = this.activity(id);
     const activity = trackActivity(this.activities.get(id) ?? emptyActivity(), event, Date.parse(line.at));
     if (activity.startedAt === undefined) this.activities.delete(id);
     else this.activities.set(id, activity);
     this.deps.bus.emit("chat.event", { sessionId: id, line }, session?.projectId ?? undefined);
     if (this.activity(id) !== previous) this.deps.bus.emit("session.activity", { sessionId: id });
+  }
+
+  visibleHistory(id: string): ChatLine[] {
+    const history = this.history(id);
+    if (this.live.has(id)) return history;
+    const last = history.findLast(({ event }) =>
+      event.t === "user" || event.t === "result" || event.t === "error" || event.t === "stopped");
+    if (last?.event.t !== "user") return history;
+    this.append(id, { t: "error", message: "Office closed before this turn finished. Retry to resend the message." });
+    return this.history(id);
   }
 
   private options(id: string): ChatOptions {
@@ -178,6 +196,7 @@ export class ChatService {
     this.secret.delete(id);
     this.incognitoDirs.delete(id);
     this.seqs.delete(id);
+    this.queues.delete(id);
     this.live.delete(id);
   }
 
@@ -263,23 +282,97 @@ export class ChatService {
 
   // ---------- sending ----------
 
+  private queue(id: string): QueuedMessage[] {
+    const known = this.queues.get(id);
+    if (known) return known;
+    const queue = this.history(id).reduce((entries, line) => trackQueue(entries, line.event), [] as QueuedMessage[]);
+    this.queues.set(id, queue);
+    return queue;
+  }
+
+  /** From the composer: an existing queue waits for a successful turn or an explicit Send. */
+  submit(id: string, text: string, images: ChatImage[], options?: ChatOptions): void {
+    if (this.session(id).mode !== "chat") throw new IpcFailure("not-chat", "This session is open in a terminal");
+    if (!this.working(id) && !this.queue(id).length) {
+      this.visibleHistory(id);
+      this.send(id, text, images, options);
+      return;
+    }
+    const messageId = randomUUID();
+    if (images.length) this.saveImages(id, messageId, images);
+    this.append(id, { t: "queued", id: messageId, text: redactClaudeToken(text), images: images.length });
+  }
+
+  private queued(id: string, messageId: string): QueuedMessage {
+    const message = this.queue(id).find((entry) => entry.id === messageId);
+    if (!message) throw new IpcFailure("no-message", "That message is no longer queued.");
+    return message;
+  }
+
+  editQueued(id: string, messageId: string, text: string): void {
+    this.session(id);
+    const message = this.queued(id, messageId);
+    this.append(id, { ...message, t: "queued", text: redactClaudeToken(text) });
+  }
+
+  removeQueued(id: string, messageId: string): void {
+    this.session(id);
+    const message = this.queued(id, messageId);
+    this.append(id, { t: "queue-remove", id: messageId });
+    if (!message.images) return;
+    if (this.memory.has(id)) this.unsavedImages.get(id)?.delete(messageId);
+    else rmSync(join(this.dir(id), `${messageId}.images.json`), { force: true });
+  }
+
+  async sendQueued(id: string, messageId: string): Promise<void> {
+    this.session(id);
+    this.queued(id, messageId);
+    await this.interrupt(id);
+    this.visibleHistory(id);
+    this.deliverQueued(id, this.queued(id, messageId));
+  }
+
+  private deliverQueued(id: string, message: QueuedMessage): void {
+    const images = this.readImages(id, message.id, message.images);
+    // One persisted user event both claims the queue entry and creates a recoverable transcript message.
+    this.send(id, message.text, images, undefined, undefined, message.id);
+  }
+
+  private drain(id: string): void {
+    const first = this.queue(id)[0];
+    if (!first || this.working(id)) return;
+    try { this.deliverQueued(id, first); }
+    catch (error) {
+      this.append(id, { t: "error", message: error instanceof Error ? error.message : String(error) });
+    }
+  }
+
   /** Sends the owner's message: starts the program if it is not running, and records the message. */
-  send(id: string, text: string, images: ChatImage[] = [], options?: ChatOptions, brief?: OfficeBrief): void {
+  send(id: string, text: string, images: ChatImage[] = [], options?: ChatOptions, brief?: OfficeBrief, message: string = randomUUID()): void {
     const row = this.session(id);
     if (row.mode !== "chat") throw new IpcFailure("not-chat", "This session is open in a terminal");
     if (this.working(id)) throw new IpcFailure("busy", "A turn is still running. Stop it first.");
     const provider = this.deps.providers.get(row.provider);
     if (!provider?.chatCommand) throw new IpcFailure("no-chat", "This tool has no chat mode");
     if (options) this.setOptions(id, options);
-    const picked = this.options(id);
-    const message = randomUUID();
     if (images.length) this.saveImages(id, message, images);
     text = redactClaudeToken(text);
     this.append(id, { t: "user", id: message, text, images: images.length, ...(brief ? { brief } : {}) });
     this.append(id, { t: "turn-start" });
     this.deps.sessions.setStatus(id, "working");
 
-    this.nameFromFirstMessage(row, text);
+    try {
+      this.nameFromFirstMessage(row, text);
+      this.startTurn(row, provider, text, images);
+    } catch (error) {
+      this.append(id, { t: "error", message: error instanceof Error ? error.message : String(error) });
+      this.deps.sessions.setStatus(id, "idle");
+    }
+  }
+
+  private startTurn(row: SessionRow, provider: Provider, text: string, images: ChatImage[]): void {
+    const id = row.id;
+    const picked = this.options(id);
     const kind = provider.chatKind ?? "claude";
     if (kind === "claude") {
       let live = this.live.get(id);
@@ -298,7 +391,7 @@ export class ChatService {
     const threadId = row.providerSessionId ?? undefined;
     const brain = this.deps.sessions.brainForSession(row);
     const officeMcp = this.deps.sessions.officeMcpForSession(row);
-    const spec = provider.chatCommand({
+    const spec = provider.chatCommand!({
       cwd: row.cwd,
       officeSessionId: id,
       resume: Boolean(threadId),
@@ -337,15 +430,20 @@ export class ChatService {
     const message = messages.find((event) => event.id === messageId);
     if (!message || (text !== undefined && (message.brief || messages.at(-1) !== message)))
       throw new IpcFailure("no-message", "That message is unavailable to resend.");
+    const images = this.readImages(id, messageId, message.images);
+    this.send(id, text ?? message.text, images, useDefault ? { model: "", effort: "" } : undefined, message.brief);
+  }
+
+  private readImages(id: string, messageId: string, count: number): ChatImage[] {
     let images = this.unsavedImages.get(id)?.get(messageId) ?? [];
-    if (message.images && !images.length && /^[0-9a-f-]{36}$/.test(messageId)) {
+    if (count && !images.length && /^[0-9a-f-]{36}$/.test(messageId)) {
       try {
         images = JSON.parse(readFileSync(join(this.dir(id), `${messageId}.images.json`), "utf8")) as ChatImage[];
       } catch { /* Older conversations saved only the count. */ }
     }
-    if (message.images && !images.length)
+    if (count && !images.length)
       throw new IpcFailure("no-images", "Attach the images again to resend this message.");
-    this.send(id, text ?? message.text, images, useDefault ? { model: "", effort: "" } : undefined, message.brief);
+    return images;
   }
 
   /** A saved chat is named by its first message, so the list reads as what each was about. */
@@ -426,7 +524,7 @@ export class ChatService {
         if (event.t === "result") sawResult = true;
         this.take(id, live, event);
       }
-      if (parser.threadId && parser.threadId !== before) {
+      if (this.live.get(id) === live && !live.stopped && parser.threadId && parser.threadId !== before) {
         this.deps.sessions.setProviderSessionId(id, parser.threadId);
       }
     }
@@ -447,13 +545,19 @@ export class ChatService {
   /** Records one event; a result ends the turn. */
   private take(id: string, live: Live, event: ChatEvent): void {
     if (live.stopped || !live.working) return;
+    if (live.interruption && (event.t === "result" || event.t === "error")) {
+      if (event.t === "result") this.finishInterrupt(id, live);
+      return;
+    }
     this.append(id, event);
     if (event.t === "result" || event.t === "error") {
       live.working = false;
+      live.succeeded = event.t === "result" && event.ok;
       const failure = event.t === "error" ? event.message : !event.ok ? event.error : undefined;
       if (failure) this.authFailure(id, live, failure);
       if (event.t === "result") this.deps.sessions.setStatus(id, "idle");
       else this.deps.sessions.setStatus(id, "idle", event.message);
+      if (live.succeeded && live.kind === "claude") this.drain(id);
     }
   }
 
@@ -466,7 +570,12 @@ export class ChatService {
   /** The program ended: report it if it ended in the middle of a turn, and free the slot. */
   private async ended(id: string, live: Live): Promise<void> {
     const exit = await live.handle.exit;
-    if (this.live.get(id) === live) this.live.delete(id);
+    if (this.live.get(id) !== live) return;
+    this.live.delete(id);
+    if (live.interruption) {
+      this.finishInterrupt(id, live);
+      return;
+    }
     // The program refused the conversation flag: it was started to resume a conversation that was never saved
     // (it was ended before it saved anything), or to start one that exists. Start it again the other way; a
     // program that was just stopped can still be saving as it dies, so the flag may need to turn more than once.
@@ -501,6 +610,7 @@ export class ChatService {
       this.deps.sessions.setStatus(id, "idle");
     }
     this.deps.bus.emit("chat.state", { sessionId: id });
+    if (live.succeeded && live.kind === "codex") this.drain(id);
   }
 
   /**
@@ -525,19 +635,58 @@ export class ChatService {
     live.handle.kill();
   }
 
+  /** Interrupts a turn while retaining Claude's input stream and the work it has already done. */
+  interrupt(id: string): Promise<void> {
+    const live = this.live.get(id);
+    if (!live?.working) return Promise.resolve();
+    if (live.interruption) return live.interruption.done;
+    if (live.kind === "codex") {
+      this.stop(id);
+      return live.handle.exit.then(() => undefined);
+    }
+    let finish!: () => void;
+    const done = new Promise<void>((resolve) => { finish = resolve; });
+    const timer = setTimeout(() => this.stop(id), INTERRUPT_TIMEOUT_MS);
+    live.interruption = { done, finish, timer, detail: this.stoppingDetail(id) };
+    live.handle.write(JSON.stringify({
+      type: "control_request", request_id: randomUUID(), request: { subtype: "interrupt" },
+    }));
+    return done;
+  }
+
+  private stoppingDetail(id: string): string | undefined {
+    const tool = this.activities.get(id)?.tools.at(-1)?.label;
+    return tool ? `${tool.charAt(0).toLowerCase()}${tool.slice(1)}` : undefined;
+  }
+
+  private finishInterrupt(id: string, live: Live): void {
+    const interruption = live.interruption;
+    if (interruption) clearTimeout(interruption.timer);
+    const detail = interruption?.detail ?? this.stoppingDetail(id);
+    live.interruption = undefined;
+    live.working = false;
+    this.deps.broker.cancelRun(id);
+    this.append(id, { t: "stopped", detail });
+    this.deps.sessions.setStatus(id, "idle");
+    this.deps.bus.emit("chat.state", { sessionId: id });
+    if (interruption) {
+      if (live.stopped) void live.handle.exit.then(interruption.finish);
+      else interruption.finish();
+    }
+  }
+
   /** Stop ends the program and its children; the next message starts it again with --resume. */
   stop(id: string): void {
     const live = this.live.get(id);
     if (!live) return;
-    live.stopped = true;
     const wasWorking = live.working;
-    live.working = false;
-    this.live.delete(id);
-    live.handle.kill();
-    this.deps.broker.cancelRun(id);
-    if (wasWorking) this.append(id, { t: "stopped" });
-    this.deps.sessions.setStatus(id, "idle");
-    this.deps.bus.emit("chat.state", { sessionId: id });
+    this.endIdle(id, live);
+    if (wasWorking) this.finishInterrupt(id, live);
+    else {
+      this.deps.broker.cancelRun(id);
+      this.deps.sessions.setStatus(id, "idle");
+      this.deps.bus.emit("chat.state", { sessionId: id });
+    }
   }
 
   /** An approval card opened or was answered: the chat needs the owner while one is open. */

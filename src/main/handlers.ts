@@ -609,11 +609,14 @@ function registerConfigHandlers(ctx: AppContext): void {
 /** The task board and the inbox. */
 function registerTaskHandlers(ctx: AppContext): void {
   ctx.ipc.handle("chat.state", (req) => ctx.chat.state(req.id));
-  ctx.ipc.handle("chat.history", (req) => ctx.chat.history(req.id));
+  ctx.ipc.handle("chat.history", (req) => ctx.chat.visibleHistory(req.id));
   ctx.ipc.handle("chat.send", (req) =>
-    ctx.chat.send(req.id, req.text, req.images ?? [], req.options),
+    ctx.chat.submit(req.id, req.text, req.images ?? [], req.options),
   );
-  ctx.ipc.handle("chat.stop", (req) => ctx.chat.stop(req.id));
+  ctx.ipc.handle("chat.stop", (req) => ctx.chat.interrupt(req.id));
+  ctx.ipc.handle("chat.queueEdit", (req) => ctx.chat.editQueued(req.id, req.messageId, req.text));
+  ctx.ipc.handle("chat.queueRemove", (req) => ctx.chat.removeQueued(req.id, req.messageId));
+  ctx.ipc.handle("chat.queueSend", (req) => ctx.chat.sendQueued(req.id, req.messageId));
   ctx.ipc.handle("chat.setOptions", (req) => ctx.chat.setOptions(req.id, req.options));
   ctx.ipc.handle("chat.resend", (req) => ctx.chat.resend(req.id, req.messageId, req.text, req.useDefault));
   ctx.ipc.handle("chat.files", (req) => ctx.chat.files(req.id, req.query));

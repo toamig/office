@@ -573,6 +573,9 @@ export type OfficeBrief = z.infer<typeof OfficeBrief>;
 const PlanStep = z.object({ text: z.string(), status: z.enum(["completed", "in_progress", "pending"]) });
 export type PlanStep = z.infer<typeof PlanStep>;
 
+export const QueuedMessage = z.object({ id: z.string(), text: z.string(), images: z.number() });
+export type QueuedMessage = z.infer<typeof QueuedMessage>;
+
 export const ChatEvent = z.discriminatedUnion("t", [
   z.object({
     t: z.literal("user"),
@@ -581,6 +584,8 @@ export const ChatEvent = z.discriminatedUnion("t", [
     images: z.number().default(0),
     brief: OfficeBrief.optional(),
   }),
+  QueuedMessage.extend({ t: z.literal("queued") }),
+  z.object({ t: z.literal("queue-remove"), id: z.string() }),
   z.object({ t: z.literal("turn-start") }),
   z.object({ t: z.literal("plan"), id: z.string(), steps: z.array(PlanStep) }),
   /** A new assistant message begins (its text streams in as text-delta events). */
@@ -623,7 +628,7 @@ export const ChatEvent = z.discriminatedUnion("t", [
   }),
   z.object({ t: z.literal("error"), message: z.string() }),
   /** The owner stopped the turn, or the process went away. */
-  z.object({ t: z.literal("stopped") }),
+  z.object({ t: z.literal("stopped"), detail: z.string().optional() }),
 ]);
 export type ChatEvent = z.infer<typeof ChatEvent>;
 

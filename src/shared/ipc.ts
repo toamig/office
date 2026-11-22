@@ -459,12 +459,15 @@ export const channels = {
   "chat.send": {
     req: z.object({
       id: z.string(),
-      text: z.string(),
+      text: z.string().trim().min(1),
       images: z.array(ChatImage).optional(),
       options: ChatOptions.optional(),
     }),
     res: z.void(),
   },
+  "chat.queueEdit": { req: z.object({ id: z.string(), messageId: z.string(), text: z.string().trim().min(1) }), res: z.void() },
+  "chat.queueRemove": { req: z.object({ id: z.string(), messageId: z.string() }), res: z.void() },
+  "chat.queueSend": { req: z.object({ id: z.string(), messageId: z.string() }), res: z.void() },
   /** The model and permission mode picked in the chat header; they apply from the next message. */
   "chat.setOptions": { req: z.object({ id: z.string(), options: ChatOptions }), res: z.void() },
   "chat.resend": { req: z.object({
