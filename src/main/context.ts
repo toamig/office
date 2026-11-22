@@ -57,6 +57,8 @@ import { OnboardingService } from "./modules/onboarding/service";
 import { readHubStatus, runValidate } from "./modules/vault/health";
 import { commitStarterFiles, detectRuleDomain, StarterPack } from "./modules/vault/starter-pack";
 import { GlobalRules } from "./modules/setup/global-rules";
+import { GitRuleHooks } from "./modules/setup/git-rule-hooks";
+import { readHub } from "./modules/vault/hub";
 import { notesPath, readText } from "./modules/vault/scope";
 import { frontmatterValue } from "./modules/notes/notes";
 import { detectTools } from "./modules/setup/detect";
@@ -93,6 +95,8 @@ export interface AppContext {
   workflowResults: WorkflowResults;
   starterPack: () => StarterPack;
   globalRules: GlobalRules;
+  gitRuleHooks: GitRuleHooks;
+  ruleHookTargets: (projectId?: string) => Array<{ name: string; repo: string }>;
   changeStarterRules: (work: (pack: StarterPack) => string[], message: string, digest?: boolean) => Promise<void>;
   starterDomains: () => string[];
   claudeSignIn: ClaudeSignIn;
@@ -179,7 +183,7 @@ function createBase(): Base {
   return { box, bus, db, store, notifier, ntfy };
 }
 
-function createNotes({ box, bus, store, notifier }: Base): Notes {
+function createNotes({ box, bus, store, notifier }: Base, checkScript: string): Notes {
   const vault = new VaultService({
     bus,
     workspace: () => store.state.workspace,
@@ -189,6 +193,8 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
   const writer = new VaultWriter({
     hubRoot: () =>
       store.state.workspace?.vault.kind === "brain-hub" ? box.current.workspaceRoot : null,
+    ruleRoot: () => store.state.workspace?.vault.kind === "none" ? "" : box.current.workspaceRoot,
+    checkScript,
     onWarning: (warning) => {
       warnings.unshift({ at: new Date().toISOString(), message: warning.message });
       warnings.length = Math.min(warnings.length, 20);
@@ -690,7 +696,8 @@ export async function createContext(
 ): Promise<AppContext> {
   mkdirSync(dataDir(), { recursive: true });
   const base = createBase();
-  const notes = createNotes(base);
+  const checkScript = join(dirname(relayScript), "office-check.mjs");
+  const notes = createNotes(base, checkScript);
   const tokens = new ClaudeTokenStore(storage);
   const agents = createAgents(base, notes, relayScript, tokens);
   const orch = createOrchestration(base, notes, agents);
@@ -738,6 +745,23 @@ export async function createContext(
   const starterPack = () => new StarterPack(box.current.workspaceRoot, join(dirname(relayScript), "..", "brain-template"),
     store.state.workspace?.vault.kind === "folder");
   const globalRules = new GlobalRules(() => box.current.workspaceRoot, userHome, join(dataDir(), "global-rules.json"));
+  const gitRuleHooks = new GitRuleHooks(checkScript);
+  const ruleHookTargets: AppContext["ruleHookTargets"] = (projectId) => {
+    const root = box.current.workspaceRoot;
+    const kind = store.state.workspace?.vault.kind;
+    if (!root || !kind || kind === "none") return [];
+    const brain = [{ name: "Brain", repo: root }, ...(kind === "brain-hub"
+      ? readHub(root).flatMap(({ folder }) => {
+        const repo = notesPath(root, folder);
+        return repo ? [{ name: folder, repo }] : [];
+      }) : [])].filter(({ repo }) => existsSync(join(repo, ".git")));
+    if (projectId === undefined) return brain;
+    const project = notes.projects.find(projectId);
+    const repo = project && notes.projects.absPath(project);
+    return project && repo && existsSync(join(repo, ".git")) &&
+      !brain.some((item) => item.repo.replaceAll("\\", "/").toLowerCase() === repo.replaceAll("\\", "/").toLowerCase())
+      ? [{ name: project.name, repo }] : [];
+  };
   const refreshGlobal = () => {
     try {
       const global = globalRules.refresh();
@@ -845,6 +869,8 @@ export async function createContext(
     officeTools,
     starterPack,
     globalRules,
+    gitRuleHooks,
+    ruleHookTargets,
     changeStarterRules,
     starterDomains,
     claudeSignIn,

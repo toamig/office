@@ -1,7 +1,8 @@
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { basename, dirname, relative } from "node:path";
 import type { WriteResult } from "../../../shared/models";
 import { writeTextFile } from "../../core/settings";
+import { run } from "../../core/exec";
 import { git } from "../git/run";
 import { operationInProgress } from "../git/sync";
 import { appendToSection, formatWaitingLine, removeWaitingLine } from "./openitems";
@@ -24,6 +25,8 @@ export interface WriterWarning {
 export interface VaultWriterDeps {
   /** Hub root for `brain-hub` vaults, so validate can run after a write; null otherwise. */
   hubRoot: () => string | null;
+  ruleRoot?: () => string;
+  checkScript?: string;
   onWarning: (warning: WriterWarning) => void;
   today?: () => string;
 }
@@ -159,7 +162,8 @@ export class VaultWriter {
 
     checkPath?.();
     let before: string;
-    if (existsSync(file)) before = readFileSync(file, "utf8");
+    const original = existsSync(file) ? readFileSync(file) : undefined;
+    if (original) before = original.toString("utf8");
     else if (initial) before = initial();
     else throw new VaultWriteError("not-found", `${rel} does not exist yet`);
     const after = transform(before);
@@ -169,9 +173,21 @@ export class VaultWriter {
     writeTextFile(file, after);
 
     const add = await git(repo, ["add", "--", rel]);
+    const ruleRoot = this.deps.ruleRoot?.();
+    const script = this.deps.checkScript;
+    if (add.code === 0 && ruleRoot && script && existsSync(script)) {
+      const checked = await run("node", [script, "writer", ruleRoot, "brain", rel], { cwd: repo, timeoutMs: 30_000 });
+      if (checked.code !== 0) {
+        const reset = await git(repo, ["restore", "--staged", "--", rel]);
+        if (reset.code !== 0) await git(repo, ["rm", "--cached", "--ignore-unmatch", "--", rel]);
+        if (original) writeFileSync(file, original);
+        else rmSync(file, { force: true });
+        throw new VaultWriteError("commit-failed", firstLine(checked.stderr || checked.stdout) || "The Brain rules rejected the write.");
+      }
+    }
     const commit =
       add.code === 0
-        ? await git(repo, ["commit", "-m", message, "--", rel], { timeoutMs: 120_000 })
+        ? await git(repo, ["commit", "-m", message, "--", rel], { timeoutMs: 120_000, env: { OFFICE_VAULT_WRITER: "1" } })
         : add;
     if (commit.code !== 0) {
       throw new VaultWriteError(

@@ -33,6 +33,7 @@ import { Notes } from "./project/Notes";
 import { ProjectInspector } from "./project/ProjectInspector";
 import { useProjectManage } from "./project/Manage";
 import { RecentRuns } from "./project/RecentRuns";
+import { GitRulesPanel } from "./setup/GitRulesPanel";
 
 type Tab = "overview" | "todos" | "agents" | "notes" | "preview" | "git";
 
@@ -151,6 +152,7 @@ function Overview({ id }: { id: string }) {
       </Card>
       <PrsPanel projectId={id} />
       <RecentRuns id={id} />
+      {s && <GitRulesPanel projectId={id} />}
     </CardGrid>
   );
 }

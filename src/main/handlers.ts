@@ -683,6 +683,21 @@ function registerVaultHandlers(ctx: AppContext): void {
     ctx.globalRules.undo();
     ctx.bus.emit("rules.changed", {});
   });
+  ctx.ipc.handle("rules.gitStatus", (req) => Promise.all(ctx.ruleHookTargets(req.projectId)
+    .map(async ({ name, repo }) => ({ name, installed: await ctx.gitRuleHooks.installed(repo) }))));
+  ctx.ipc.handle("rules.gitConfigure", async (req) => {
+    const root = ctx.settings().workspaceRoot;
+    const targets = ctx.ruleHookTargets(req.projectId);
+    if (!targets.length) throw new Error("There is no Git repository to configure.");
+    try {
+      for (const { repo } of targets) {
+        if (ctx.settings().workspaceRoot !== root) throw new Error("The Brain changed. Review the repositories again.");
+        await ctx.gitRuleHooks.configure(repo, root, req.projectId ? "code" : "brain", req.enabled);
+      }
+    } finally {
+      ctx.bus.emit("rules.changed", {});
+    }
+  });
   ctx.ipc.handle("health.changes", (req) => ctx.healthActions.changes(req.folder));
   ctx.ipc.handle("health.commit", async (req) => ({
     hash: await ctx.healthActions.commit(req.folder, req.message),

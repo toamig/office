@@ -575,6 +575,10 @@ export const channels = {
   }) },
   "rules.globalApply": { req: z.object({ id: z.string() }), res: z.void() },
   "rules.globalUndo": { req: z.void(), res: z.void() },
+  "rules.gitStatus": { req: z.object({ projectId: z.string().optional() }), res: z.array(z.object({
+    name: z.string(), installed: z.boolean(),
+  })) },
+  "rules.gitConfigure": { req: z.object({ projectId: z.string().optional(), enabled: z.boolean() }), res: z.void() },
   /** What is uncommitted in one of the brain's repos ("." is the hub), with each file's changes. */
   "health.changes": { req: z.object({ folder: z.string() }), res: DiffResult },
   "health.commit": {
