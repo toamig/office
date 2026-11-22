@@ -9,6 +9,7 @@ import { git } from "../git/run";
 import type { RunService } from "../runs/service";
 import type { SessionService } from "../sessions/service";
 import { updateFromUpstream, type VaultWriter } from "../vault/writer";
+import { runRuleTool } from "../vault/rule-pack";
 import { projectNoteNames, updateStarterRouter, writeProjectLayout } from "../vault/starter-layout";
 import {
   addHubRow,
@@ -298,15 +299,9 @@ async function editAndCommitHub(c: Ctx, root: string, onCommitted: () => void): 
   );
   await must(
     "brain reindex",
-    run("node", [join(root, "Common", "tools", "brain.mjs"), "reindex"], {
-      cwd: root,
-      timeoutMs: 120_000,
-    }),
+    runRuleTool(root, "reindex", 120_000, ["node", "Common/tools/brain.mjs", "reindex"])!,
   );
-  const validate = await run("node", [join(root, "Common", "tools", "brain.mjs"), "validate"], {
-    cwd: root,
-    timeoutMs: 120_000,
-  });
+  const validate = await runRuleTool(root, "validate", 120_000, ["node", "Common/tools/brain.mjs", "validate"])!;
   if (validate.code !== 0)
     throw new Error(
       `brain validate failed: ${validate.stdout.split("\n").find((l) => l.startsWith("ERROR")) ?? "see the brain"}`,

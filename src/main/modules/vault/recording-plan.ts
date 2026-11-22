@@ -64,7 +64,7 @@ export function recordTarget(
   };
 }
 
-export function recordingPrompt(text: string, general: boolean, learning: boolean): string {
+export function recordingPrompt(text: string, general: boolean, learning: boolean, placement = ""): string {
   const destinations = general
     ? "journal, reference"
     : `decision, todo, waiting, architecture, contract, design, audience, reference, journal${learning ? ", lesson, profile" : ""}`;
@@ -74,6 +74,7 @@ export function recordingPrompt(text: string, general: boolean, learning: boolea
     "Use waiting for something the owner must do, todo for remaining project work, and journal for a short story of the actual session work.",
     "Record only supported facts that add durable context. Never record credentials, secrets, or private personal information.",
     "Use certainty 'ask' where the fact, placement, or owner's intent is uncertain. Use 'save' only when there is direct evidence.",
+    ...(placement ? [`Follow this brain's placement rules when choosing a destination:\n${placement}`] : []),
     "For lessons state the correction and the rule it implies. For the owner profile use only explicit preferences or recurring corrections.",
     "Return an empty list if the transcript contains nothing worth saving.",
     "",

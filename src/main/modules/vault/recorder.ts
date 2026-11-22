@@ -7,6 +7,7 @@ import type { Db } from "../../core/db";
 import { nowIso } from "../../core/util";
 import { Cursor, readRecording } from "./recording-input";
 import { type Entry, type RecordTarget, parseRecording, recordTarget, recordingPrompt } from "./recording-plan";
+import { readRulePack, ruleBody } from "./rule-pack";
 import { appendToSection, formatWaitingLine } from "./openitems";
 import { notesPath } from "./scope";
 import type { VaultWriter } from "./writer";
@@ -101,7 +102,9 @@ export class Recorder {
     const delta = readRecording(chatsDir, terminalsDir, session.id, cursor);
     if (!delta.text.trim()) return empty();
     const learning = this.deps.settings().learning;
-    const result = await this.deps.complete(session, recordingPrompt(delta.text, general, learning));
+    const pack = readRulePack(root);
+    const result = await this.deps.complete(session, recordingPrompt(delta.text, general, learning,
+      pack ? ruleBody(root, pack.placement) : ""));
     if (this.deps.root() !== root || !this.deps.settings().enabled) return empty();
     const entries = parseRecording(result).flatMap((entry) => {
       if ((entry.destination === "lesson" || entry.destination === "profile") && !learning) return [];

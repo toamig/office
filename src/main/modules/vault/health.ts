@@ -3,11 +3,14 @@ import { join } from "node:path";
 import type { HealthProblem, HealthView, HubRepoRow } from "../../../shared/models";
 import { run } from "../../core/exec";
 import { git } from "../git/run";
+import { runRuleTool } from "./rule-pack";
 
 /** Runs `node Common/tools/brain.mjs validate` from the hub root and parses its report. */
-export async function runValidate(root: string): Promise<HealthView["validate"]> {
+export async function runValidate(root: string, fallback?: () => HealthView["validate"]): Promise<HealthView["validate"]> {
   const tool = join(root, "Common", "tools", "brain.mjs");
-  if (!existsSync(tool)) {
+  const work = runRuleTool(root, "validate", 120_000, !fallback && existsSync(tool) ? ["node", tool, "validate"] : undefined);
+  if (!work) {
+    if (fallback) return fallback();
     return {
       ran: false,
       ok: true,
@@ -18,8 +21,8 @@ export async function runValidate(root: string): Promise<HealthView["validate"]>
       output: "",
     };
   }
-  const result = await run("node", [tool, "validate"], { cwd: root, timeoutMs: 120_000 });
-  return parseValidate(result.stdout, result.code);
+  const result = await work;
+  return parseValidate(result.stdout || result.stderr, result.code);
 }
 
 /** `ERROR ...` lines are errors, `warn ...` lines are warnings, the last `hub:` line is the summary. */

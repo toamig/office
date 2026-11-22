@@ -1,8 +1,9 @@
-import { lstatSync, readFileSync } from "node:fs";
-import { isAbsolute, join, relative, resolve, sep } from "node:path";
+import { join, sep } from "node:path";
 import type { Workspace } from "../../../shared/types";
 import { frontmatterValue, stripFrontmatter } from "../notes/notes";
 import { readHub } from "./hub";
+import { brainPath as notesPath, brainText as readText, readRulePack, ruleBody, ruleReferences } from "./rule-pack";
+export { notesPath, readText };
 
 export interface BrainScope {
   root: string;
@@ -13,36 +14,6 @@ export interface BrainScope {
   restrictedRead?: boolean;
 }
 
-/** Returns a path below the root. Rejects traversal and junctions on every existing component. */
-export function notesPath(root: string, path: string): string | null {
-  if (!root || !path || isAbsolute(path) || /^[A-Za-z]:/.test(path)) return null;
-  const parts = path.split(/[\\/]/);
-  if (parts.some((part) => part === ".." || part.includes(":"))) return null;
-  const base = resolve(root);
-  const target = resolve(base, ...parts);
-  const rel = relative(base, target);
-  if (!rel || isAbsolute(rel) || rel.startsWith(`..${sep}`) || rel === "..") return null;
-  let current = base;
-  for (const part of rel.split(sep).filter(Boolean)) {
-    current = join(current, part);
-    try {
-      if (lstatSync(current).isSymbolicLink()) return null;
-    } catch (error) {
-      if ((error as NodeJS.ErrnoException).code !== "ENOENT") return null;
-      break;
-    }
-  }
-  return target;
-}
-
-export function readText(file: string | null): string {
-  if (!file) return "";
-  try {
-    return readFileSync(file, "utf8");
-  } catch {
-    return "";
-  }
-}
 
 export const profilePath = (kind: string): string =>
   kind === "brain-hub" ? "Common/OwnerProfile.md" : "Shared/OwnerProfile.md";
@@ -75,7 +46,7 @@ export function brainScope(ws: Workspace | null, root: string, projectId?: strin
   const folders = new Set([
     ...readHub(root).map((repo) => repo.folder),
     ...ws.projects.flatMap((entry) => entry.vault === undefined ? [] : [entry.vault]),
-    "Shared", "Common", "General",
+    "Shared", "Common", "General", "Rules",
   ]);
   const scope: BrainScope = { root, instructions: "", writable: owner ? [owner] : [], readOnly: [], private: [] };
   for (const name of folders) {
@@ -85,11 +56,19 @@ export function brainScope(ws: Workspace | null, root: string, projectId?: strin
   }
   const read = (name: string) => !owner || folder === undefined ? "" : readText(notesPath(root, `${folder}/${name}`));
   const overview = read("Overview.md");
+  const rules = readRulePack(root);
+  const domain = frontmatterValue(overview, "domain");
   scope.instructions = [
-    "Brain context. Read the root router and then the project's router. Open the one file that answers the question. Do not scan the Brain.",
+    rules ? ruleReferences(rules, root) : "Brain context. Read the root router and then the project's router. Open the one file that answers the question. Do not scan the Brain.",
     `Root router: ${join(root, "_index.md")}`,
     owner ? `Your notes: ${owner}. Write only in this notes folder.` : "Brain notes are read-only in this conversation.",
     "You may read declared dependencies and use the routers to find other public notes. Never read another project's private notes, even if a router names them.",
+    ...(rules?.load.filter((entry) => !entry.domain || entry.domain === domain)
+      .flatMap((entry) => {
+        const path = notesPath(root, entry.file);
+        if (!path || scope.private.some((hidden) => path === hidden || path.startsWith(hidden + sep))) return [];
+        return ruleBody(root, entry.file);
+      }) ?? []),
     packPart("Project overview", frontmatterValue(overview, "summary") ?? stripFrontmatter(overview), 450),
     packPart("Open items", stripFrontmatter(read(ws.vault.openItemsFile)), 850),
     packPart("Recent decisions", tailEntries(read("Decisions.md"), 5), 850),

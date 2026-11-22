@@ -2,9 +2,9 @@ import { existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { SyncReport, SyncRepoResult } from "../../../shared/models";
 import type { Project, Workspace } from "../../../shared/types";
-import { run } from "../../core/exec";
 import { mapLimit, nowIso, projectFolder } from "../../core/util";
 import { parseHubOutput, syncRepo } from "./sync";
+import { runRuleTool } from "../vault/rule-pack";
 
 export interface SyncAllDeps {
   workspace: () => Workspace | null;
@@ -25,7 +25,8 @@ const sameFolder = (a: string, b: string): boolean =>
  */
 export async function syncHub(root: string, timeoutMs = 180_000): Promise<SyncRepoResult[]> {
   const tool = join(root, "tools", "hub.mjs");
-  if (!existsSync(tool)) {
+  const sync = runRuleTool(root, "sync", timeoutMs, existsSync(tool) ? ["node", tool, "auto"] : undefined);
+  if (!sync) {
     return [
       {
         id: "hub:.",
@@ -35,9 +36,10 @@ export async function syncHub(root: string, timeoutMs = 180_000): Promise<SyncRe
       },
     ];
   }
-  const result = await run("node", [tool, "auto"], { cwd: root, timeoutMs });
+  const result = await sync;
   const rows = parseHubOutput(result.stdout);
-  if (result.code === 0 && !result.timedOut) return rows;
+  if (result.code === 0 && !result.timedOut)
+    return rows.length ? rows : [{ id: "hub:.", name: "Brain hub", action: "up-to-date" }];
   const reason = result.timedOut
     ? `the hub tool did not finish in ${Math.round(timeoutMs / 1000)} seconds`
     : result.stderr.trim().split(/\r?\n/)[0] ||
@@ -49,6 +51,15 @@ export async function syncHub(root: string, timeoutMs = 180_000): Promise<SyncRe
     ...rows.filter((row) => row.id !== "hub:."),
     { id: "hub:.", name: "Brain hub", action: "failed", reason },
   ];
+}
+
+async function syncFolder(root: string): Promise<SyncRepoResult[]> {
+  if (!root || !existsSync(join(root, ".git"))) return [];
+  const task = runRuleTool(root, "sync", 180_000);
+  const result = task ? await task : null;
+  return [{ id: "hub:.", name: "Brain", ...(result
+    ? { action: result.code === 0 ? "up-to-date" : "failed", reason: result.stderr.trim() || undefined }
+    : await syncRepo(root)) }];
 }
 
 /** Sync all: every project repo four at a time, plus the brain hub through its own tool. */
@@ -84,6 +95,7 @@ export async function syncAll(deps: SyncAllDeps): Promise<SyncReport> {
         },
     );
     if (hubRoot) jobs.push(() => syncHub(hubRoot));
+    else if (workspace.vault.kind === "folder") jobs.push(() => syncFolder(deps.workspaceRoot()));
     for (const group of await mapLimit(jobs, 4, (job) => job())) results.push(...group);
   }
   const report: SyncReport = { startedAt, finishedAt: nowIso(), repos: results };

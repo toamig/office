@@ -5,16 +5,21 @@ import type { Workspace } from "../../../shared/types";
 import { IpcFailure } from "../../core/ipc";
 import { stripFrontmatter } from "../notes/notes";
 import type { RunService } from "../runs/service";
+import { readRulePack, ruleReferences } from "../vault/rule-pack";
 
 export const ASK_SUFFIX =
   "Answer from this vault. Follow Common/AGENTS.md: grep frontmatter first, read at most two files, cite the files you used.";
 
 /** The prompt for one question: the question, the standing rule, and the scope when one project is chosen. */
-export function buildAskPrompt(question: string, scopeFolder?: string): string {
+export function buildAskPrompt(question: string, scopeFolder?: string, root?: string): string {
   const scope = scopeFolder
     ? `\n\nScope: look only in the "${scopeFolder}" folder of the vault.`
     : "";
-  return `${question.trim()}\n\n${ASK_SUFFIX}${scope}`;
+  const rules = root ? readRulePack(root) : null;
+  const guidance = rules && root
+    ? `Answer from this brain and cite the files you used. ${ruleReferences(rules, root)}`
+    : ASK_SUFFIX;
+  return `${question.trim()}\n\n${guidance}${scope}`;
 }
 
 /** Vault-relative `.md` paths mentioned as [[wikilinks]] or plain paths, kept only when the file exists. */
@@ -84,7 +89,7 @@ export class AskService {
       providerId: role.provider,
       role,
       cwd: join(root),
-      prompt: buildAskPrompt(question, scopeFolder),
+      prompt: buildAskPrompt(question, scopeFolder, root),
       ...(projectId ? { projectId } : {}),
     });
     const pending: Pending = { question };

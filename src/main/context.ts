@@ -206,7 +206,7 @@ function createNotes({ box, bus, store, notifier }: Base): Notes {
     root: () => box.current.workspaceRoot,
     kind: () => store.state.workspace?.vault.kind,
     warnings: () => warnings,
-    validate: async (root) => folderTools.enabled() ? folderTools.validate(root) : runValidate(root),
+    validate: (root) => runValidate(root, folderTools.enabled() ? () => folderTools.validate(root) : undefined),
     repos: readHubStatus,
     onChange: () => bus.emit("vault.health", {}),
   });
@@ -349,7 +349,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
     bus.emit("vault.changed", {});
   };
   sessions.chat = {
-    send: (id, text) => chat.send(id, text),
+    send: (id, text, images, options, brief) => chat.send(id, text, images, options, brief),
     configure: (id, extra) => chat.configure(id, extra),
     stop: (id) => chat.stop(id),
     running: (id) => chat.running(id),
