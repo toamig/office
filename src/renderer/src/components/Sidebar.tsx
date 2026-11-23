@@ -16,23 +16,18 @@ import { useState, type ComponentType, type KeyboardEvent, type PointerEvent } f
 import { usePending } from "../lib/pending";
 import { prefetchView } from "../lib/prefetch";
 import { SIDEBAR_MAX, SIDEBAR_MIN, useSidebarCollapsed, useSidebarWidth } from "../lib/sidebar";
-import { VIEW_LABELS } from "../lib/views";
+import { SIDEBAR_ORDER, VIEW_LABELS } from "../lib/views";
 import { useUi, type ViewId } from "../stores/ui";
 
 /** The views in the order of the sidebar; Ctrl+1 to Ctrl+9 follow this order. */
-export const RAIL: Array<{ id: ViewId; icon: ComponentType<{ size?: number }> }> = [
-  { id: "home", icon: Home },
-  { id: "projects", icon: FolderKanban },
-  { id: "agents", icon: Bot },
-  { id: "git", icon: GitBranch },
-  { id: "board", icon: KanbanSquare },
-  { id: "brain", icon: BrainIcon },
-  { id: "inbox", icon: InboxIcon },
-  { id: "explore", icon: Compass },
-  { id: "setup", icon: Settings },
-  { id: "tools", icon: Wrench },
-  { id: "workflows", icon: CalendarClock },
-];
+const ICONS: Partial<Record<ViewId, ComponentType<{ size?: number }>>> = {
+  home: Home, projects: FolderKanban, agents: Bot, explore: Compass, board: KanbanSquare, git: GitBranch,
+  brain: BrainIcon, workflows: CalendarClock, tools: Wrench, inbox: InboxIcon,
+};
+export const RAIL: Array<{ id: ViewId; icon: ComponentType<{ size?: number }> }> = SIDEBAR_ORDER.map((id) => ({ id, icon: ICONS[id] ?? Home }));
+
+/** Setup sits apart at the bottom of the sidebar, like Settings in other apps. */
+const SETUP_ITEM = { id: "setup" as ViewId, icon: Settings };
 
 /** The sidebar: icons and labels, or icons only when collapsed. */
 export function Sidebar({
@@ -93,12 +88,25 @@ export function Sidebar({
           data-active={view === "gallery"}
           aria-label="Gallery"
           title={collapsed ? "Gallery" : undefined}
-          className="sidebar-item mt-auto"
+          className="sidebar-item"
         >
           <Palette size={16} />
           {!collapsed && <span className="sidebar-label">Gallery</span>}
         </button>
       )}
+      <button
+        onClick={() => navigate("setup")}
+        onPointerEnter={() => prefetchView("setup")}
+        onFocus={() => prefetchView("setup")}
+        data-testid="rail-setup"
+        data-active={view === "setup"}
+        title={collapsed ? VIEW_LABELS.setup : undefined}
+        aria-label={VIEW_LABELS.setup}
+        className="sidebar-item sidebar-setup"
+      >
+        <SETUP_ITEM.icon size={16} />
+        {!collapsed && <span className="sidebar-label">{VIEW_LABELS.setup}</span>}
+      </button>
       {!collapsed && (
         <div
           className="sidebar-resizer"

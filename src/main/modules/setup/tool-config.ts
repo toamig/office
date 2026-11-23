@@ -5,6 +5,8 @@ import type { ToolEdit, ToolEditPreview, ToolEntry, ToolKind } from "../../../sh
 import { writeRawFile, writeTextFile } from "../../core/settings";
 import { notesPath } from "../vault/scope";
 import { unifiedDiff } from "./install-hooks";
+import { splitCommand } from "./mcp-test";
+import { describeEntry, installedPlugins } from "./tool-describe";
 import { docEntries, documents, editDoc, type Entry, object, read, skillsDir, skillsIn, toolId } from "./tool-documents";
 
 interface Deps {
@@ -51,7 +53,26 @@ export class ToolConfigService {
   }
 
   list(projectId?: string): ToolEntry[] {
-    return this.entries(projectId).map(({ doc: _doc, key: _key, value: _value, storageKind: _kind, hook: _hook, ...entry }) => entry);
+    const plugins = installedPlugins(this.deps.home());
+    return this.entries(projectId).map((entry) => describeEntry(entry, plugins));
+  }
+
+  /** The configuration of a connection already in the list, for testing it. */
+  connection(id: string, projectId?: string): { address?: string; command?: string; args: string[]; env: Record<string, string> } | null {
+    const entry = this.entries(projectId).find((item) => item.id === id);
+    if (!entry || (entry.kind !== "mcp" && entry.kind !== "connector")) return null;
+    const config = object(entry.value);
+    const strings = (value: unknown): string[] => Array.isArray(value) ? value.filter((item): item is string => typeof item === "string") : [];
+    const env = Object.fromEntries(Object.entries(object(config["env"])).filter((pair): pair is [string, string] => typeof pair[1] === "string"));
+    if (typeof config["url"] === "string") return { address: config["url"], args: [], env };
+    return typeof config["command"] === "string" ? { command: config["command"], args: strings(config["args"]), env } : null;
+  }
+
+  /** Plugins that are installed and not turned on yet, for the guided Add. */
+  availablePlugins(provider: ToolEntry["provider"], projectId?: string): Array<{ id: string; title: string; description: string }> {
+    if (provider !== "claude-code") return [];
+    const on = new Set(this.entries(projectId).filter((entry) => entry.kind === "plugin" && !entry.disabled).map((entry) => entry.name));
+    return [...installedPlugins(this.deps.home())].filter(([id]) => !on.has(id)).map(([id, plugin]) => ({ id, ...plugin }));
   }
 
   preview(request: ToolEdit): ToolEditPreview {
@@ -105,8 +126,19 @@ export class ToolConfigService {
       if (entry.key === "@notify") throw new Error("Codex only uses notify in user settings.");
       this.destination(plan, entry.provider, kind, entry.key, entry.value, project);
     }
+    if (request.action === "enable") {
+      this.file(plan, entry.doc, kind, entry.key, this.enabledValue(entry));
+      return;
+    }
     const disabled = request.action === "disable" ? this.disabledValue(entry) : undefined;
     this.file(plan, entry.doc, kind, entry.key, disabled);
+  }
+
+  private enabledValue(entry: Entry): unknown {
+    if (!entry.disabled) throw new Error("That tool is already on.");
+    if (entry.provider === "claude-code" && entry.kind === "plugin") return true;
+    if (entry.provider === "codex" && entry.kind !== "hook") return { ...object(entry.value), enabled: true };
+    throw new Error("This tool cannot be switched back on from here. Add it again instead.");
   }
 
   private disabledValue(entry: Entry): unknown {
@@ -130,7 +162,7 @@ export class ToolConfigService {
       throw new Error("Enter the connector's HTTP or HTTPS address.");
     const config = {
       hook: [{ hooks: [{ type: "command", command: value }] }],
-      mcp: { command: value },
+      mcp: ((parts) => ({ command: parts[0] ?? value, ...(parts.length > 1 ? { args: parts.slice(1) } : {}) }))(splitCommand(value)),
       connector: provider === "codex" ? { url: value, enabled: true } : { type: "http", url: value },
       plugin: provider === "codex" ? { enabled: true } : true,
     }[kind];

@@ -1237,3 +1237,12 @@ export const UpdateStatus = z.object({
   detail: z.string().nullable(),
 });
 export type UpdateStatus = z.infer<typeof UpdateStatus>;
+
+/** The Windows task that syncs the Brain every 15 minutes, as Setup shows it (read only). */
+export const BrainSyncState = z.object({
+  state: z.enum(["on", "off", "missing", "unsupported"]),
+  next: z.string().nullable(),
+  last: z.string().nullable(),
+  lastResultOk: z.boolean().nullable(),
+});
+export type BrainSyncState = z.infer<typeof BrainSyncState>;

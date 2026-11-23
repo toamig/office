@@ -185,6 +185,17 @@ body {
   background: var(--hover);
   font-weight: 600;
 }
+.sidebar-setup {
+  margin-top: auto;
+}
+.sidebar-setup::before {
+  content: "";
+  position: absolute;
+  top: -5px;
+  right: 6px;
+  left: 6px;
+  border-top: 1px solid var(--line);
+}
 .sidebar-label {
   overflow: hidden;
   text-overflow: ellipsis;

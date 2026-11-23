@@ -39,6 +39,8 @@ import {
   setDock,
   setLayout,
 } from "./modules/sessions/layouts";
+import { testConnection } from "./modules/setup/mcp-test";
+import { readBrainSync } from "./modules/setup/brain-sync";
 import { appDataDir, claudeDir, userHome } from "./core/paths";
 import { claudeTaskViews, projectOfFolder, readClaudeTasks, workflowFromClaudeTask } from "./modules/workflows/claude-tasks";
 import { workflowsFor } from "../shared/workflow";
@@ -180,6 +182,7 @@ function registerSetupHandlers(ctx: AppContext): void {
     ctx.patchSettings({ welcomeDone: true });
     ctx.bus.emit("setup.changed", {});
   });
+  ctx.ipc.handle("setup.brainSync", () => readBrainSync());
   ctx.ipc.handle("setup.inspect", (req) => inspectWorkspaceFolder(req.root));
   ctx.ipc.handle("setup.clone", (req) => cloneWorkspaceRepo(req.url, req.dest));
   ctx.ipc.handle("setup.apply", async (req) => {
@@ -210,6 +213,14 @@ function registerSetupHandlers(ctx: AppContext): void {
   );
   ctx.ipc.handle("setup.inventory", (req) => inventory.get(req.projectId));
   ctx.ipc.handle("tools.list", (req) => ctx.toolConfig.list(req.projectId));
+  ctx.ipc.handle("tools.plugins", (req) => ctx.toolConfig.availablePlugins(req.provider, req.projectId));
+  ctx.ipc.handle("tools.test", (req) => {
+    if ("address" in req) return testConnection({ address: req.address });
+    if ("command" in req) return testConnection({ command: req.command });
+    const saved = ctx.toolConfig.connection(req.id, req.projectId);
+    if (!saved) throw new IpcFailure("not-found", "That connection is no longer in the configuration.");
+    return testConnection(saved);
+  });
   ctx.ipc.handle("tools.preview", (req) => ctx.toolConfig.preview(req));
   ctx.ipc.handle("tools.apply", (req) => {
     ctx.toolConfig.apply(req.id);

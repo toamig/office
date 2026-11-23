@@ -17,7 +17,7 @@ export interface Document {
   groups: Partial<Record<ToolKind, string>>;
 }
 
-export type Entry = ToolEntry & {
+export type Entry = Omit<ToolEntry, "title" | "description" | "configKey" | "command"> & {
   doc?: Document; storageKind?: ToolKind; key: string; value?: unknown;
   hook?: { group: number; index: number };
 };

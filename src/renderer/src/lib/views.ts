@@ -16,3 +16,8 @@ export const VIEW_LABELS: Record<ViewId, string> = {
   workflows: "Workflows",
   gallery: "Gallery",
 };
+
+/** The views in the order of the sidebar. Setup is not in it: it sits apart at the bottom. */
+export const SIDEBAR_ORDER: ViewId[] = [
+  "home", "projects", "agents", "explore", "board", "git", "brain", "workflows", "tools", "inbox",
+];

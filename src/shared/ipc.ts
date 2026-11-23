@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
 import { OfficeConfirmation } from "./office-tools";
-import { ToolEdit, ToolEditPreview, ToolEntry } from "./tool-config";
+import { InstalledPlugin, ToolEdit, ToolEditPreview, ToolEntry, ToolTest, ToolTestResult } from "./tool-config";
 import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
 import { PermissionProfile, Pipeline, Role } from "./schemas";
 import {
@@ -76,6 +76,7 @@ import {
   RewindPreview,
   ChatOptions,
   ChatState,
+  BrainSyncState,
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
@@ -250,6 +251,7 @@ export const channels = {
   "setup.login": { req: z.object({ id: z.string() }), res: z.void() },
   /** Opens the install command of a missing tool (Codex) in a terminal tab. */
   "setup.install": { req: z.object({ id: z.string() }), res: z.void() },
+  "setup.brainSync": { req: z.void(), res: BrainSyncState },
   "setup.inspect": { req: z.object({ root: z.string() }), res: WorkspaceInspection },
   "setup.clone": {
     req: z.object({ url: z.string(), dest: z.string() }),
@@ -272,6 +274,11 @@ export const channels = {
     req: z.object({ projectId: z.string().optional() }),
     res: z.array(ToolEntry),
   },
+  "tools.plugins": {
+    req: z.object({ provider: z.enum(["claude-code", "codex"]), projectId: z.string().optional() }),
+    res: z.array(InstalledPlugin),
+  },
+  "tools.test": { req: ToolTest, res: ToolTestResult },
   "tools.preview": { req: ToolEdit, res: ToolEditPreview },
   "tools.apply": { req: z.object({ id: z.string() }), res: z.void() },
   "setup.pickFolder": {
