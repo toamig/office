@@ -54,6 +54,7 @@ export class PreviewPane {
         contextIsolation: true,
         nodeIntegration: false,
         webSecurity: true,
+        partition: "office-project-preview",
         ...(isE2E() ? { backgroundThrottling: false } : {}),
       },
     });

@@ -1,46 +1,31 @@
 import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, Search } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
-import type { PreviewState } from "@shared/models";
+import { useCallback, useEffect, useRef, useState } from "react";
+import type { PreviewBounds, PreviewState } from "@shared/models";
 import { Button, EmptyState, IconButton, Input, notify, notifyError } from "../ui";
 import { office } from "../lib/ipc";
-import { useUi } from "../stores/ui";
+import { useNativeBounds } from "../lib/native-bounds";
 
 /** A browser pane for the project's page or local dev server: back, forward, reload, open externally. */
-export function PreviewTab({ projectId }: { projectId: string }) {
-  const storeKey = `preview-url:${projectId}`;
+export function PreviewTab({ projectId, owner, initialUrl, transient = false }: { projectId: string; owner?: string; initialUrl?: string; transient?: boolean }) {
+  const storeKey = `preview-url:${owner ?? projectId}`;
   const [url, setUrl] = useState(() => localStorage.getItem(storeKey) ?? "");
   const [state, setState] = useState<PreviewState | null>(null);
   const holder = useRef<HTMLDivElement>(null);
-  // Dialogs sit in the page, and a native pane would cover them, so it steps aside while one is open.
-  const covered = useUi((s) => s.switcherOpen || s.syncReport !== null);
+  useNativeBounds(holder, useCallback((bounds: PreviewBounds) => {
+    void office.invoke("preview.bounds", { ...bounds, owner });
+  }, [owner]));
 
   useEffect(() => {
-    const send = (visible: boolean): void => {
-      const r = holder.current?.getBoundingClientRect();
-      if (r)
-        void office.invoke("preview.bounds", {
-          x: r.x,
-          y: r.y,
-          width: r.width,
-          height: r.height,
-          visible,
-        });
-    };
-    send(!covered);
-    const observer = new ResizeObserver(() => send(!covered));
-    if (holder.current) observer.observe(holder.current);
-    const timer = setInterval(() => send(!covered), 300);
+    void office.invoke("preview.state", { owner }).then(setState);
+    const off = office.on("preview.state", (e) => {
+      const payload = e.payload as PreviewState & { owner?: string };
+      if (payload.owner === owner) setState(payload);
+    });
     return () => {
-      observer.disconnect();
-      clearInterval(timer);
-      void office.invoke("preview.bounds", { x: 0, y: 0, width: 0, height: 0, visible: false });
+      off();
+      if (owner) void office.invoke("preview.act", { action: "close", owner });
     };
-  }, [covered]);
-
-  useEffect(() => {
-    void office.invoke("preview.state").then(setState);
-    return office.on("preview.state", (e) => setState(e.payload as PreviewState));
-  }, []);
+  }, [owner]);
 
   // A page that did not load is a result, not a lasting state: it is a notification, and the layout never moves.
   const loadError = state?.error ?? null;
@@ -54,19 +39,23 @@ export function PreviewTab({ projectId }: { projectId: string }) {
       });
   }, [loadError, projectId]);
 
-  const go = async (target = url): Promise<void> => {
+  const go = useCallback(async (target: string): Promise<void> => {
     if (!target.trim()) return;
     try {
-      const next = await office.invoke("preview.open", { url: target });
+      const next = await office.invoke("preview.open", { url: target, owner });
       setState(next);
       setUrl(next.url || target);
-      localStorage.setItem(storeKey, next.url || target);
+      if (!transient) localStorage.setItem(storeKey, next.url || target);
     } catch (err) {
       notifyError(err, "Could not open that address", `preview-${projectId}`);
     }
-  };
+  }, [owner, projectId, storeKey, transient]);
+  useEffect(() => {
+    const target = initialUrl ?? (owner && !transient ? localStorage.getItem(storeKey) : undefined);
+    if (target) void go(target);
+  }, [initialUrl, owner, storeKey, transient, go]);
   const act = (action: "back" | "forward" | "reload" | "external"): void => {
-    void office.invoke("preview.act", { action }).then(setState);
+    void office.invoke("preview.act", { action, owner }).then(setState);
   };
   const detect = async (): Promise<void> => {
     const found = await office.invoke("preview.detect");
@@ -85,10 +74,10 @@ export function PreviewTab({ projectId }: { projectId: string }) {
   return (
     <div data-testid="preview-tab" className="flex h-full flex-col p-3">
       <form
-        className="mb-2 flex items-end gap-2"
+        className="mb-2 flex flex-wrap items-end gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          void go();
+          void go(url);
         }}
       >
         <IconButton

@@ -4,10 +4,32 @@ import { Markdown } from "../../components/Markdown";
 import { office } from "../../lib/ipc";
 import { Button, Dialog } from "../../ui";
 
-export const ChatAssets = createContext<{ id: string } | null>(null);
+export const ChatAssets = createContext<{ id: string; openFile?: (path: string) => void; openPreview?: (url: string) => void } | null>(null);
 export const isImagePath = (path: string) => /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(path);
 export const isLocalFile = (path: string) => !/^(?:#|\/\/)/.test(path) &&
   (!/^[a-z][a-z0-9+.-]*:/i.test(path) || /^(?:file:\/\/|[a-z]:[\\/])/i.test(path));
+
+const isFileReference = (path: string) => isLocalFile(path) && /(?:[\\/]|\.[a-z][a-z\d]{0,11}$)/i.test(path);
+export const isArtifactPath = (path: string) => isImagePath(path) || /\.(?:html?|xhtml|md|markdown|pdf)$/i.test(path);
+export const wroteFile = (name: string) => ["Write", "Edit", "MultiEdit", "NotebookEdit", "apply_patch"].includes(name);
+
+export function localAddress(value: string): string | undefined {
+  const raw = value.match(/(?:^|[\s(])((?:https?:\/\/)?(?:localhost|127\.0\.0\.1|\[::1\]):\d+(?:\/[^\s"'<>)]*)?)(?=$|[\s),;"'])/im)?.[1]?.replace(/[.,;]+$/, "");
+  if (!raw) return;
+  return /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
+}
+
+function fileLink(value: string): string {
+  if (/^file:/i.test(value)) return value;
+  try { return decodeURIComponent(value); } catch { return value; }
+}
+
+function isLoopbackLink(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return ["http:", "https:"].includes(url.protocol) && ["localhost", "127.0.0.1", "[::1]"].includes(url.hostname) && !url.username && !url.password;
+  } catch { return false; }
+}
 
 export function toolPaths(input: Record<string, unknown>): string[] {
   const changes = input["changes"];
@@ -48,8 +70,22 @@ export function ChatImageView({ source, alt, inline = false }: { source: ChatIma
 }
 
 export function ChatMarkdown({ children }: { children: string }) {
-  return <Markdown localLinks components={{ img: ({ src, alt }) => src && isLocalFile(src) ?
-    <ChatImageView key={src} source={{ kind: "file", path: src }} alt={alt || "Image"} inline /> : <span>{alt}</span> }}>
+  const assets = useContext(ChatAssets);
+  return <Markdown localLinks components={{
+    img: ({ src, alt }) => src && isLocalFile(src) ? <ChatImageView key={src} source={{ kind: "file", path: fileLink(src) }} alt={alt || "Image"} inline /> : <span>{alt}</span>,
+    a: ({ node: _node, href, children: label, ...props }) => {
+      if (href && isLoopbackLink(href) && assets?.openPreview) return <button type="button" className="chat-link" onClick={() => assets.openPreview?.(href)}>{label}</button>;
+      if (href && isFileReference(href) && assets?.openFile) return <button type="button" className="chat-link" onClick={() => assets.openFile?.(fileLink(href))}>{label}</button>;
+      return <a {...props} href={href} target="_blank" rel="noreferrer">{label}</a>;
+    },
+    code: ({ node: _node, children: code, ...props }) => {
+      if (typeof code === "string" && !props.className && !code.includes("\n")) {
+        if (isLoopbackLink(code) && assets?.openPreview) return <button type="button" className="chat-link" onClick={() => assets.openPreview?.(code)}><code>{code}</code></button>;
+        if (isFileReference(code) && assets?.openFile) return <button type="button" className="chat-link" onClick={() => assets.openFile?.(code)}><code>{code}</code></button>;
+      }
+      return <code {...props}>{code}</code>;
+    },
+  }}>
     {children}
   </Markdown>;
 }

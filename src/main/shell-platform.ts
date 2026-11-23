@@ -29,11 +29,17 @@ export interface ShellPlatform {
   pickFolder(title?: string): Promise<string | null>;
   /** Opens a folder or file with the system's default program; answers an error text, or "" on success. */
   openPath(path: string): Promise<string>;
+  revealPath?(path: string): void;
+  filePreview?: {
+    open(id: string, file: string): Promise<void>;
+    setBounds(id: string, bounds: PreviewBounds): void;
+    close(id: string): void;
+  };
   preview: {
-    open(url: string): Promise<PreviewState>;
-    setBounds(bounds: PreviewBounds): void;
-    act(action: "back" | "forward" | "reload" | "stop" | "external" | "close"): PreviewState;
-    state(): PreviewState;
+    open(url: string, owner?: string): Promise<PreviewState>;
+    setBounds(bounds: PreviewBounds, owner?: string): void;
+    act(action: "back" | "forward" | "reload" | "stop" | "external" | "close", owner?: string): PreviewState;
+    state(owner?: string): PreviewState;
   };
   updates: {
     status(): UpdateStatus;

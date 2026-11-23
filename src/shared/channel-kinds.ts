@@ -47,6 +47,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "chat.state",
   "chat.history",
   "chat.image",
+  "chat.file",
   "chat.commands",
   "chat.rewindPreview",
   "chat.files",
@@ -88,6 +89,7 @@ const QUIET_PREFIXES = [
   "layout.",
   "dock.",
   "chat.send",
+  "chat.previewFileBounds",
   "setup.pickFolder",
 ];
 

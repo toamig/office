@@ -591,6 +591,12 @@ export const ChatImageSource = z.discriminatedUnion("kind", [
 ]);
 export type ChatImageSource = z.infer<typeof ChatImageSource>;
 
+export const ChatFile = z.object({
+  name: z.string(), kind: z.enum(["markdown", "html", "image", "pdf", "text", "binary"]),
+  text: z.string().optional(),
+});
+export type ChatFile = z.infer<typeof ChatFile>;
+
 /**
  * What a chat shows, one event at a time, whichever program is underneath. The main process turns the
  * provider's stream into these, stores them as JSON lines in the session's folder, and sends them to the

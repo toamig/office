@@ -1,4 +1,4 @@
-import { GitBranch } from "lucide-react";
+import { GitBranch, PanelRightOpen } from "lucide-react";
 import { useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { emptyChat, reduceChat, replayChat, toolGroup, type ChatItem, type ChatState as Conversation } from "@shared/chat";
 import type { ChatLine, ChatOptions, ChatState, SessionRow } from "@shared/models";
@@ -10,11 +10,12 @@ import { StatusChip } from "../../components/StatusChip";
 import { useSessionActions } from "../../components/SessionActions";
 import { office } from "../../lib/ipc";
 import { useUi } from "../../stores/ui";
-import { Button, Dropdown, OverflowMenu, notifyError } from "../../ui";
+import { Button, Dropdown, IconButton, OverflowMenu, SplitPane, notifyError } from "../../ui";
 import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
 import { LivePlan, ToolGroup, TurnStatus } from "./Activity";
 import { Composer } from "./Composer";
-import { ChatAssets } from "./ChatAssets";
+import { ChatAssets, isArtifactPath, toolPaths, wroteFile } from "./ChatAssets";
+import { ChatSidePanel, type SideTab } from "./ChatSidePanel";
 import { slashMenu, type SlashCommand } from "./commands";
 import { ChatMessage } from "./Messages";
 import { QueuedMessage } from "./QueuedMessage";
@@ -102,6 +103,12 @@ export function ChatView({ session, onChanged, headerActions }: {
   const plain = isChatSession(session);
   const { conversation, ready } = useConversation(id);
   const { items, working, activity, queue } = conversation;
+  const panelKey = `office.chat-panel:${id}`;
+  const [panelVisible, setPanelVisible] = useState(() => !session.incognito && localStorage.getItem(panelKey) === "1");
+  const [sideTab, setSideTab] = useState<SideTab>("preview");
+  const [sideFile, setSideFile] = useState<string>();
+  const [sideUrl, setSideUrl] = useState<string>();
+  const latestArtifact = useRef<string | undefined>(undefined);
   const [state, setState] = useState<ChatState | null>(null);
   const [login, setLogin] = useState<{ messageId: string; run: ToolRun }>();
   const [discovered, setDiscovered] = useState<string[]>();
@@ -115,6 +122,34 @@ export function ChatView({ session, onChanged, headerActions }: {
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
   const { wrapUp } = useSessionActions();
+
+  const showPanel = (show: boolean) => {
+    setPanelVisible(show);
+    if (!session.incognito) localStorage.setItem(panelKey, show ? "1" : "0");
+  };
+  const openFile = (path: string) => {
+    setSideFile(path);
+    setSideTab("file");
+    showPanel(true);
+  };
+  const openPreview = (url: string) => {
+    setSideUrl(url);
+    setSideTab("preview");
+    showPanel(true);
+  };
+
+  useEffect(() => {
+    if (!ready) return;
+    for (let index = items.length - 1; index >= 0; index--) {
+      const item = items[index];
+      if (item?.kind !== "tool" || item.status !== "done" || !wroteFile(item.name)) continue;
+      const path = toolPaths(item.input).findLast(isArtifactPath);
+      if (!path) continue;
+      if (latestArtifact.current !== item.id && panelVisible && sideTab === "file") setSideFile(path);
+      latestArtifact.current = item.id;
+      break;
+    }
+  }, [items, ready, panelVisible, sideTab]);
 
   useEffect(() => {
     let request = 0;
@@ -194,7 +229,11 @@ export function ChatView({ session, onChanged, headerActions }: {
     if (item.kind === "error" && lastMessage) retryTargets.set(index, lastMessage);
   }
   return (
-    <ChatAssets.Provider value={{ id }}>
+    <ChatAssets.Provider value={{ id, openFile, openPreview }}>
+    <SplitPane id={session.incognito ? "chat-side-incognito" : `chat-side:${id}`} fixedSide="right"
+      defaultSize={430} min={280} minSecond={280} showSecond={panelVisible} label="Resize chat side panel"
+      second={<ChatSidePanel session={session} tab={sideTab} path={sideFile} url={sideUrl} onTab={setSideTab}
+        onClose={() => showPanel(false)} />} first={
     <div className="chat" ref={chat} data-testid="chat" data-session={id}>
       <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>
@@ -202,6 +241,7 @@ export function ChatView({ session, onChanged, headerActions }: {
         {session.branch && <span className="pane-branch"><GitBranch size={12} />{session.branch}</span>}
         <div className="flex-1" />
         {!plain && <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">Wrap up</Button>}
+        {!panelVisible && <IconButton size="sm" label="Show chat side panel" onClick={() => showPanel(true)}><PanelRightOpen /></IconButton>}
         {headerActions}
       </header>
       <div className="chat-scroll" ref={list} data-testid="chat-scroll" onScroll={(event) => {
@@ -266,7 +306,7 @@ export function ChatView({ session, onChanged, headerActions }: {
       {rewind && <RewindDialog id={id} initialMessage={rewind.messageId}
         messages={items.filter((item) => item.kind === "user").filter((item) => snapshots.has(item.id)).reverse()}
         terminal={claude && !plain && !working ? openTerminal : undefined} onClose={() => setRewind(undefined)} />}
-    </div>
+    </div>} />
     </ChatAssets.Provider>
   );
 }

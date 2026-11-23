@@ -3,7 +3,8 @@ import type { AppContext } from "./context";
 import { currentChrome } from "./chrome";
 import { terminalMenu } from "./core/context-menu";
 import type { UpdateService } from "./core/update";
-import type { PreviewPane } from "./preview";
+import { PreviewPane } from "./preview";
+import { ChatFilePreview } from "./chat-file-preview";
 import type { ShellPlatform } from "./shell-platform";
 
 const targetWindow = (): BrowserWindow | undefined =>
@@ -15,6 +16,17 @@ export function createElectronPlatform(
   preview: PreviewPane,
   updates: UpdateService,
 ): ShellPlatform {
+  const files = new ChatFilePreview(targetWindow, (id) => ctx.chat.fileScope(id));
+  const previews = new Map<string, PreviewPane>();
+  const pane = (owner?: string): PreviewPane => {
+    if (!owner) return preview;
+    let selected = previews.get(owner);
+    if (!selected) {
+      selected = new PreviewPane(() => targetWindow() ?? null, (state) => ctx.bus.emit("preview.state", { ...state, owner }));
+      previews.set(owner, selected);
+    }
+    return selected;
+  };
   return {
     chrome: () => currentChrome(),
     popupMenu: (items) => {
@@ -64,11 +76,21 @@ export function createElectronPlatform(
       return result.canceled ? null : (result.filePaths[0] ?? null);
     },
     openPath: (path) => shell.openPath(path),
+    revealPath: (path) => shell.showItemInFolder(path),
+    filePreview: {
+      open: (id, file) => files.open(id, file),
+      setBounds: (id, bounds) => files.setBounds(id, bounds),
+      close: (id) => files.close(id),
+    },
     preview: {
-      open: (url) => preview.open(url),
-      setBounds: (bounds) => preview.setBounds(bounds),
-      act: (action) => preview.act(action),
-      state: () => preview.state(),
+      open: (url, owner) => pane(owner).open(url),
+      setBounds: (bounds, owner) => pane(owner).setBounds(bounds),
+      act: (action, owner) => {
+        const state = pane(owner).act(action);
+        if (action === "close" && owner) previews.delete(owner);
+        return state;
+      },
+      state: (owner) => pane(owner).state(),
     },
     updates: {
       status: () => updates.status(),

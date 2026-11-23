@@ -26,10 +26,10 @@ function diffRows(file: DiffFile): DiffRow[] {
 }
 
 /** Changed files and a unified diff with line comments that can go back to the agent that made the change. */
-export function DiffTab({ projectId }: { projectId: string }) {
+export function DiffTab({ projectId, workingDir = "", inspect = true }: { projectId: string; workingDir?: string; inspect?: boolean }) {
   const worktrees = useQuery("worktrees.list", { projectId }, ["project.status"]);
   const branches = useQuery("branches.list", { projectId });
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState(workingDir);
   const [mode, setMode] = useState<Mode>("working");
   const [base, setBase] = useState("");
   const baseName = base || branches.data?.defaultBranch || "main";
@@ -72,7 +72,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
 
   return (
     <div className="grid gap-3" data-testid="diff-tab">
-      <InspectorSlot view="git">
+      {inspect && <InspectorSlot view="git">
         {file && (
           <Card title="Selected file" testId="git-file-inspector">
             <dl className="ui-dl">
@@ -92,7 +92,7 @@ export function DiffTab({ projectId }: { projectId: string }) {
             </div>
           </Card>
         )}
-      </InspectorSlot>
+      </InspectorSlot>}
       <div className="flex flex-wrap items-center gap-3">
         <Select
           value={dir}

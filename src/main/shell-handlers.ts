@@ -6,6 +6,7 @@ import { notePath } from "./modules/notes/notes";
 import { findUproject } from "./modules/projects/unreal";
 import type { ShellPlatform } from "./shell-platform";
 import type { RunSummary } from "../shared/models";
+import { describeChatFile, isHtmlFile, isPdfFile, scopedFile } from "./modules/chat/files";
 
 /** Handlers that reach Electron through the platform (menus, dialogs, the shell, the preview pane, the updater). */
 export function registerShellHandlers(ctx: AppContext, platform: ShellPlatform): void {
@@ -17,15 +18,42 @@ export function registerShellHandlers(ctx: AppContext, platform: ShellPlatform):
   ctx.ipc.handle("app.update.install", () => platform.updates.installNow());
   ctx.ipc.handle("preview.open", async (req) => {
     try {
-      return await platform.preview.open(req.url);
+      return await platform.preview.open(req.url, req.owner);
     } catch (err) {
       throw new IpcFailure("bad-url", (err as Error).message);
     }
   });
-  ctx.ipc.handle("preview.bounds", (req) => platform.preview.setBounds(req));
-  ctx.ipc.handle("preview.act", (req) => platform.preview.act(req.action));
-  ctx.ipc.handle("preview.state", () => platform.preview.state());
+  ctx.ipc.handle("preview.bounds", (req) => platform.preview.setBounds(req, req.owner));
+  ctx.ipc.handle("preview.act", (req) => platform.preview.act(req.action, req.owner));
+  ctx.ipc.handle("preview.state", (req) => platform.preview.state(req?.owner));
   ctx.ipc.handle("preview.detect", () => detectDevServer());
+  const fileRequests = new Map<string, symbol>();
+  const chatFile = (id: string, path: string) => scopedFile(ctx.chat.fileScope(id), path);
+  ctx.ipc.handle("chat.file", async (req) => describeChatFile(await chatFile(req.id, req.path)));
+  ctx.ipc.handle("chat.fileAction", async (req) => {
+    const file = await chatFile(req.id, req.path);
+    if (req.action === "reveal") return platform.revealPath?.(file);
+    const error = await platform.openPath(file);
+    if (error) throw new IpcFailure("open-failed", error);
+  });
+  ctx.ipc.handle("chat.previewFile", async (req) => {
+    if (!platform.filePreview) throw new IpcFailure("no-preview", "File previews need the desktop app.");
+    const request = Symbol();
+    fileRequests.set(req.id, request);
+    try {
+      const file = await chatFile(req.id, req.path);
+      if (fileRequests.get(req.id) !== request) return;
+      if (!isHtmlFile(file) && !isPdfFile(file)) throw new IpcFailure("no-preview", "This file does not use a native preview.");
+      await platform.filePreview.open(req.id, file);
+    } finally {
+      if (fileRequests.get(req.id) === request) fileRequests.delete(req.id);
+    }
+  });
+  ctx.ipc.handle("chat.previewFileBounds", (req) => platform.filePreview?.setBounds(req.id, req));
+  ctx.ipc.handle("chat.closeFilePreview", (req) => {
+    fileRequests.delete(req.id);
+    platform.filePreview?.close(req.id);
+  });
   const folderOf = (id: string): string => {
     const project = ctx.projects.find(id);
     if (!project) throw new IpcFailure("not-found", `No project with id ${id}`);

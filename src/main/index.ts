@@ -42,7 +42,10 @@ import { registerShellHandlers } from "./shell-handlers";
 const CSP =
   "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: office-file:; font-src 'self' data:; connect-src 'self'";
 
-protocol.registerSchemesAsPrivileged([{ scheme: "office-file", privileges: { standard: true, secure: true, stream: true } }]);
+protocol.registerSchemesAsPrivileged([
+  { scheme: "office-file", privileges: { standard: true, secure: true, stream: true } },
+  { scheme: "office-preview", privileges: { standard: true, secure: true, stream: true, supportFetchAPI: true, corsEnabled: true } },
+]);
 
 let mainWindow: BrowserWindow | null = null;
 let ctx: AppContext | null = null;

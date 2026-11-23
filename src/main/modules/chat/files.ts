@@ -1,8 +1,8 @@
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto";
-import { realpath, stat } from "node:fs/promises";
-import { extname, isAbsolute, relative, resolve, sep } from "node:path";
+import { open, realpath, stat } from "node:fs/promises";
+import { basename, extname, isAbsolute, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
-import type { ChatImage, ChatImageSource } from "../../../shared/models";
+import type { ChatFile, ChatImage, ChatImageSource } from "../../../shared/models";
 import { IpcFailure } from "../../core/ipc";
 
 const images = new Map([
@@ -14,6 +14,33 @@ export const imageMime = (path: string) => images.get(extname(path).toLowerCase(
 const imageTypes = new Set(images.values());
 
 export interface FileScope { cwd: string; roots: string[]; private: string[] }
+
+const ext = (path: string) => extname(path).toLowerCase();
+export const isHtmlFile = (path: string) => /^(?:\.html?|\.xhtml)$/.test(ext(path));
+export const isPdfFile = (path: string) => ext(path) === ".pdf";
+
+export async function describeChatFile(file: string): Promise<ChatFile> {
+  const name = basename(file);
+  if (isHtmlFile(file)) return { name, kind: "html" };
+  if (isPdfFile(file)) return { name, kind: "pdf" };
+  if (imageMime(file)) return { name, kind: "image" };
+  const handle = await open(file, "r");
+  try {
+    if ((await handle.stat()).size > 1024 * 1024) return { name, kind: "binary" };
+    const buffer = Buffer.alloc(1024 * 1024 + 1);
+    let length = 0;
+    while (length < buffer.length) {
+      const { bytesRead } = await handle.read(buffer, length, buffer.length - length, length);
+      if (!bytesRead) break;
+      length += bytesRead;
+    }
+    const data = buffer.subarray(0, length);
+    if (length === buffer.length || data.includes(0)) return { name, kind: "binary" };
+    try {
+      return { name, kind: /^(?:\.md|\.markdown)$/.test(ext(file)) ? "markdown" : "text", text: new TextDecoder("utf8", { fatal: true }).decode(data) };
+    } catch { return { name, kind: "binary" }; }
+  } finally { await handle.close(); }
+}
 
 export function insideFolder(folder: string, path: string): boolean {
   const rel = relative(folder, path);
