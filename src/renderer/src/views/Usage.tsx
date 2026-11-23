@@ -1,3 +1,4 @@
+import { durationWords } from "@shared/cloud";
 import type { UsageRow, UsageTotals } from "@shared/usage";
 import { useQuery } from "../lib/hooks";
 import { useUi } from "../stores/ui";
@@ -35,6 +36,32 @@ function Breakdown({ title, rows, empty }: { title: string; rows: UsageRow[]; em
           })}
         </div>
       )}
+    </Card>
+  );
+}
+
+/** Cloud routine runs by count and time. The routines API reports no tokens, so there are none to show. */
+function CloudUsage() {
+  const cloud = useQuery("cloud.usage", undefined, ["cloud.changed"]);
+  const data = cloud.data;
+  if (!data || data.runs === 0) return null;
+  return (
+    <Card title="Cloud routine runs" testId="usage-cloud">
+      <p className="ui-muted pb-2">
+        {data.runs} {data.runs === 1 ? "run" : "runs"} in the last 30 days{durationWords(data.seconds) ? `, ${durationWords(data.seconds)} in all` : ""}.
+        Claude reports no tokens for cloud routines, so only counts and time are shown.
+      </p>
+      <div className="grid gap-1.5">
+        {data.routines.map((routine) => (
+          <div key={routine.id} className="usage-row">
+            <span className="min-w-0 truncate">{routine.name}</span>
+            <span aria-hidden />
+            <span className="ui-muted text-right tabular-nums">
+              {routine.runs} {routine.runs === 1 ? "run" : "runs"}{durationWords(routine.seconds) ? ` · ${durationWords(routine.seconds)}` : ""}
+            </span>
+          </div>
+        ))}
+      </div>
     </Card>
   );
 }
@@ -86,6 +113,7 @@ export function Usage() {
           <Breakdown title="Heaviest workflows" rows={view.workflows} empty="No workflow has used tokens yet." />
         </div>
       </>}
+      <CloudUsage />
     </Page>
   );
 }

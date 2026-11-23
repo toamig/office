@@ -13,6 +13,7 @@ import {
   Workspace as WorkspaceSchema,
 } from "../../../shared/schemas";
 import type { z } from "zod";
+import type { CloudSendTo } from "../../../shared/cloud";
 import type { PermissionProfile, Role, Workspace } from "../../../shared/types";
 import { workflowsFor, type Workflow } from "../../../shared/workflow";
 import { validCron } from "../../core/scheduler";
@@ -206,6 +207,18 @@ export class WorkspaceEditor {
       const list = all.filter((item) => item.id !== workflow.id);
       json["workflows"] = [...list, workflow];
       delete json["automations"];
+    });
+  }
+
+  /** Saves where a cloud routine's results go, with the routine's id, in the workspace config. */
+  async setCloudSendTo(id: string, sendTo: CloudSendTo): Promise<void> {
+    if (!/^trig_[A-Za-z0-9_-]+$/.test(id)) throw new IpcFailure("invalid", "That is not a routine id.");
+    await this.edit(`Workspace: cloud routine ${id} sends results to ${sendTo}`, (json) => {
+      const saved = WorkspaceSchema.parse(json).cloudRoutines ?? [];
+      const rest = saved.filter((entry) => entry.id !== id);
+      // Worth a look is the default, so it is not kept.
+      json["cloudRoutines"] = sendTo === "worth-a-look" ? rest : [...rest, { id, sendTo }];
+      if ((json["cloudRoutines"] as unknown[]).length === 0) delete json["cloudRoutines"];
     });
   }
 

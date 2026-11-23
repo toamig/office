@@ -599,7 +599,13 @@ function registerConfigHandlers(ctx: AppContext): void {
     return { workflowId: workflow.id };
   });
   ctx.ipc.handle("cloud.state", () => ctx.cloud.state());
-  ctx.ipc.handle("cloud.refresh", () => ctx.cloud.refresh());
+  ctx.ipc.handle("cloud.refresh", async () => { await ctx.cloud.refresh(); return ctx.cloud.state(); });
+  ctx.ipc.handle("cloud.run", (req) => ctx.cloud.runNow(req.id, req.confirmed));
+  ctx.ipc.handle("cloud.setEnabled", (req) => ctx.cloud.setEnabled(req.id, req.enabled, req.confirmed));
+  ctx.ipc.handle("cloud.setSendTo", async (req) => { await ctx.editor.setCloudSendTo(req.id, req.sendTo); ctx.cloud.rebuild(); });
+  ctx.ipc.handle("cloud.usage", () => ctx.cloudReports.usage());
+  ctx.ipc.handle("cloud.projectRuns", (req) =>
+    ctx.cloudReports.recent(req.id, new Date(Date.now() - 30 * 86_400_000), 6).map(({ excerpt: _excerpt, ...run }) => run));
   ctx.ipc.handle("workflows.results", () => ctx.workflowResults.list());
   ctx.ipc.handle("workflows.discuss", (req) => ctx.workflowResults.discuss(req.id));
   ctx.ipc.handle("workflows.later", (req) => ctx.workflowResults.later(req.id));

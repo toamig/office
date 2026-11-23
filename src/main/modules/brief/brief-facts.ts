@@ -5,6 +5,7 @@ import type { Recap } from "../../../shared/recap";
 import type { Project, Workspace } from "../../../shared/types";
 import type { Db } from "../../core/db";
 import { projectFolder } from "../../core/util";
+import { recentCloudRuns, type CloudRunFact } from "../cloud/reports";
 import { git } from "../git/run";
 import { parseOpenItems } from "../vault/openitems";
 
@@ -20,6 +21,8 @@ export interface ProjectFacts {
   commits: CommitFact[];
   notes: NoteFact[];
   open: OpenFact[];
+  /** Cloud routine runs reported for the project. Their words are third-party data. */
+  cloud: CloudRunFact[];
   /** Where it stands in git: uncommitted files, unpushed commits, other branches. */
   stands: string[];
 }
@@ -117,11 +120,12 @@ export async function collectProjectFacts(env: FactEnv, project: Project, since:
     const names = branches.code === 0 ? branches.stdout.split(/\r?\n/).filter(Boolean) : [];
     if (names.length > 1) stands.push(`${names.length} local branches: ${names.slice(0, 5).join(", ")}`);
   }
-  return { project, sessions, commits, notes, open, stands };
+  const cloud = recentCloudRuns(env.db, project.id, since, 6);
+  return { project, sessions, commits, notes, open, cloud, stands };
 }
 
 export const hasNews = (facts: ProjectFacts): boolean =>
-  facts.sessions.length + facts.commits.length + facts.notes.length > 0;
+  facts.sessions.length + facts.commits.length + facts.notes.length + facts.cloud.length > 0;
 
 /** The links the brief uses: every one points to the exact thing. */
 export const links = {

@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { AutonomyLevel, DEFAULT_AUTONOMY } from "./autonomy";
+import { CloudRoutineSetting } from "./cloud";
 import { Workflow } from "./workflow";
 
 /** Machine settings: local to one PC, never committed (plan 5.1). */
@@ -159,6 +160,8 @@ export const Workspace = z.object({
   }),
   automations: z.array(Automation).default([]),
   workflows: z.array(Workflow).optional(),
+  /** Where each cloud routine's results go, by the routine's id. */
+  cloudRoutines: z.array(CloudRoutineSetting).optional(),
   archiveAfterDays: z.number().int().default(7),
   briefTime: z.string().default("08:00"),
 });

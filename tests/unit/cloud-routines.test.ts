@@ -97,7 +97,7 @@ describe("cloud routines read through claude", () => {
 
   it("maps a routine to the project whose remote is one of its repositories", async () => {
     scenario({ replies: { list: listBody } });
-    const state = await service({ projectOf: (repositories) => repositories.map(repoKey).includes("example-org/demo-repo") ? "Demo" : null }).refresh();
+    const state = await service({ projectOf: (repositories) => repositories.map(repoKey).includes("example-org/demo-repo") ? { id: "demo", name: "Demo" } : null }).refresh();
     expect(state.routines[0]?.projectName).toBe("Demo");
     expect(state.routines[1]?.projectName).toBeNull();
     expect(repoKey("git@github.com:Example-Org/Demo-Repo.git")).toBe("example-org/demo-repo");

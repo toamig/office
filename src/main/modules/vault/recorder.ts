@@ -10,6 +10,8 @@ import { appendDecision, DecisionDetails, type Entry, type RecordTarget, parsePl
 import { readRulePack, ruleBody } from "./rule-pack";
 import { appendToSection, formatWaitingLine } from "./openitems";
 import { replaceSection, sectionLines } from "./sections";
+import { quoteAsData } from "../../../shared/cloud";
+import { recentCloudRuns } from "../cloud/reports";
 import { recapLine, type Recap, type SessionRecap } from "../../../shared/recap";
 import { notesPath } from "./scope";
 import type { VaultWriter } from "./writer";
@@ -109,7 +111,7 @@ export class Recorder {
     if (!delta.text.trim()) return empty();
     const learning = this.deps.settings().learning;
     const pack = readRulePack(root);
-    const result = await this.deps.complete(session, recordingPrompt(delta.text, general, learning,
+    const result = await this.deps.complete(session, recordingPrompt(delta.text + this.cloudContext(session, general), general, learning,
       pack ? ruleBody(root, pack.placement) : "", !!pack, this.recapOf(session.id)));
     if (result === null) return { ...empty(), stopped: true };
     if (this.deps.root() !== root || !this.deps.settings().enabled) return empty();
@@ -124,6 +126,15 @@ export class Recorder {
       return target ? [{ entry, target }] : [];
     });
     return await this.fileEntries(session, root, delta.cursor, entries);
+  }
+
+  /** The cloud routine runs of the session's project in the last three days, quoted as data, for the project's state. */
+  private cloudContext(session: SessionRow, general: boolean): string {
+    if (general || !session.projectId) return "";
+    const runs = recentCloudRuns(this.deps.db, session.projectId, new Date(Date.now() - 3 * 86_400_000), 3);
+    if (runs.length === 0) return "";
+    const lines = runs.map((run) => `${run.routine}: ${run.state}${run.state === "failed" ? ` (${run.failure ?? "no reason given"})` : run.excerpt ? `, result: ${run.excerpt.slice(0, 400)}` : ""}`);
+    return `\n\nCloud routine runs of this project (they count for where it stands)\n${quoteAsData(lines.join("\n"))}`;
   }
 
   /** Keeps the latest recap of a session; it is shown when the session is reopened and read by the brief. */

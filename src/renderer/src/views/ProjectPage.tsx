@@ -33,6 +33,7 @@ import { Notes } from "./project/Notes";
 import { CatchMeUp } from "./project/CatchMeUp";
 import { ProjectInspector } from "./project/ProjectInspector";
 import { useProjectManage } from "./project/Manage";
+import { CloudRuns } from "./project/CloudRuns";
 import { RecentRuns } from "./project/RecentRuns";
 import { GitRulesPanel } from "./setup/GitRulesPanel";
 
@@ -153,6 +154,7 @@ function Overview({ id }: { id: string }) {
       </Card>
       <PrsPanel projectId={id} />
       <RecentRuns id={id} />
+      <CloudRuns id={id} />
       {s && <GitRulesPanel projectId={id} />}
     </CardGrid>
   );

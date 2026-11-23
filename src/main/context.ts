@@ -10,6 +10,7 @@ import { NtfyChannel } from "./core/channels/ntfy";
 import { ModuleManager } from "./core/modules";
 import { Notifier } from "./core/notifier";
 import { readClaudeTasks } from "./modules/workflows/claude-tasks";
+import { CloudReports } from "./modules/cloud/reports";
 import { CloudRoutines, repoKey } from "./modules/cloud/routines";
 import { cheapestModel, Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
@@ -101,6 +102,7 @@ export interface AppContext {
   scheduler: Scheduler;
   workflowResults: WorkflowResults;
   cloud: CloudRoutines;
+  cloudReports: CloudReports;
   starterPack: () => StarterPack;
   globalRules: GlobalRules;
   gitRuleHooks: GitRuleHooks;
@@ -498,7 +500,16 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     },
   });
   const claudeCode = agents.providers.get("claude-code") as ClaudeCodeProvider;
-  const cloud = new CloudRoutines({
+  const projectOfRepos = (repositories: string[]): { id: string; name: string } | null => {
+    const wanted = new Set(repositories.map(repoKey).filter((key): key is string => key !== null));
+    for (const project of store.state.workspace?.projects ?? []) {
+      const origin = projects.originOf(project.id);
+      const key = origin ? repoKey(origin) : null;
+      if (key && wanted.has(key)) return { id: project.id, name: project.name };
+    }
+    return null;
+  };
+  const cloud: CloudRoutines = new CloudRoutines({
     claude: async (args) => {
       let env: Record<string, string> = {};
       try { env = claudeCode.auth.env(); } catch { /* the program uses its own sign-in */ }
@@ -508,15 +519,22 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     available: () => resolveTool("claude") !== null,
     model: () => cheapestModel("claude-code"),
     changed: () => bus.emit("cloud.changed", {}),
-    projectOf: (repositories) => {
-      const wanted = new Set(repositories.map(repoKey).filter((key): key is string => key !== null));
-      for (const project of store.state.workspace?.projects ?? []) {
-        const origin = projects.originOf(project.id);
-        const key = origin ? repoKey(origin) : null;
-        if (key && wanted.has(key)) return project.name;
-      }
-      return null;
-    },
+    projectOf: (repositories) => projectOfRepos(repositories),
+    sendTo: (id) => store.state.workspace?.cloudRoutines?.find((entry) => entry.id === id)?.sendTo ?? "worth-a-look",
+    onRefreshed: (routines, follow) => reports.report(routines, follow),
+  });
+  const reports = new CloudReports({
+    db,
+    root: () => box.current.workspaceRoot,
+    save: (root, workflow, result) => workflowResults.save(root, workflow, result),
+    sendTo: (id) => store.state.workspace?.cloudRoutines?.find((entry) => entry.id === id)?.sendTo ?? "worth-a-look",
+    projectOf: (repositories) => projectOfRepos(repositories),
+    urlOf: (sessionId) => cloud.urlOf(sessionId),
+    failed: (routine, reason, projectId) => notifier.notify({
+      kind: "automation.done", ...(projectId ? { projectId } : {}), title: `${routine} failed in the cloud`,
+      body: reason ?? "The routine reported no reason.", link: { view: "workflows" },
+    }),
+    changed: () => { bus.emit("cloud.changed", {}); bus.emit("workflow.changed", {}); },
   });
   const scheduler = new Scheduler({
     db,
@@ -550,7 +568,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     log: (m) => console.log(m),
   });
   agents.permissionHook.listeners.push((runId, waiting) => tasks.permissionWaiting(runId, waiting));
-  return { editor, tasks, scheduler, modules, workflowResults, cloud };
+  return { editor, tasks, scheduler, modules, workflowResults, cloud, cloudReports: reports };
 }
 
 type Orchestration = ReturnType<typeof createOrchestration>;

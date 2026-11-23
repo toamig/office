@@ -98,7 +98,7 @@ describe("workflow migration and safety", () => {
       settings: () => ({ enabled: false, model: "" }),
     });
     vi.spyOn(brief, "collect").mockResolvedValue([{
-      project: Workspace.parse(config).projects[0]!, sessions: [], notes: [], open: [], stands: [],
+      project: Workspace.parse(config).projects[0]!, sessions: [], notes: [], open: [], cloud: [], stands: [],
       commits: [{ sha: "abc1234", short: "abc1234", subject: "A change", at: "2026-11-21T09:00:00Z", files: ["src/a.ts"] }],
     }]);
     await brief.run();

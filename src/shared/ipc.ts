@@ -4,7 +4,7 @@ import { OfficeConfirmation } from "./office-tools";
 import { SessionRecap } from "./recap";
 import { LimitWindow, UsageTotals, UsageView } from "./usage";
 import { InstalledPlugin, ToolEdit, ToolEditPreview, ToolEntry, ToolTest, ToolTestResult } from "./tool-config";
-import { CloudState } from "./cloud";
+import { CloudProjectRun, CloudSendTo, CloudState, CloudUsage } from "./cloud";
 import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
 import { PermissionProfile, Pipeline, Role, Stage } from "./schemas";
 import {
@@ -588,6 +588,13 @@ export const channels = {
   },
   "cloud.state": { req: z.void(), res: CloudState },
   "cloud.refresh": { req: z.void(), res: CloudState },
+  /** Starts a routine in the cloud; the request must carry the owner's confirmed click. */
+  "cloud.run": { req: z.object({ id: z.string(), confirmed: z.literal(true) }), res: z.void() },
+  /** Turns a routine on or off; the request must carry the owner's confirmed click. */
+  "cloud.setEnabled": { req: z.object({ id: z.string(), enabled: z.boolean(), confirmed: z.literal(true) }), res: z.void() },
+  "cloud.setSendTo": { req: z.object({ id: z.string(), sendTo: CloudSendTo }), res: z.void() },
+  "cloud.usage": { req: z.void(), res: CloudUsage },
+  "cloud.projectRuns": { req: z.object({ id: z.string() }), res: z.array(CloudProjectRun) },
   "workflows.results": { req: z.void(), res: z.array(WorkflowResult) },
   "workflows.discuss": { req: z.object({ id: z.string() }), res: NotificationLink },
   "workflows.later": { req: z.object({ id: z.string() }), res: z.void() },

@@ -17,7 +17,7 @@ export interface CloudDeps {
   changed: () => void;
   now?: () => Date;
   /** The Office project a routine's repositories belong to. */
-  projectOf?: (repositories: string[]) => string | null;
+  projectOf?: (repositories: string[]) => { id: string; name: string } | null;
   /** Where a routine's results go. */
   sendTo?: (routineId: string) => CloudSendTo;
   /** Called after each good refresh with the routines and the runs seen, for run reporting. */
@@ -26,7 +26,7 @@ export interface CloudDeps {
 
 /** "owner/repo" of a git remote written as https or ssh, lower case; null when it is not one. */
 export function repoKey(url: string): string | null {
-  const match = /(?:^|[/:@])([^/:@\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(url.trim());
+  const match = /(?:^|[/:@])([^/:@\s]+)\/([^/\s]+?)(?:\.git)?\/?$/.exec(url.trim().replaceAll("\\", "/"));
   return match ? `${match[1]}/${match[2]}`.toLowerCase() : null;
 }
 
@@ -177,10 +177,30 @@ export class CloudRoutines {
         nextRun: routine.enabled && !finished ? routine.nextRunAt : null,
         lastRun, link: url ?? CLOUD_ROUTINES_PAGE,
         sendTo: this.deps.sendTo?.(routine.id) ?? "worth-a-look",
-        projectName: this.deps.projectOf?.(routine.repositories) ?? null,
+        projectName: this.deps.projectOf?.(routine.repositories)?.name ?? null,
         details: { model: routine.model, prompt: routine.prompt, repositories: routine.repositories, connectors: routine.connectors, cron: routine.cron, id: routine.id },
       };
     });
+  }
+
+  /** Starts a routine in the cloud. Only after the owner confirmed this click. */
+  async runNow(id: string, confirmed: boolean): Promise<void> {
+    if (confirmed !== true) throw new Error("Running a routine needs the owner's confirmation.");
+    const routine = this.known(id);
+    if (!routine) throw new Error("That routine is not in the list. Refresh and try again.");
+    const reply = expectReply(await this.call([{ action: "run", triggerId: routine.id }]), "run");
+    if ("problem" in reply) throw new Error(reply.problem);
+    void this.refresh();
+  }
+
+  /** Turns a routine on or off. Only after the owner confirmed this click; nothing else about it can change. */
+  async setEnabled(id: string, enabled: boolean, confirmed: boolean): Promise<void> {
+    if (confirmed !== true) throw new Error("Changing a routine needs the owner's confirmation.");
+    const routine = this.known(id);
+    if (!routine) throw new Error("That routine is not in the list. Refresh and try again.");
+    const reply = expectReply(await this.call([{ action: "update", triggerId: routine.id, enabled }]), "update");
+    if ("problem" in reply) throw new Error(reply.problem);
+    await this.refresh();
   }
 
   /** The views again, after a setting changed, without asking Claude. */
