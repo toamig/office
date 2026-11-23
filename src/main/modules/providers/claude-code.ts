@@ -41,6 +41,18 @@ export function chatToolFlags(addDirs: string[], model?: string, officeMcp?: Run
   ];
 }
 
+/**
+ * The program offers AskUserQuestion and ExitPlanMode only when someone can answer a permission prompt, and
+ * `--permission-prompts none` (or no prompt tool at all) hides them. This names the host as the one who answers;
+ * Office then answers the two tools with a card and refuses everything else that would prompt.
+ */
+const HOST_PROMPTS = ["--permission-prompt-tool", "stdio"];
+export function keepQuestionTools(flags: string[]): string[] {
+  const index = flags.findIndex((flag, at) => flag === "--permission-prompts" && flags[at + 1] === "none");
+  if (index >= 0) return [...flags.slice(0, index), ...HOST_PROMPTS, ...flags.slice(index + 2)];
+  return flags.includes("--permission-prompt-tool") ? flags : [...flags, ...HOST_PROMPTS];
+}
+
 export const CLAUDE_MODELS = ["opus", "sonnet", "haiku"];
 const READ_ONLY_TOOLS = ["Read", "Grep", "Glob"];
 
@@ -301,7 +313,7 @@ export class ClaudeCodeProvider implements Provider {
       o.resume && !o.incognito ? "--resume" : "--session-id",
       o.threadId ?? o.officeSessionId,
       ...(o.effort ? ["--effort", o.effort] : []),
-      ...(o.restricted
+      ...keepQuestionTools(o.restricted
         ? [...chatToolFlags(o.addDirs ?? [], runOptions.role?.model, o.officeMcp), ...this.roleFlags({ ...runOptions, role: undefined, addDirs: undefined })]
         : [...this.roleFlags(runOptions), ...permissionFlags(runOptions)]),
       ...(o.incognito ? ["--no-session-persistence"] : []),

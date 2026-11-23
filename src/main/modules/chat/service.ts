@@ -21,7 +21,7 @@ import { interactionFor, type PermissionBroker } from "../runs/permissions";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
-import { CHAT_INTERACTION_HOOK, ClaudeChatParser, CodexChatParser, initializationCommands, initialized, interactionHook } from "./events";
+import { CHAT_INTERACTION_HOOK, ClaudeChatParser, CodexChatParser, initializationCommands, initialized, interactionHook, toolPermissionRequest } from "./events";
 import { chatFailure } from "../../../shared/chat-failure";
 import { activityLabel, emptyActivity, REWIND_LIMIT, trackActivity, trackQueue, type TurnActivity } from "../../../shared/chat";
 import { redactClaudeToken } from "../../core/claude-secret";
@@ -702,6 +702,11 @@ export class ChatService {
         void this.answerClaudeHook(id, live, hook);
         continue;
       }
+      const permission = toolPermissionRequest(line);
+      if (permission) {
+        void this.answerClaudeHook(id, live, permission, "permission");
+        continue;
+      }
       for (const event of parser.parse(line)) {
         if (event.t === "assistant" && event.text) live.lastAssistant = event.text;
         this.take(id, live, event);
@@ -710,10 +715,20 @@ export class ChatService {
     await this.ended(id, live);
   }
 
-  private async answerClaudeHook(id: string, live: Live, hook: NonNullable<ReturnType<typeof interactionHook>>): Promise<void> {
+  /**
+   * Answers a question or plan the program asks for. Normally it arrives as a PreToolUse hook callback; when the
+   * program asks over the permission prompt channel instead, the same card is used. Any other tool asked over that
+   * channel is refused, as `--permission-prompts none` would have done.
+   */
+  private async answerClaudeHook(
+    id: string,
+    live: Live,
+    hook: { requestId: string; tool: string; id: string; input: Record<string, unknown> },
+    via: "hook" | "permission" = "hook",
+  ): Promise<void> {
     const interaction = interactionFor(hook.tool, hook.input, live.lastAssistant ?? "");
     const deny = (message: string) => ({ behavior: "deny" as const, message });
-    let decision = deny("The question or plan is unavailable.");
+    let decision = deny(via === "permission" && !interaction ? "Office does not allow this tool in a chat." : "The question or plan is unavailable.");
     try {
       const reply = live.working && !live.stopped && !live.interruption && interaction
         ? await this.deps.broker.request(id, { tool_name: hook.tool, input: hook.input }, undefined, {
@@ -721,21 +736,25 @@ export class ChatService {
           onRequest: (requestId) => this.append(id, { t: "interaction", id: hook.id, requestId, interaction }),
           onAnswer: (answer) => this.append(id, { t: "interaction-result", id: hook.id, answer }),
         }) : decision;
-      if (!live.stopped && this.live.get(id) === live) this.writeInteractionDecision(live, hook.requestId, reply);
+      if (!live.stopped && this.live.get(id) === live) this.writeInteractionDecision(live, hook.requestId, reply, via);
       return;
     } catch {
       decision = deny("Office could not collect the answer.");
     }
-    if (!live.stopped && this.live.get(id) === live) this.writeInteractionDecision(live, hook.requestId, decision);
+    if (!live.stopped && this.live.get(id) === live) this.writeInteractionDecision(live, hook.requestId, decision, via);
   }
 
-  private writeInteractionDecision(live: Live, requestId: string, decision: import("../runs/permissions").PermissionDecision): void {
-    live.handle.write(JSON.stringify({ type: "control_response", response: {
-      subtype: "success", request_id: requestId, response: { hookSpecificOutput: {
-        hookEventName: "PreToolUse", permissionDecision: decision.behavior,
-        ...(decision.behavior === "allow" ? { updatedInput: decision.updatedInput } : { permissionDecisionReason: decision.message }),
-      } },
-    } }));
+  private writeInteractionDecision(
+    live: Live,
+    requestId: string,
+    decision: import("../runs/permissions").PermissionDecision,
+    via: "hook" | "permission",
+  ): void {
+    const response = via === "permission" ? decision : { hookSpecificOutput: {
+      hookEventName: "PreToolUse", permissionDecision: decision.behavior,
+      ...(decision.behavior === "allow" ? { updatedInput: decision.updatedInput } : { permissionDecisionReason: decision.message }),
+    } };
+    live.handle.write(JSON.stringify({ type: "control_response", response: { subtype: "success", request_id: requestId, response } }));
   }
 
   private async readCodex(id: string, live: Live): Promise<void> {

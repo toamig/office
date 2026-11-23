@@ -38,10 +38,12 @@ describe("the exact flags of a Chat", () => {
       "--strict-mcp-config",
       "--add-dir",
       "C:/brain",
+      "--permission-prompt-tool",
+      "stdio",
     ]);
     expect(CHAT_TOOLS).toBe("Read,Grep,Glob,WebSearch,WebFetch,Agent");
-    // Nothing that runs a command or edits a file is ever offered, and no approval tool is attached.
-    expect(args.join(" ")).not.toMatch(/Bash|Edit|Write|permission-prompt/);
+    // Nothing that runs a command or edits a file is ever offered, and no Office approval tool is attached (stdio only hands over questions).
+    expect(args.join(" ")).not.toMatch(/Bash|Edit|Write|office_permission/);
   });
 
   it("a saved chat resumes its conversation; an incognito chat never does and keeps nothing", () => {
@@ -71,5 +73,24 @@ describe("the exact flags of a Chat", () => {
     expect(ordinary).not.toContain("--tools");
     expect(ordinary).toContain("--permission-mode");
     expect(ordinary).toContain("manual");
+  });
+
+  it("keeps the question and plan tools in every kind of chat by naming the host as the one who answers prompts", () => {
+    // Without a prompt answerer the program hides AskUserQuestion and ExitPlanMode, so none of these may use "none".
+    const kinds = [
+      { kind: "ask", mcpConfig: "C:/mcp.json" },
+      { kind: "full" },
+      { kind: "readonly" },
+    ] as const;
+    for (const permission of kinds) {
+      const args = provider.chatCommand({ ...base, restricted: false, addDirs: [], permission }).args;
+      expect(args.join(" "), permission.kind).not.toContain("--permission-prompts none");
+      expect(args, permission.kind).toContain("--permission-prompt-tool");
+    }
+    const full = provider.chatCommand({ ...base, restricted: false, addDirs: [], permission: { kind: "full" } }).args;
+    expect(full.slice(full.indexOf("--permission-prompt-tool"), full.indexOf("--permission-prompt-tool") + 2)).toEqual(["--permission-prompt-tool", "stdio"]);
+    const ask = provider.chatCommand({ ...base, restricted: false, addDirs: [], permission: { kind: "ask", mcpConfig: "C:/mcp.json" } }).args;
+    expect(ask[ask.indexOf("--permission-prompt-tool") + 1]).toBe("mcp__office__office_permission");
+    expect(ask.filter((arg) => arg === "--permission-prompt-tool")).toHaveLength(1);
   });
 });

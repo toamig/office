@@ -27,6 +27,15 @@ export function interactionHook(line: string) {
   return { requestId, tool, id: str(request["tool_use_id"]) || str(data["tool_use_id"]) || requestId, input: obj(data["tool_input"]) };
 }
 
+/** A tool the program wants permission for, asked over the permission prompt channel (`--permission-prompt-tool stdio`). */
+export function toolPermissionRequest(line: string) {
+  const message = asJson(line);
+  const request = obj(message?.["request"]);
+  const requestId = str(message?.["request_id"]);
+  if (message?.["type"] !== "control_request" || request["subtype"] !== "can_use_tool" || !requestId) return;
+  return { requestId, tool: str(request["tool_name"]), id: str(request["tool_use_id"]) || requestId, input: obj(request["input"]) };
+}
+
 export function initialized(line: string, requestId: string): boolean {
   const message = asJson(line);
   return message?.["type"] === "control_response" && obj(message["response"])["request_id"] === requestId;
