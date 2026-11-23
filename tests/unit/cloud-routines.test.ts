@@ -197,6 +197,11 @@ describe("the parsers", () => {
     expect(parseRunLog("")).toBeNull();
   });
 
+  it("reads runs when the reply adds a note line after the JSON", () => {
+    const body = `${JSON.stringify({ trigger_id: "trig_1", data: [{ id: "cse_1", title: "T", url: "https://claude.ai/code/session_1" }], next_cursor: "c1" })}\n\n→ older runs exist: pass cursor="c1"`;
+    expect(parseRuns(body).map((run) => run.id)).toEqual(["cse_1"]);
+  });
+
   it("reads the final answer from Claude Code's condensed log of timed lines", () => {
     const dash = "—";
     const header = JSON.stringify({ session_id: "cse_1", events_fetched: 200, events_shown: 9, next_cursor: "c1" });

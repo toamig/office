@@ -224,8 +224,14 @@ export function parseRuns(body: string): CloudRunInfo[] {
 
 export const RESULT_LIMIT = 20_000;
 
+/**
+ * The JSON of a reply. The tool may add plain lines after it (`list_runs` ends with an "older runs exist" line when
+ * there are more, seen 2026-11-23), so when the whole body is not JSON the first line is tried on its own.
+ */
 function safeParse(body: string): unknown {
-  try { return JSON.parse(body); } catch { return null; }
+  try { return JSON.parse(body); } catch { /* trailing notes; try the first line */ }
+  const first = body.trimStart().split("\n", 1)[0] ?? "";
+  try { return JSON.parse(first); } catch { return null; }
 }
 
 function textOf(value: unknown): string | null {
@@ -294,7 +300,9 @@ function fromTimedLines(lines: string[]): string | null {
  * assistant said, else the first lines of the log.
  */
 export function parseRunLog(body: string): string | null {
-  const whole = safeParse(body);
+  // Strict: the log's first line is its own JSON header, which is not the reply as a whole.
+  let whole: unknown = null;
+  try { whole = JSON.parse(body); } catch { /* the condensed log of lines below */ }
   const data = object(whole);
   let found: string | null = null;
   if (data) {
