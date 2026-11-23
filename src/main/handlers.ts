@@ -39,7 +39,9 @@ import {
   setDock,
   setLayout,
 } from "./modules/sessions/layouts";
-import { userHome } from "./core/paths";
+import { appDataDir, claudeDir, userHome } from "./core/paths";
+import { claudeTaskViews, projectOfFolder, readClaudeTasks, workflowFromClaudeTask } from "./modules/workflows/claude-tasks";
+import { workflowsFor } from "../shared/workflow";
 import { noteEntries, readNote } from "./modules/notes/notes";
 import { buildSearchItems } from "./modules/search/items";
 import { readInventories } from "./modules/setup/inventory";
@@ -539,6 +541,29 @@ function registerConfigHandlers(ctx: AppContext): void {
   ctx.ipc.handle("workflows.create", (req) => ctx.editor.saveWorkflow(req, { absent: true }));
   ctx.ipc.handle("workflows.setEnabled", (req) => ctx.editor.setWorkflowEnabled(req.id, req.enabled));
   ctx.ipc.handle("workflows.remove", (req) => ctx.editor.removeWorkflow(req.id));
+  ctx.ipc.handle("workflows.claudeTasks", () =>
+    claudeTaskViews(readClaudeTasks(claudeDir(), appDataDir()), ctx.store.state.workspace, (id) => {
+      const project = ctx.projects.find(id);
+      return project ? ctx.projects.absPath(project) : undefined;
+    }));
+  ctx.ipc.handle("workflows.moveClaudeTask", async (req) => {
+    const task = readClaudeTasks(claudeDir(), appDataDir()).find((entry) => entry.id === req.id);
+    if (!task) throw new IpcFailure("not-found", "That Claude task no longer exists.");
+    const workspace = ctx.store.state.workspace;
+    const existing = workflowsFor(workspace).find((entry) => entry.fromClaudeTask === task.id);
+    if (existing) throw new IpcFailure("exists", `${task.name} is already a workflow.`);
+    const found = projectOfFolder(workspace, task.cwd, (id) => {
+      const project = ctx.projects.find(id);
+      return project ? ctx.projects.absPath(project) : undefined;
+    });
+    const workflow = workflowFromClaudeTask(task, {
+      ...(req.schedule === undefined ? {} : { schedule: req.schedule }),
+      projectId: req.projectId === undefined ? found?.id ?? null : req.projectId,
+      taken: new Set(workflowsFor(workspace).map((entry) => entry.id)),
+    });
+    await ctx.editor.saveWorkflow(workflow, { absent: true });
+    return { workflowId: workflow.id };
+  });
   ctx.ipc.handle("workflows.results", () => ctx.workflowResults.list());
   ctx.ipc.handle("workflows.discuss", (req) => ctx.workflowResults.discuss(req.id));
   ctx.ipc.handle("workflows.later", (req) => ctx.workflowResults.later(req.id));

@@ -17,6 +17,15 @@ export function dataDir(): string {
   return join(process.env["XDG_CONFIG_HOME"] ?? join(home, ".config"), "Office");
 }
 
+/** The roaming app data folder (the fake home's when OFFICE_HOME is set), where the Claude app keeps its state. */
+export function appDataDir(): string {
+  if (process.platform === "win32" && !process.env["OFFICE_HOME"] && process.env["APPDATA"]) return process.env["APPDATA"];
+  const home = userHome();
+  if (process.platform === "win32") return join(home, "AppData", "Roaming");
+  if (process.platform === "darwin") return join(home, "Library", "Application Support");
+  return process.env["XDG_CONFIG_HOME"] ?? join(home, ".config");
+}
+
 /** The workspace repo override (OFFICE_WORKSPACE), if any. */
 export function workspaceOverride(): string | undefined {
   return process.env["OFFICE_WORKSPACE"] ? resolve(process.env["OFFICE_WORKSPACE"]) : undefined;

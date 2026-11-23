@@ -35,6 +35,8 @@ export interface SchedulerDeps {
   validate?: (root: string) => Promise<HealthView["validate"]>;
   now?: () => Date;
   fullAutoConfirmed?: () => boolean;
+  /** The Claude Code tasks that are on, to warn when one runs the same thing. */
+  claudeTasks?: () => Array<{ id: string; name: string; enabled: boolean | null }>;
 }
 
 function nextRunOf(pattern: string, from: Date): Date | null {
@@ -258,11 +260,14 @@ export class Scheduler {
 
   list(): WorkflowView[] {
     const root = this.deps.root();
+    const claude = this.deps.claudeTasks?.() ?? [];
     return workflowsFor(this.deps.workspace()).map((workflow) => ({
       ...workflow,
       valid: workflow.schedule === null || validCron(workflow.schedule),
       ...this.latestRun(root, workflow.id),
       nextRun: workflow.enabled && workflow.schedule ? nextRunOf(workflow.schedule, this.now())?.toISOString() ?? null : null,
+      alsoRunsIn: workflow.enabled && workflow.schedule && workflow.fromClaudeTask
+        ? claude.find((task) => task.id === workflow.fromClaudeTask && task.enabled === true)?.name ?? null : null,
       upcoming: workflow.schedule ? nextRuns(workflow.schedule, 3, this.now()).map((at) => at.toISOString()) : [],
     }));
   }

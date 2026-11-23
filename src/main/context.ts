@@ -9,12 +9,15 @@ import { IpcRegistry } from "./core/ipc";
 import { NtfyChannel } from "./core/channels/ntfy";
 import { ModuleManager } from "./core/modules";
 import { Notifier } from "./core/notifier";
+import { readClaudeTasks } from "./modules/workflows/claude-tasks";
 import { cheapestModel, Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
 import {
   claudeSettingsPath,
   codexConfigPath,
   dataDir,
+  appDataDir,
+  claudeDir,
   dbPath,
   exploreDir,
   modulesDir,
@@ -491,6 +494,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     neutralFolder: dataDir,
     defaultProvider: cheapestProvider,
     fullAutoConfirmed: () => box.current.confirmedFullAuto,
+    claudeTasks: () => readClaudeTasks(claudeDir(), appDataDir()),
     output: (root, workflow, result) => workflowResults.save(root, workflow, result),
     changed: () => bus.emit("workflow.changed", {}),
     validate: (root) => runValidate(root, notes.folderTools.enabled() ? () => notes.folderTools.validate(root) : undefined),

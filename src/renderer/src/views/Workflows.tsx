@@ -7,6 +7,7 @@ import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { Banner, Button, Card, Dialog, EmptyState, OverflowMenu, Page, Time, notifyError } from "../ui";
 import { WorkflowForm } from "./workflows/WorkflowForm";
+import { ClaudeTasks } from "./workflows/ClaudeTasks";
 
 const runLabels = { running: "Running", done: "Completed", failed: "Failed", cancelled: "Stopped" };
 
@@ -72,12 +73,16 @@ export function Workflows() {
       {list.error && <Banner tone="danger">{list.error}</Banner>}
       {runs.length > 0 && <Card title="Background runs"><BackgroundRuns runs={runs} /></Card>}
       {list.data?.length === 0 && <EmptyState title="No workflows yet" />}
+      <ClaudeTasks onMoved={() => list.reload()} />
       {list.data?.map((workflow) => {
         const running = workflow.lastRun?.status === "running";
         const working = busy.includes(workflow.id);
         const projectName = available.find((project) => project.id === workflow.projectId)?.name;
         return (
           <Card key={workflow.id} title={workflow.name}>
+            {workflow.alsoRunsIn && <Banner tone="attention">
+              The Claude app also runs {workflow.alsoRunsIn} on this schedule, so each run would happen twice. Turn the task off in the Claude app.
+            </Banner>}
             <div className="grid gap-4 lg:grid-cols-[minmax(10rem,1fr)_minmax(16rem,2fr)_auto]">
               <div className="min-w-0">
                 <p className="ui-muted">{projectName ?? "Brain"}</p>

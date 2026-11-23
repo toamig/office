@@ -25,6 +25,8 @@ export const Workflow = z.object({
   output: WorkflowOutput.default("worth-a-look"),
   enabled: z.boolean().default(true),
   template: z.literal("brain-upkeep").optional(),
+  /** The id of the Claude Code scheduled task this workflow was moved from. */
+  fromClaudeTask: z.string().optional(),
 });
 export type Workflow = z.infer<typeof Workflow>;
 
@@ -52,6 +54,8 @@ export const WorkflowView = Workflow.extend({
   }).nullable(),
   /** The next three runs. */
   upcoming: z.array(z.string()).default([]),
+  /** The name of the Claude task that is also on and would run the same thing. */
+  alsoRunsIn: z.string().nullable().default(null),
 
 });
 export type WorkflowView = z.infer<typeof WorkflowView>;
@@ -110,3 +114,20 @@ export function workflowsFor(workspace: Workspace | null): Workflow[] {
   });
   return [...saved, ...legacy];
 }
+
+/** A Claude Code scheduled task as the Workflows view lists it. */
+export const ClaudeTaskView = z.object({
+  id: z.string(),
+  name: z.string(),
+  description: z.string(),
+  schedule: z.string().nullable(),
+  enabled: z.boolean().nullable(),
+  projectName: z.string().nullable(),
+  projectId: z.string().nullable(),
+  lastRunAt: z.string().nullable(),
+  /** The workflow made from it, once moved. */
+  movedAs: z.object({ id: z.string(), name: z.string(), enabled: z.boolean() }).nullable(),
+  /** Both the task and its workflow are on, so each run would happen twice. */
+  runsTwice: z.boolean(),
+});
+export type ClaudeTaskView = z.infer<typeof ClaudeTaskView>;

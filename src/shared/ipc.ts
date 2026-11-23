@@ -2,7 +2,7 @@ import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
 import { OfficeConfirmation } from "./office-tools";
 import { ToolEdit, ToolEditPreview, ToolEntry } from "./tool-config";
-import { Workflow, WorkflowResult, WorkflowView } from "./workflow";
+import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
 import { PermissionProfile, Pipeline, Role } from "./schemas";
 import {
   AppSettings,
@@ -537,6 +537,11 @@ export const channels = {
   "workflows.setEnabled": { req: z.object({ id: z.string(), enabled: z.boolean() }), res: z.void() },
   "workflows.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "workflows.runNow": { req: z.object({ id: z.string() }), res: z.void() },
+  "workflows.claudeTasks": { req: z.void(), res: z.array(ClaudeTaskView) },
+  "workflows.moveClaudeTask": {
+    req: z.object({ id: z.string(), schedule: z.string().nullable().optional(), projectId: z.string().nullable().optional() }),
+    res: z.object({ workflowId: z.string() }),
+  },
   "workflows.results": { req: z.void(), res: z.array(WorkflowResult) },
   "workflows.discuss": { req: z.object({ id: z.string() }), res: NotificationLink },
   "workflows.later": { req: z.object({ id: z.string() }), res: z.void() },

@@ -54,6 +54,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "permissions.list",
   "app.chrome",
   "workflows.list",
+  "workflows.claudeTasks",
   "workflows.results",
   "office.confirmations",
   "settings.get",
