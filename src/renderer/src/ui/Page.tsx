@@ -1,5 +1,5 @@
 import { ChevronDown, MoreHorizontal } from "lucide-react";
-import { createContext, useEffect, useRef, useState, type ReactNode } from "react";
+import { createContext, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from "react";
 import { Button, IconButton } from "./Button";
 
 /** The spot in a page header where a view's own controls go (a workbench puts its Layout menu there). */
@@ -45,6 +45,32 @@ export function OverflowMenu({
   const [open, setOpen] = useState(false);
   const [spot, setSpot] = useState<{ top: number; left: number } | null>(null);
   const box = useRef<HTMLDivElement>(null);
+  const menu = useRef<HTMLDivElement>(null);
+  // A menu opens below its button, but one near the bottom of the window (the chat composer) opens above it,
+  // and one that would run off the left edge is held inside the window: measured, not guessed from a row count.
+  useLayoutEffect(() => {
+    const el = menu.current;
+    if (!open || !el) return;
+    if (floating) {
+      const trigger = box.current?.getBoundingClientRect();
+      if (!trigger) return;
+      const height = el.offsetHeight;
+      const below = trigger.bottom + 4 + height <= window.innerHeight - 8;
+      el.style.top = `${below ? trigger.bottom + 4 : Math.max(8, trigger.top - height - 4)}px`;
+      el.style.left = `${Math.max(8, Math.min(trigger.left, window.innerWidth - el.offsetWidth - 8))}px`;
+      return;
+    }
+    const host = box.current?.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
+    if (host && rect.bottom > window.innerHeight - 8 && host.top - rect.height - 4 >= 8) {
+      el.style.top = "auto";
+      el.style.bottom = "calc(100% + var(--space-1))";
+    }
+    if (rect.left < 8) {
+      el.style.right = "auto";
+      el.style.left = "0";
+    }
+  }, [open, floating]);
   useEffect(() => {
     if (!open) return;
     const away = (e: MouseEvent): void => {
@@ -124,11 +150,12 @@ export function OverflowMenu({
       )}
       {open && (
         <div
+          ref={menu}
           className="ui-popover ui-menu"
           role="menu"
           data-testid={`${testId}-menu`}
-          {...(floating && spot
-            ? { style: { position: "fixed", top: spot.top, left: spot.left, right: "auto" } }
+          {...(floating
+            ? { style: { position: "fixed", top: spot?.top ?? 0, left: spot?.left ?? 0, right: "auto" } }
             : {})}
         >
           {calm.map(row)}
