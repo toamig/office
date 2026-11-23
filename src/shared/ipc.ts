@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
 import { OfficeConfirmation } from "./office-tools";
+import { SessionRecap } from "./recap";
 import { LimitWindow, UsageTotals, UsageView } from "./usage";
 import { InstalledPlugin, ToolEdit, ToolEditPreview, ToolEntry, ToolTest, ToolTestResult } from "./tool-config";
 import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
@@ -13,6 +14,8 @@ import {
   BranchList,
   AuditEntry,
   BriefView,
+  BriefCard,
+  BriefRange,
   CreateTask,
   TaskDetail,
   TaskView,
@@ -380,7 +383,13 @@ export const channels = {
   "vault.readFile": { req: z.object({ path: z.string() }), res: VaultFile },
   "vault.audit": { req: z.void(), res: z.array(AuditEntry) },
   "brief.latest": { req: z.void(), res: BriefView },
-  "brief.run": { req: z.void(), res: z.object({ date: z.string(), count: z.number() }) },
+  "brief.run": { req: z.object({ range: BriefRange.optional() }).optional(), res: z.object({ date: z.string(), count: z.number() }) },
+  /** The card of one project, by default since you last worked on it. Nothing is stored. */
+  "brief.catchUp": { req: z.object({ projectId: z.string(), range: BriefRange.optional() }), res: z.object({ since: z.string(), card: BriefCard }) },
+  /** The latest recap of each session that has one, for the Sessions list. */
+  "sessions.recaps": { req: z.void(), res: z.record(z.string(), z.string()) },
+  /** What a session did and where it left off, or null when it has no recap yet. */
+  "sessions.recap": { req: z.object({ id: z.string() }), res: SessionRecap.nullable() },
   "explore.start": {
     req: z.object({ providerId: z.string().optional(), incognito: z.boolean().optional() }),
     res: SessionRow,

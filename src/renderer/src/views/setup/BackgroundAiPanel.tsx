@@ -18,8 +18,8 @@ function Job({ label, enabled, toggle, children, disabled }: {
   );
 }
 
-function ModelField({ job, model, save }: { job: string; model: string; save: (value: string) => void }) {
-  return <Input key={model} hideLabel label={`${job} model`} defaultValue={model} placeholder="Cheapest available"
+function ModelField({ job, model, save, fallback = "Cheapest available" }: { job: string; model: string; save: (value: string) => void; fallback?: string }) {
+  return <Input key={model} hideLabel label={`${job} model`} defaultValue={model} placeholder={fallback}
     maxLength={120} onBlur={(event) => { if (model !== event.target.value.trim()) save(event.target.value.trim()); }} />;
 }
 
@@ -47,7 +47,7 @@ export function BackgroundAiPanel() {
       {s && (
         <>
           <Job label="Morning brief" enabled={s.briefEnabled} toggle={(briefEnabled) => void set({ briefEnabled })}>
-            <ModelField job="Morning brief" model={s.briefModel} save={(briefModel) => void set({ briefModel })} />
+            <ModelField job="Morning brief" model={s.briefModel} fallback="Sonnet" save={(briefModel) => void set({ briefModel })} />
             <Input type="time" hideLabel label="Morning brief time" value={s.briefTime}
               onChange={(event) => { if (event.target.value) void set({ briefTime: event.target.value }); }} />
           </Job>

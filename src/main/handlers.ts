@@ -382,7 +382,10 @@ function registerBrainHandlers(ctx: AppContext): void {
   ctx.ipc.handle("vault.readFile", (req) => readVaultFile(ctx.settings().workspaceRoot, req.path));
   ctx.ipc.handle("vault.audit", () => readAudit(ctx.settings().workspaceRoot));
   ctx.ipc.handle("brief.latest", () => ctx.brief.latest());
-  ctx.ipc.handle("brief.run", () => ctx.brief.run());
+  ctx.ipc.handle("brief.run", (req) => ctx.brief.run(req?.range));
+  ctx.ipc.handle("brief.catchUp", (req) => ctx.brief.catchUp(req.projectId, req.range));
+  ctx.ipc.handle("sessions.recaps", () => ctx.recorder.recapLines());
+  ctx.ipc.handle("sessions.recap", (req) => ctx.recorder.recapOf(req.id));
   ctx.ipc.handle("explore.start", (req) =>
     ctx.explore.start(req.providerId, req.incognito === true),
   );

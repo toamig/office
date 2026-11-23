@@ -1,5 +1,5 @@
 import type { TodoGroup, WaitingItem } from "../../../shared/models";
-import { localDate } from "../brief/brief";
+import { localDate } from "../../../shared/brief";
 
 const ITEM_RE = /^- \[ \] (\d{4}-\d{2}-\d{2}) (.+?)(?: \(([^()]*)\))?\s*$/;
 const H2_RE = /^## (.+?)\s*$/;

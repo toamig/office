@@ -4,6 +4,7 @@ import { emptyChat, reduceChat, replayChat, toolGroup, type ChatItem, type ChatS
 import type { ChatLine, ChatOptions, ChatState, SessionRow } from "@shared/models";
 import { isChatSession } from "@shared/roles";
 import { AutonomyPicker } from "../../components/AutonomyPicker";
+import type { SessionRecap } from "@shared/recap";
 import { formatTokens } from "../../components/UsageMeter";
 import { useQuery } from "../../lib/hooks";
 import { OfficeConfirmations } from "../../components/OfficeConfirmations";
@@ -96,6 +97,21 @@ function ChatChoices({ state, working, onChange }: {
   </>;
 }
 
+/** What the session did and where it left off, shown at the top of a reopened session. */
+function WhereItLeftOff({ recap }: { recap: SessionRecap }) {
+  return (
+    <details className="ui-surface mb-3 grid gap-2 p-3" data-testid="chat-recap" open>
+      <summary className="cursor-pointer font-medium">Where this left off</summary>
+      <div className="grid gap-2 pt-2">
+        <p className="m-0"><span className="ui-label">Asked </span>{recap.asked}</p>
+        {recap.done.length > 0 && <div><span className="ui-label">Done</span><ul className="m-0 pl-5">{recap.done.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+        {recap.unfinished.length > 0 && <div><span className="ui-label">Left open</span><ul className="m-0 pl-5">{recap.unfinished.map((item) => <li key={item}>{item}</li>)}</ul></div>}
+        {recap.next && <p className="m-0"><span className="ui-label">Next </span>{recap.next}</p>}
+      </div>
+    </details>
+  );
+}
+
 export function ChatView({ session, onChanged, headerActions }: {
   session: SessionRow;
   onChanged: () => void;
@@ -129,6 +145,7 @@ export function ChatView({ session, onChanged, headerActions }: {
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
   const { wrapUp } = useSessionActions();
+  const recap = useQuery("sessions.recap", { id }, ["recorder.changed"]).data ?? null;
   const used = useQuery("usage.session", { sessionId: id }, ["usage.changed"]).data?.tokens ?? 0;
 
   const setMode = (mode: "hidden" | "side" | "full") => {
@@ -276,6 +293,7 @@ export function ChatView({ session, onChanged, headerActions }: {
         pinned.current = el.scrollHeight - el.scrollTop - el.clientHeight < 60;
       }}>
         <div className="chat-column">
+          {recap && !working && <WhereItLeftOff recap={recap} />}
           {ready && items.length === 0 && <div className="chat-empty" data-testid="chat-empty">
             {plain ? "Ask a question or request an Office action." : "Ask the agent anything about this project."}
           </div>}

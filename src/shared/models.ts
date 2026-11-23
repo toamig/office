@@ -801,26 +801,7 @@ export type AuditEntry = z.infer<typeof AuditEntry>;
 export const VaultFile = z.object({ path: z.string(), markdown: z.string() });
 export type VaultFile = z.infer<typeof VaultFile>;
 
-export const BriefItem = z.object({
-  projectId: z.string(),
-  projectName: z.string(),
-  markdown: z.string(),
-});
-export type BriefItem = z.infer<typeof BriefItem>;
-
-/** One plain line of the brief, with the place it points to. */
-export const BriefLine = z.object({ text: z.string(), link: NotificationLink });
-export type BriefLine = z.infer<typeof BriefLine>;
-
-export const BriefView = z.object({
-  /** Local date (YYYY-MM-DD) of the newest brief, or null when none was written yet. */
-  date: z.string().nullable(),
-  /** Three to five plain lines: what changed, what needs you, what is worth doing next. */
-  lines: z.array(BriefLine),
-  /** The facts the lines were written from, grouped by project (Show details). */
-  items: z.array(BriefItem),
-});
-export type BriefView = z.infer<typeof BriefView>;
+export { BriefCard, BriefLine, BriefNext, BriefRange, BriefView } from "./brief";
 
 export const SpawnInput = z.object({
   name: z.string().min(1),

@@ -6,9 +6,11 @@ import type { Workspace } from "../../../shared/types";
 import type { Db } from "../../core/db";
 import { nowIso } from "../../core/util";
 import { Cursor, readRecording } from "./recording-input";
-import { appendDecision, DecisionDetails, type Entry, type RecordTarget, parseRecording, recordTarget, recordingPrompt } from "./recording-plan";
+import { appendDecision, DecisionDetails, type Entry, type RecordTarget, parsePlan, recordTarget, recordingPrompt } from "./recording-plan";
 import { readRulePack, ruleBody } from "./rule-pack";
 import { appendToSection, formatWaitingLine } from "./openitems";
+import { replaceSection, sectionLines } from "./sections";
+import { recapLine, type Recap, type SessionRecap } from "../../../shared/recap";
 import { notesPath } from "./scope";
 import type { VaultWriter } from "./writer";
 
@@ -36,6 +38,9 @@ type Proposal = Pick<Entry, "destination" | "text"> & {
 };
 
 const empty = (): WrapUpResult => ({ saved: 0, proposed: 0 });
+
+/** The section of a project's Overview that holds where the project stands now. */
+export const STATE_HEADING = "Where it stands";
 
 export class Recorder {
   private readonly active = new Map<string, Promise<WrapUpResult>>();
@@ -105,15 +110,61 @@ export class Recorder {
     const learning = this.deps.settings().learning;
     const pack = readRulePack(root);
     const result = await this.deps.complete(session, recordingPrompt(delta.text, general, learning,
-      pack ? ruleBody(root, pack.placement) : "", !!pack));
+      pack ? ruleBody(root, pack.placement) : "", !!pack, this.recapOf(session.id)));
     if (result === null) return { ...empty(), stopped: true };
     if (this.deps.root() !== root || !this.deps.settings().enabled) return empty();
-    const entries = parseRecording(result).flatMap((entry) => {
+    const plan = parsePlan(result);
+    if (!general && plan.recap) this.storeRecap(session, plan.recap);
+    if (!general && plan.state?.length && session.projectId) {
+      try { await this.writeState(root, session.projectId, plan.state); } catch { /* the state is kept by the next run */ }
+    }
+    const entries = plan.entries.flatMap((entry) => {
       if ((entry.destination === "lesson" || entry.destination === "profile") && !learning) return [];
       const target = this.target(root, session.projectId, entry.destination);
       return target ? [{ entry, target }] : [];
     });
     return await this.fileEntries(session, root, delta.cursor, entries);
+  }
+
+  /** Keeps the latest recap of a session; it is shown when the session is reopened and read by the brief. */
+  private storeRecap(session: SessionRow, recap: Recap): void {
+    this.deps.db.prepare(`INSERT INTO session_recaps (session_id, project_id, at, asked, done, unfinished, next_step) VALUES (?, ?, ?, ?, ?, ?, ?)
+      ON CONFLICT(session_id) DO UPDATE SET project_id = excluded.project_id, at = excluded.at, asked = excluded.asked, done = excluded.done,
+      unfinished = excluded.unfinished, next_step = excluded.next_step`)
+      .run(session.id, session.projectId, nowIso(), recap.asked, JSON.stringify(recap.done), JSON.stringify(recap.unfinished), recap.next);
+    this.deps.changed();
+  }
+
+  recapOf(sessionId: string): SessionRecap | null {
+    const row = this.deps.db.prepare("SELECT at, asked, done, unfinished, next_step FROM session_recaps WHERE session_id = ?")
+      .get(sessionId) as { at: string; asked: string; done: string; unfinished: string; next_step: string | null } | undefined;
+    if (!row) return null;
+    const list = (json: string): string[] => { try { const value: unknown = JSON.parse(json); return Array.isArray(value) ? value.map(String) : []; } catch { return []; } };
+    return { sessionId, at: row.at, asked: row.asked, done: list(row.done), unfinished: list(row.unfinished), next: row.next_step };
+  }
+
+  /** One line for each session that has a recap, for the Sessions list. */
+  recapLines(): Record<string, string> {
+    const rows = this.deps.db.prepare("SELECT session_id, asked, next_step FROM session_recaps").all() as Array<{ session_id: string; asked: string; next_step: string | null }>;
+    return Object.fromEntries(rows.map((row) => [row.session_id, recapLine({ asked: row.asked, next: row.next_step })]));
+  }
+
+  /** Keeps the project's Overview current: its "Where it stands" section is the state the brief and new sessions read. */
+  private async writeState(root: string, projectId: string, state: string[]): Promise<void> {
+    const ws = this.deps.workspace();
+    const project = ws?.projects.find((entry) => entry.id === projectId);
+    if (!ws || ws.vault.kind === "none" || !project || project.vault === undefined || this.deps.root() !== root) return;
+    const relative = `${project.vault}/Overview.md`.replaceAll("\\", "/");
+    const path = notesPath(root, relative);
+    if (!path) return;
+    const { writer } = this.deps;
+    const date = writer.today();
+    const body = [...state.map((line) => `- ${line}`), "", `Updated ${date} by the Office recorder.`];
+    const facts = (lines: string[]): string => lines.filter((line) => line.trim() && !line.startsWith("Updated ")).join(" | ");
+    const same = (current: string[] | null): boolean => current !== null && facts(current) === facts(body);
+    const result = await writer.edit(path, `${project.name}: update where it stands`, (content) =>
+      same(sectionLines(content, STATE_HEADING)) ? content : replaceSection(content, STATE_HEADING, body));
+    if (result.committed) await this.deps.afterSave?.(root);
   }
 
   private async fileEntries(

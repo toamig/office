@@ -1,25 +1,21 @@
-import { existsSync } from "node:fs";
-import { join } from "node:path";
-import type { BriefItem, BriefLine, BriefView } from "../../../shared/models";
-import type { Project, Workspace } from "../../../shared/types";
+import { join, sep } from "node:path";
+import { z } from "zod";
+import {
+  BRIEF_RANGE_LABELS, BriefRange, briefSince, concreteLine, localDate,
+  type BriefCard, type BriefLine, type BriefLink, type BriefNext, type BriefView,
+} from "../../../shared/brief";
+import type { Workspace } from "../../../shared/types";
 import type { Db } from "../../core/db";
 import type { Notifier } from "../../core/notifier";
-import { projectFolder } from "../../core/util";
-import { git } from "../git/run";
 import type { RunService } from "../runs/service";
-import { cheapestModel } from "../../core/scheduler";
+import { brainScope, type BrainScope } from "../vault/scope";
+import { activityDays, collectProjectFacts, hasNews, links, type FactEnv, type ProjectFacts } from "./brief-facts";
+
+export { localDate };
 
 const MARKER = "__run__";
-/** The row that holds the brief's lines; the other rows of a date are the facts of one project each. */
-const LINES = "__lines__";
-
-export interface Activity {
-  project: Project;
-  commits: string[];
-  notes: string[];
-  sessions: string[];
-  runs: string[];
-}
+/** The row that holds the brief itself. */
+const CARDS = "__cards__";
 
 export interface BriefDeps {
   db: Db;
@@ -36,124 +32,155 @@ export interface BriefDeps {
   written?: () => void;
 }
 
-const pad = (n: number): string => String(n).padStart(2, "0");
-export const localDate = (d: Date): string =>
-  `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-
-/** Midnight at the start of yesterday, local time. */
-export function startOfYesterday(now: Date): Date {
-  const d = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-  d.setDate(d.getDate() - 1);
-  return d;
-}
-
 /** True once today's brief time has passed. */
 export function briefDue(now: Date, briefTime: string): boolean {
   const [h, m] = briefTime.split(":").map(Number);
   return now.getHours() * 60 + now.getMinutes() >= (h ?? 0) * 60 + (m ?? 0);
 }
 
-async function subjects(repo: string, since: string, paths: string[] = []): Promise<string[]> {
-  if (!existsSync(join(repo, ".git")) && !existsSync(repo)) return [];
-  const result = await git(repo, [
-    "log",
-    `--since=${since}`,
-    "--format=%s",
-    "--no-merges",
-    ...(paths.length ? ["--", ...paths] : []),
-  ]);
-  return result.code === 0 ? result.stdout.split("\n").filter(Boolean) : [];
-}
+/** One fact the brief may cite, with the exact place it leads to. */
+interface Fact { id: string; text: string; link: BriefLink; kind: "S" | "C" | "N" | "O" | "G" }
 
-/** The most lines a brief has, and the longest a line may be: it is read at a glance on Home. */
-export const BRIEF_MAX_LINES = 5;
-export const BRIEF_MAX_CHARS = 140;
-
-/** The only tools the brief's run has: it reads nothing, because every fact is in the prompt. */
-export const BRIEF_TOOLS = "";
-
-/** The facts as the prompt gives them, and the format the answer must take. */
-export function buildBriefPrompt(activities: Activity[], needsYou: string[] = []): string {
-  const lines = [
-    "Write the owner's morning brief as three to five plain lines, one per line, each starting with `- `.",
-    `Each line is one short sentence of at most ${BRIEF_MAX_CHARS} characters, with no markdown, links or headings.`,
-    "Cover, in this order: what changed yesterday, what needs the owner, and what is worth doing next.",
-    "Use only the facts below; do not read anything else.",
-    "",
-  ];
-  for (const a of activities) {
-    lines.push(`### ${a.project.name}`);
-    for (const c of a.commits) lines.push(`- commit: ${c}`);
-    for (const n of a.notes) lines.push(`- brain: ${n}`);
-    for (const s of a.sessions) lines.push(`- session: ${s}`);
-    for (const r of a.runs) lines.push(`- run: ${r}`);
-    lines.push("");
+/** The facts of one project with ids the model cites. */
+export function factIndex(facts: ProjectFacts): Fact[] {
+  const out: Fact[] = [];
+  const add = (kind: Fact["kind"], text: string, link: BriefLink): void => {
+    out.push({ id: `${kind}${out.filter((fact) => fact.kind === kind).length + 1}`, kind, text, link });
+  };
+  const id = facts.project.id;
+  for (const session of facts.sessions) {
+    const recap = session.recap;
+    add("S", recap
+      ? `Session "${session.title}": asked ${recap.asked} Done: ${recap.done.join("; ") || "nothing recorded"}. Unfinished: ${recap.unfinished.join("; ") || "nothing"}. Next: ${recap.next ?? "none"}.`
+      : `Session "${session.title}" (no recap yet)`, links.session(session.id));
   }
-  if (needsYou.length > 0) {
-    lines.push("### Needs the owner now");
-    for (const n of needsYou) lines.push(`- ${n}`);
-    lines.push("");
+  for (const commit of facts.commits.slice(0, 14)) {
+    const files = commit.files.length ? ` (files: ${commit.files.join(", ")})` : "";
+    add("C", `Commit ${commit.short}: ${commit.subject}${files}`, links.commit(id, commit.sha));
   }
-  return lines.join("\n");
-}
-
-/** The lines of the model's answer: at most five, each cut to the limit, without bullets or markdown. */
-export function parseBriefLines(text: string): string[] {
-  return text
-    .split("\n")
-    .filter((l) => !/^\s*#/.test(l))
-    .map((l) =>
-      l
-        .replace(/^\s*(?:[-*]|\d+[.)])\s+/, "")
-        .replace(/[*_`>]/g, "")
-        .trim(),
-    )
-    .filter((l) => l.length > 0)
-    .slice(0, BRIEF_MAX_LINES)
-    .map((l) =>
-      l.length > BRIEF_MAX_CHARS ? `${l.slice(0, BRIEF_MAX_CHARS - 3).trimEnd()}...` : l,
-    );
-}
-
-/** Where a line leads: the project it names, the list of what needs you, or Home. */
-export function linkForLine(
-  line: string,
-  projects: Array<{ id: string; name: string }>,
-): BriefLine["link"] {
-  const named = projects.find((p) => line.toLowerCase().includes(p.name.toLowerCase()));
-  if (/need(s)? you|waiting|approv|review|conflict|failed/i.test(line)) return { view: "inbox" };
-  if (named) return { view: "project", params: { id: named.id } };
-  return { view: "home" };
-}
-
-/** The lines when no model could be asked: written from the facts, so the brief never comes out empty. */
-export function plainBrief(activities: Activity[], needsYou: string[]): string[] {
-  const out: string[] = [];
-  if (activities.length > 0) {
-    const names = activities.map((a) => a.project.name);
-    out.push(`Changed since you last looked: ${names.join(", ")}.`);
-  } else out.push("Nothing changed since you last looked.");
-  out.push(
-    needsYou.length > 0
-      ? `${needsYou.length} ${needsYou.length === 1 ? "thing needs" : "things need"} you.`
-      : "Nothing needs you.",
-  );
+  const seen = new Set<string>();
+  for (const note of facts.notes.slice(0, 10)) {
+    if (seen.has(`${note.name}:${note.sha}`)) continue;
+    seen.add(`${note.name}:${note.sha}`);
+    add("N", `Brain note ${note.name} changed: ${note.subject}`, links.note(id, note.name));
+  }
+  for (const item of facts.open.slice(0, 8)) {
+    add("O", `${item.waiting ? "Waiting on you" : "Open item"}: ${item.text}`, links.note(id, "OpenItems", item.heading));
+  }
+  for (const line of facts.stands) add("G", line, { view: "git", params: { project: id } });
   return out;
 }
 
-/** What a project's facts say, as bullet lines: shown under Show details. */
-const factsOf = (a: Activity): string =>
-  [
-    ...a.commits.map((c) => `- ${c}`),
-    ...a.notes.map((n) => `- brain: ${n}`),
-    ...a.sessions.map((s) => `- ${s}`),
-    ...a.runs.map((r) => `- ${r}`),
-  ].join("\n");
+const clip = (text: string, max = 200): string => (text.length > max ? `${text.slice(0, max - 3).trimEnd()}...` : text);
 
-/** The morning brief: what changed per project yesterday, written by a cheap model. */
+/** A card written from the facts alone: every line is one fact and leads to it. Used when no model can be asked. */
+export function plainCard(facts: ProjectFacts): BriefCard {
+  const id = facts.project.id;
+  const done: BriefLine[] = [];
+  for (const session of facts.sessions) {
+    for (const item of (session.recap?.done ?? []).slice(0, 2)) done.push({ text: clip(`${item} (${session.title})`), link: links.session(session.id) });
+  }
+  for (const commit of facts.commits.slice(0, 4)) {
+    const shown = commit.files.slice(0, 3).join(", ");
+    done.push({
+      text: clip(`${commit.subject}${shown ? ` (${shown}${commit.files.length > 3 ? ", and more" : ""})` : ""}`),
+      link: links.commit(id, commit.sha),
+    });
+  }
+  const noted = new Set<string>();
+  for (const note of facts.notes) {
+    if (noted.has(note.name) || noted.size >= 3) continue;
+    noted.add(note.name);
+    done.push({ text: clip(`Updated the ${note.name} note: ${note.subject}`), link: links.note(id, note.name) });
+  }
+  const stands: BriefLine[] = facts.stands.map((text) => ({ text, link: { view: "git", params: { project: id } } }));
+  for (const session of facts.sessions) {
+    for (const item of (session.recap?.unfinished ?? []).slice(0, 2)) stands.push({ text: clip(`${item} (${session.title})`), link: links.session(session.id) });
+  }
+  for (const item of facts.open.filter((entry) => entry.waiting).slice(0, 3)) {
+    stands.push({ text: clip(`Waiting on you: ${item.text}`), link: links.note(id, "OpenItems", item.heading) });
+  }
+  const next: BriefNext[] = [];
+  const resume = facts.sessions.find((session) => session.recap?.next);
+  if (resume?.recap?.next) next.push({ text: clip(resume.recap.next), action: { kind: "continue", sessionId: resume.id } });
+  const waiting = facts.open.find((entry) => entry.waiting);
+  if (waiting) next.push({ text: clip(waiting.text), action: { kind: "open", link: links.note(id, "OpenItems", waiting.heading) } });
+  const todo = facts.open.find((entry) => !entry.waiting);
+  if (todo && next.length < 2) next.push({ text: clip(`Start on: ${todo.text}`), action: { kind: "start", projectId: id, brief: todo.text } });
+  const unrecorded = facts.sessions.filter((session) => !session.recap).length;
+  const unknown = done.length === 0
+    ? "There is no recap or commit in this period, so I cannot say what was done."
+    : unrecorded > 0 ? `${unrecorded} ${unrecorded === 1 ? "session has" : "sessions have"} no recap yet, so some work may be missing.` : null;
+  return { projectId: id, projectName: facts.project.name, done: done.slice(0, 6), stands: stands.slice(0, 6), next: next.slice(0, 2), unknown };
+}
+
+/** The facts as the prompt gives them, and the format the answer must take. */
+export function buildBriefPrompt(all: ProjectFacts[], range: string, needsYou: string[] = []): string {
+  const lines = [
+    `Write the owner's catch-up brief for the time since ${range}. Say where each project was left, in plain words.`,
+    "Use only the facts below. Each fact has an id such as S1 (a session), C2 (a commit), N1 (a brain note), O3 (an open item) or G1 (the state of the repo). You may read the brain notes and files they name when a fact is not enough.",
+    "For each project give: done (two to six bullets, each naming the concrete thing: the feature, screen, file, decision with its ADR number, or number), stands (what is unfinished right now), next (one or two concrete next steps).",
+    "Every bullet must cite the id of the fact it comes from in `ref`. Never write \"made progress\", \"various updates\" or \"worked on X\". If the facts are thin, say what you do not know in `unknown` instead of filling a line.",
+    'Reply with only JSON: {"projects":[{"projectId":"...","done":[{"text":"...","ref":"C1"}],"stands":[{"text":"...","ref":"G1"}],"next":[{"text":"...","ref":"S1","action":"continue"}],"unknown":null}]}',
+    'For next, action is "continue" (ref is a session S), "open" (ref is a note N or open item O) or "start" (a new session with this text as its brief; ref may be any fact).',
+    "",
+  ];
+  for (const facts of all) {
+    lines.push(`## ${facts.project.name} (projectId ${facts.project.id})`);
+    for (const fact of factIndex(facts)) lines.push(`- ${fact.id}: ${fact.text}`);
+    lines.push("");
+  }
+  if (needsYou.length) lines.push("## Needs the owner now", ...needsYou.map((item) => `- ${item}`));
+  return lines.join("\n");
+}
+
+const Reply = z.object({
+  projects: z.array(z.object({
+    projectId: z.string(),
+    done: z.array(z.object({ text: z.string(), ref: z.string() })).default([]),
+    stands: z.array(z.object({ text: z.string(), ref: z.string() })).default([]),
+    next: z.array(z.object({ text: z.string(), ref: z.string(), action: z.enum(["continue", "open", "start"]).default("start") })).default([]),
+    unknown: z.string().nullable().optional(),
+  })),
+});
+
+/** The model's reply as cards. A line that cites no fact of its project, or says nothing concrete, is dropped. */
+export function parseBrief(text: string, all: ProjectFacts[]): BriefCard[] {
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("The brief was not JSON.");
+  const reply = Reply.parse(JSON.parse(text.slice(start, end + 1)));
+  const cards: BriefCard[] = [];
+  for (const entry of reply.projects) {
+    const facts = all.find((item) => item.project.id === entry.projectId);
+    if (!facts) continue;
+    const known = new Map(factIndex(facts).map((fact) => [fact.id, fact]));
+    const lines = (items: Array<{ text: string; ref: string }>, allowed: string): BriefLine[] => items.flatMap((item) => {
+      const fact = known.get(item.ref.trim().toUpperCase());
+      return fact && allowed.includes(fact.kind) && concreteLine(item.text) ? [{ text: clip(item.text.trim(), 240), link: fact.link }] : [];
+    }).slice(0, 6);
+    const next = entry.next.flatMap((item): BriefNext[] => {
+      const fact = known.get(item.ref.trim().toUpperCase());
+      if (!concreteLine(item.text)) return [];
+      const text = clip(item.text.trim(), 240);
+      if (item.action === "continue" && fact?.kind === "S") return [{ text, action: { kind: "continue", sessionId: fact.link.params?.["session"] ?? "" } }];
+      if (item.action === "open" && fact && (fact.kind === "N" || fact.kind === "O")) return [{ text, action: { kind: "open", link: fact.link } }];
+      if (item.action === "start") return [{ text, action: { kind: "start", projectId: facts.project.id, brief: item.text.trim() } }];
+      return [];
+    }).slice(0, 2);
+    const card: BriefCard = {
+      projectId: facts.project.id, projectName: facts.project.name, done: lines(entry.done, "SCN"), stands: lines(entry.stands, "GOS"), next,
+      unknown: entry.unknown?.trim() || null,
+    };
+    if (card.done.length + card.stands.length + card.next.length > 0) cards.push(card);
+  }
+  return cards;
+}
+
+/** The morning brief: where you left off, one card per project, written from recaps, commits, notes and open items. */
 export class BriefService {
-  /** What waits on the owner right now (titles), set by the app so the brief can say it. */
-  needsYou: () => string[] = () => [];
+  /** What waits on the owner right now, with where each leads, set by the app so the brief can say it. */
+  needsYou: () => BriefLine[] = () => [];
 
   constructor(private readonly deps: BriefDeps) {}
 
@@ -161,102 +188,107 @@ export class BriefService {
     return this.deps.now ? this.deps.now() : new Date();
   }
 
-  /** Commits, brain changes and finished sessions and runs since `since`, for each non-archived project. */
-  async collect(since: Date): Promise<Activity[]> {
+  private env(ws: Workspace): FactEnv {
+    return {
+      db: this.deps.db, workspace: ws, projectsRoot: this.deps.projectsRoot(), projectPaths: this.deps.projectPaths?.(),
+      workspaceRoot: this.deps.workspaceRoot(),
+    };
+  }
+
+  /** Where a range starts; "since last time" is the latest day before today on which the owner worked. */
+  async since(range: BriefRange): Promise<Date> {
+    const ws = this.deps.workspace();
+    const now = this.now();
+    if (range !== "since-last" || !ws) return briefSince(range, now, []);
+    return briefSince(range, now, await activityDays(this.env(ws), new Date(now.getTime() - 60 * 86_400_000)));
+  }
+
+  /** The facts of every project that had news since a moment. */
+  async collect(since: Date): Promise<ProjectFacts[]> {
     const ws = this.deps.workspace();
     if (!ws) return [];
-    const iso = since.toISOString();
-    const out: Activity[] = [];
+    const env = this.env(ws);
+    const out: ProjectFacts[] = [];
     for (const project of ws.projects) {
       if (project.archived) continue;
-      const code = projectFolder(this.deps.projectsRoot(), project, this.deps.projectPaths?.());
-      const commits = await subjects(code, iso);
-      let notes: string[] = [];
-      if (project.vault !== undefined && project.vault !== "." && ws.vault.kind !== "none") {
-        const folder = join(this.deps.workspaceRoot(), project.vault);
-        notes = existsSync(join(folder, ".git"))
-          ? await subjects(folder, iso)
-          : await subjects(this.deps.workspaceRoot(), iso, [project.vault]);
-      }
-      const sessions = (
-        this.deps.db
-          .prepare("SELECT title, status FROM sessions WHERE project_id = ? AND ended_at >= ?")
-          .all(project.id, iso) as Array<{ title: string | null; status: string }>
-      ).map(
-        (s) => `${s.title ?? "an agent session"} ${s.status === "failed" ? "failed" : "finished"}`,
-      );
-      const runs = (
-        this.deps.db
-          .prepare(
-            "SELECT kind, status FROM runs WHERE project_id = ? AND ended_at >= ? AND kind NOT IN ('brief', 'ask')",
-          )
-          .all(project.id, iso) as Array<{ kind: string; status: string }>
-      ).map((r) => `${r.kind} run ${r.status}`);
-      if (commits.length + notes.length + sessions.length + runs.length > 0) {
-        out.push({ project, commits, notes, sessions, runs });
-      }
+      const facts = await collectProjectFacts(env, project, since);
+      if (hasNews(facts)) out.push(facts);
     }
     return out;
   }
 
-  /** Writes today's brief: a few plain lines, and the facts behind them. Returns how many projects had news. */
-  async run(): Promise<{ date: string; count: number }> {
-    const ws = this.deps.workspace();
-    const now = this.now();
-    const date = localDate(now);
-    this.mark(date);
-    if (!ws) return { date, count: 0 };
-    const activities = await this.collect(startOfYesterday(now));
-    const needsYou = this.needsYou();
-    let lines: string[] = [];
-    if (activities.length + needsYou.length === 0) {
-      lines = ["Nothing changed since you last looked, and nothing needs you."];
-    } else if (this.deps.settings?.().enabled !== false) {
-      // The run may only read, with nothing allowed to run, on the cheapest model; every fact is in its prompt.
-      const role = ws.roles["brief"];
-      const provider = role?.provider ?? this.deps.defaultProvider?.() ?? "claude-code";
+  private readScope(ws: Workspace): { cwd: string; brain?: BrainScope } {
+    const root = this.deps.workspaceRoot();
+    const base = root && ws.vault.kind !== "none" ? brainScope(ws, root) : undefined;
+    if (!root || !base) return { cwd: root || this.deps.projectsRoot() };
+    return {
+      cwd: root,
+      brain: {
+        ...base, writable: [], readOnly: [...base.readOnly, ...base.writable], private: [...base.private, join(root, `.git${sep}`)],
+        restrictedRead: true, instructions: "Read only the notes the brief needs. Private notes are available only to their own project.",
+      },
+    };
+  }
+
+  /** Asks the model to write the cards; without one, or when its reply is no good, they are written from the facts. */
+  private async cardsFor(ws: Workspace, all: ProjectFacts[], rangeLabel: string): Promise<BriefCard[]> {
+    if (all.length === 0) return [];
+    if (this.deps.settings?.().enabled !== false) {
+      const provider = ws.roles["brief"]?.provider ?? this.deps.defaultProvider?.() ?? "claude-code";
+      const configured = this.deps.settings?.().model;
+      const model = configured || (provider === "codex" ? undefined : "sonnet");
+      const scope = this.readScope(ws);
       try {
         const handle = this.deps.runs.start({
-          kind: "brief",
-          providerId: provider,
-          role: {
-            provider,
-            model: this.deps.settings?.().model || cheapestModel(provider),
-            instructions: "",
-            readOnly: true,
-            allowedCommands: [],
-          },
-          tools: BRIEF_TOOLS,
-          cwd: this.deps.workspaceRoot() || this.deps.projectsRoot(),
-          prompt: buildBriefPrompt(activities, needsYou),
+          kind: "brief", providerId: provider, tools: "Read,Grep,Glob", cwd: scope.cwd, ...(scope.brain ? { brain: scope.brain } : {}),
+          role: { provider, ...(model ? { model } : {}), instructions: "", readOnly: true, allowedCommands: [] },
+          prompt: buildBriefPrompt(all, rangeLabel, this.needsYou().map((item) => item.text)),
         });
         const result = await handle.result;
-        if (result.error === "cancelled") return { date, count: 0 };
-        if (result.ok) lines = parseBriefLines(result.resultText);
+        if (result.error === "cancelled") return [];
+        if (result.ok) {
+          const cards = parseBrief(result.resultText, all);
+          if (cards.length > 0) return all.flatMap((facts) => cards.filter((card) => card.projectId === facts.project.id));
+        }
       } catch {
-        /* the plain lines below are used */
+        /* the cards written from the facts are used */
       }
     }
-    if (lines.length === 0) lines = plainBrief(activities, needsYou);
-    const projects = ws.projects;
-    const stored: BriefLine[] = lines.map((text) => ({ text, link: linkForLine(text, projects) }));
-    const insert = this.deps.db.prepare(
-      "INSERT INTO briefs (date, project_id, markdown) VALUES (?, ?, ?) ON CONFLICT(date, project_id) DO UPDATE SET markdown = excluded.markdown",
-    );
-    this.deps.db.transaction(() => {
-      insert.run(date, LINES, JSON.stringify(stored));
-      for (const a of activities) insert.run(date, a.project.id, factsOf(a));
-    })();
+    return all.map(plainCard);
+  }
+
+  /** Writes today's brief for a range. Returns how many projects had news. */
+  async run(range: BriefRange = "since-last"): Promise<{ date: string; count: number }> {
+    const ws = this.deps.workspace();
+    const date = localDate(this.now());
+    this.mark(date);
+    if (!ws) return { date, count: 0 };
+    const since = await this.since(range);
+    const all = await this.collect(since);
+    const cards = await this.cardsFor(ws, all, `${BRIEF_RANGE_LABELS[range]} (${localDate(since)})`);
+    this.deps.db.prepare("INSERT INTO briefs (date, project_id, markdown) VALUES (?, ?, ?) ON CONFLICT(date, project_id) DO UPDATE SET markdown = excluded.markdown")
+      .run(date, CARDS, JSON.stringify({ range, since: since.toISOString(), cards }));
     this.deps.written?.();
-    return { date, count: activities.length };
+    return { date, count: cards.length };
+  }
+
+  /** The card of one project for any range; by default since the owner last worked on it. Nothing is stored. */
+  async catchUp(projectId: string, range?: BriefRange): Promise<{ since: string; card: BriefCard }> {
+    const ws = this.deps.workspace();
+    const project = ws?.projects.find((entry) => entry.id === projectId);
+    if (!ws || !project) throw new Error("That project is not in this workspace.");
+    const now = this.now();
+    const since = range
+      ? await this.since(range)
+      : briefSince("since-last", now, await activityDays({ ...this.env(ws), workspace: { ...ws, projects: [project] } }, new Date(now.getTime() - 60 * 86_400_000)));
+    const facts = await collectProjectFacts(this.env(ws), project, since);
+    const cards = await this.cardsFor(ws, hasNews(facts) ? [facts] : [], localDate(since));
+    const card = cards[0] ?? { ...plainCard(facts), unknown: "Nothing was recorded for this project in that time." };
+    return { since: since.toISOString(), card };
   }
 
   private mark(date: string): void {
-    this.deps.db
-      .prepare(
-        "INSERT INTO briefs (date, project_id, markdown) VALUES (?, ?, '') ON CONFLICT(date, project_id) DO NOTHING",
-      )
-      .run(date, MARKER);
+    this.deps.db.prepare("INSERT INTO briefs (date, project_id, markdown) VALUES (?, ?, '') ON CONFLICT(date, project_id) DO NOTHING").run(date, MARKER);
   }
 
   /** At the brief time, or on the first launch after it, write today's brief once. */
@@ -265,46 +297,26 @@ export class BriefService {
     if (!ws) return false;
     const now = this.now();
     if (!briefDue(now, this.deps.settings?.().time || ws.briefTime)) return false;
-    const done = this.deps.db
-      .prepare("SELECT 1 FROM briefs WHERE date = ? AND project_id = ?")
-      .get(localDate(now), MARKER);
+    const done = this.deps.db.prepare("SELECT 1 FROM briefs WHERE date = ? AND project_id = ?").get(localDate(now), MARKER);
     if (done) return false;
     await this.run();
     return true;
   }
 
-  /** The newest brief: its lines, and the facts per project that had news. */
+  /** The newest brief. */
   latest(): BriefView {
-    const row = this.deps.db
-      .prepare("SELECT MAX(date) AS date FROM briefs WHERE project_id != ?")
-      .get(MARKER) as { date: string | null };
-    if (!row.date) return { date: null, lines: [], items: [] };
-    const rows = this.deps.db
-      .prepare("SELECT project_id, markdown FROM briefs WHERE date = ? AND project_id != ?")
-      .all(row.date, MARKER) as Array<{ project_id: string; markdown: string }>;
-    const projects = this.deps.workspace()?.projects ?? [];
-    let lines: BriefLine[] = [];
-    const items: BriefItem[] = [];
-    for (const r of rows) {
-      if (r.project_id === LINES) {
-        try {
-          lines = JSON.parse(r.markdown) as BriefLine[];
-        } catch {
-          lines = [];
-        }
-        continue;
-      }
-      items.push({
-        projectId: r.project_id,
-        projectName: projects.find((p) => p.id === r.project_id)?.name ?? r.project_id,
-        markdown: r.markdown,
-      });
+    const row = this.deps.db.prepare("SELECT date, markdown FROM briefs WHERE project_id = ? ORDER BY date DESC LIMIT 1").get(CARDS) as
+      { date: string; markdown: string } | undefined;
+    const empty: BriefView = { date: null, range: "since-last", since: null, cards: [], needsYou: this.needsYou().slice(0, 3) };
+    if (!row) return empty;
+    try {
+      const stored = JSON.parse(row.markdown) as { range?: string; since?: string; cards?: BriefCard[] };
+      return {
+        date: row.date, range: BriefRange.catch("since-last").parse(stored.range), since: stored.since ?? null,
+        cards: stored.cards ?? [], needsYou: this.needsYou().slice(0, 3),
+      };
+    } catch {
+      return { ...empty, date: row.date };
     }
-    if (this.deps.settings?.().enabled === false) {
-      const activity = projects.filter((project) => items.some((item) => item.projectId === project.id))
-        .map((project) => ({ project, commits: [], notes: [], sessions: [], runs: [] }));
-      lines = plainBrief(activity, this.needsYou()).map((text) => ({ text, link: linkForLine(text, projects) }));
-    }
-    return { date: row.date, lines, items };
   }
 }

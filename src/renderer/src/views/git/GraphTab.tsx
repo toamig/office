@@ -207,7 +207,7 @@ function BranchLabel({
 }
 
 /** What one commit changed, with its message. */
-function CommitChanges({
+export function CommitChanges({
   projectId,
   hash,
   onClose,

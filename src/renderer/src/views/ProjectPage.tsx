@@ -30,6 +30,7 @@ import { InspectorSlot } from "../components/Inspector";
 import { BranchesTab } from "./git/BranchesTab";
 import { PreviewTab } from "./PreviewTab";
 import { Notes } from "./project/Notes";
+import { CatchMeUp } from "./project/CatchMeUp";
 import { ProjectInspector } from "./project/ProjectInspector";
 import { useProjectManage } from "./project/Manage";
 import { RecentRuns } from "./project/RecentRuns";
@@ -380,6 +381,7 @@ function ProjectBody({
     }
   };
 
+  const [catching, setCatching] = useState(false);
   const more: MoreItem[] = [
     { label: "Sync", onSelect: () => void sync(), testId: "project-sync" },
     {
@@ -397,6 +399,7 @@ function ProjectBody({
           },
         ]
       : []),
+    { label: "Catch me up", onSelect: () => setCatching(true), testId: "catch-me-up" },
     {
       label: "Open folder",
       onSelect: () =>
@@ -431,6 +434,7 @@ function ProjectBody({
       more={more}
     >
       {manage.dialogs}
+      {catching && <CatchMeUp projectId={id} onClose={() => setCatching(false)} />}
       <InspectorSlot view="project">
         <ProjectInspector id={id} />
       </InspectorSlot>

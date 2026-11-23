@@ -89,8 +89,7 @@ describe("workflow migration and safety", () => {
     expect(outputs.list()).toHaveLength(4);
   });
 
-  it("gathers and shows facts with the morning brief switched off", async () => {
-    const projectEntry = Workspace.parse(config).projects[0]!;
+  it("writes the brief from the facts with the morning brief switched off, without asking a model", async () => {
     const start = vi.fn();
     const brief = new BriefService({
       db, runs: { start } as unknown as RunService,
@@ -98,10 +97,13 @@ describe("workflow migration and safety", () => {
       projectsRoot: () => root, workspaceRoot: () => root,
       settings: () => ({ enabled: false, model: "" }),
     });
-    vi.spyOn(brief, "collect").mockResolvedValue([{ project: projectEntry, commits: ["A change"], notes: [], sessions: [], runs: [] }]);
+    vi.spyOn(brief, "collect").mockResolvedValue([{
+      project: Workspace.parse(config).projects[0]!, sessions: [], notes: [], open: [], stands: [],
+      commits: [{ sha: "abc1234", short: "abc1234", subject: "A change", at: "2026-11-21T09:00:00Z", files: ["src/a.ts"] }],
+    }]);
     await brief.run();
     expect(start).not.toHaveBeenCalled();
-    expect(brief.latest().lines[0]?.text).toContain("Alpha");
-    expect(brief.latest().items[0]?.markdown).toContain("A change");
+    expect(brief.latest().cards[0]?.projectName).toBe("Alpha");
+    expect(brief.latest().cards[0]?.done[0]).toMatchObject({ text: "A change (src/a.ts)", link: { view: "git", params: { project: "alpha", commit: "abc1234" } } });
   });
 });

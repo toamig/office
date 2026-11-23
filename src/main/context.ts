@@ -875,7 +875,7 @@ export async function createContext(
   const fix = createFix(base, notes, agents, orch, pending);
   agents.github.onChange = () => pending.changed();
   // The brief says what waits on the owner, from the same list as the bell.
-  agents.brief.needsYou = () => pending.list().map((i) => i.title);
+  agents.brief.needsYou = () => pending.list().map((i) => ({ text: i.title, link: i.link ?? { view: "inbox" } }));
   const lifecycle = createLifecycle(base, notes, agents, orch, toolsMonitor, pending);
   return {
     settings: () => box.current,

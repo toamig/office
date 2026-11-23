@@ -21,7 +21,7 @@ import {
   type WorkbenchPreset,
 } from "../ui";
 import { InspectorSlot } from "../components/Inspector";
-import { GraphTab } from "./git/GraphTab";
+import { CommitChanges, GraphTab } from "./git/GraphTab";
 import { GitInspector } from "./git/GitInspector";
 import { CommitTab } from "./git/CommitTab";
 import { DiffTab } from "./git/DiffTab";
@@ -80,6 +80,8 @@ export function Git() {
   const health = useQuery("vault.health", undefined, ["vault.health"]);
   const [selected, setSelected] = useState(params["project"] ?? "");
   const [tab] = useState<Tab>(TABS.find((t) => t === params["tab"]) ?? "graph");
+  // A link to one commit (from the brief) opens its changes at once.
+  const [commit, setCommit] = useState<string | null>(params["commit"] ?? null);
 
   const repos = (projects.data ?? []).filter((p) => !p.archived && p.isRepo);
   const current = repos.find((p) => p.id === selected) ?? repos[0];
@@ -266,6 +268,7 @@ export function Git() {
       testId="git"
       fill
     >
+      {commit && current && <CommitChanges projectId={current.id} hash={commit} onClose={() => setCommit(null)} />}
       <InspectorSlot view="git">{current && <GitInspector projectId={current.id} />}</InspectorSlot>
       <SplitPane
         id="git"

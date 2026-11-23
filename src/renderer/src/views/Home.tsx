@@ -1,9 +1,8 @@
 import { useState } from "react";
-import { Markdown } from "../components/Markdown";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
-import { useUi, type ViewId } from "../stores/ui";
-import { Button, Card, EmptyState, Group, LinkButton, Page, StatusBadge, notifyError } from "../ui";
+import { useUi } from "../stores/ui";
+import { Button, Card, EmptyState, LinkButton, Page, StatusBadge, notifyError } from "../ui";
 import { describeValidate } from "@shared/health";
 import { FixButton } from "../components/Fix";
 import { RepoItem } from "../components/HealthItems";
@@ -11,9 +10,9 @@ import { PendingGroups } from "../components/PendingList";
 import { PermissionRequests } from "../components/PermissionRequests";
 import { usePending } from "../lib/pending";
 import { LiveAgentsPanel, TodayPanel } from "./home/LiveAndToday";
-import { SavedNotes } from "./home/SavedNotes";
 import { RequestComposer } from "./home/RequestComposer";
 import { WorthALook } from "./home/WorthALook";
+import { BriefPanel } from "./home/BriefCards";
 
 /** Home shows the first few; Needs you shows them all. */
 const SHOWN = 8;
@@ -37,82 +36,6 @@ function NeedsYouPanel() {
           Show all {rows.length}
         </Button>
       )}
-    </Card>
-  );
-}
-
-/** The brief: three to five plain lines at the top of Home, each leading to its place, and the facts behind them. */
-function BriefPanel() {
-  const navigate = useUi((s) => s.navigate);
-  const brief = useQuery("brief.latest", undefined, ["brief.changed", "settings.changed"]);
-  const settings = useQuery("settings.get", undefined, ["settings.changed"]);
-  const [busy, setBusy] = useState(false);
-  const [details, setDetails] = useState(false);
-  const write = async (): Promise<void> => {
-    setBusy(true);
-    try {
-      await office.invoke("brief.run");
-      brief.reload();
-    } catch (err) {
-      notifyError(err, "Could not write the brief", "brief", {
-        label: "Try again",
-        run: () => void write(),
-      });
-    } finally {
-      setBusy(false);
-    }
-  };
-  const lines = brief.data?.lines ?? [];
-  const items = brief.data?.items ?? [];
-  return (
-    <Card
-      title={brief.data?.date ? `Brief, ${brief.data.date}` : "Brief"}
-      testId="panel-brief"
-      action={
-        <Button
-          variant="ghost"
-          size="sm"
-          disabled={busy}
-          onClick={() => void write()}
-          data-testid="brief-run"
-        >
-          {busy ? "Refreshing..." : settings.data?.briefEnabled === false ? "Refresh facts" : "Write it now"}
-        </Button>
-      }
-    >
-      <div data-testid="brief">
-        {brief.data && brief.data.date === null && (
-          <EmptyState title="No brief yet">
-            It is written each morning: what changed, what needs you and what to do next.
-          </EmptyState>
-        )}
-        {lines.map((line, i) => (
-          <div key={`${i}-${line.text}`} className="ui-line" data-testid="brief-line">
-            <div className="ui-line-main">
-              <LinkButton
-                onClick={() => navigate(line.link.view as ViewId, line.link.params ?? {})}
-              >
-                {line.text}
-              </LinkButton>
-            </div>
-          </div>
-        ))}
-        {items.length > 0 && (
-          <div className="pt-2">
-            <LinkButton onClick={() => setDetails(!details)} data-testid="brief-details">
-              {details ? "Hide details" : "Show details"}
-            </LinkButton>
-          </div>
-        )}
-        {details &&
-          items.map((item) => (
-            <div key={item.projectId} className="mt-2" data-testid="brief-item">
-              <Group>{item.projectName}</Group>
-              <Markdown>{item.markdown}</Markdown>
-            </div>
-          ))}
-        <SavedNotes />
-      </div>
     </Card>
   );
 }

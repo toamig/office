@@ -48,6 +48,7 @@ function SessionList({
   onCloseSession: (s: SessionRow) => void;
 }) {
   const projects = useQuery("projects.list");
+  const recaps = useQuery("sessions.recaps", undefined, ["recorder.changed"]).data ?? {};
   const name = (id: string | null): string =>
     projects.data?.find((p) => p.id === id)?.name ?? "No project";
   // Grouped by project, in the order each project's newest session appears, so what is live stays on top.
@@ -117,6 +118,7 @@ function SessionList({
                   {s.idle && <span data-testid="session-idle">Still needed?</span>}
                 </div>
                 {s.activity && <div className="ui-line-sub truncate" title={s.activity}>{s.activity}</div>}
+                {!s.activity && recaps[s.id] && <div className="ui-line-sub truncate" title={recaps[s.id]} data-testid="session-recap">{recaps[s.id]}</div>}
               </div>
               <div className="session-actions flex gap-0.5">
                 {!s.running && s.mode !== "chat" && (

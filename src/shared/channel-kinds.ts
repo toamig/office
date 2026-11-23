@@ -42,6 +42,8 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "vault.readFile",
   "vault.audit",
   "brief.latest",
+  "sessions.recaps",
+  "sessions.recap",
   "recorder.digest",
   "explore.list",
   "branches.list",
