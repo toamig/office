@@ -78,12 +78,12 @@ export function ToolCard({ tool }: { tool: Tool }) {
   const summary = toolSummary(tool.input);
   const images = tool.status === "done" && (READ_LIKE.has(tool.name) || EDIT_LIKE.has(tool.name))
     ? files.filter(isImagePath) : [];
-  const links = assets?.openFile && files.length > 0 && <div className="flex flex-wrap gap-x-2 px-2 pb-1">
+  const links = assets?.openFile && files.length > 0 && <div className="tool-links flex flex-wrap gap-x-2">
     {files.map((path) => <button type="button" key={path} className="chat-link truncate text-left" onClick={() => assets.openFile?.(path)} title={path}>
       {tool.status === "done" && EDIT_LIKE.has(tool.name) && isArtifactPath(path) ? `Open beside: ${path.split(/[\\/]/).at(-1)}` : path}
     </button>)}
   </div>;
-  const thumbnails = images.length > 0 && <div className="flex flex-wrap gap-2 px-2 pb-2">
+  const thumbnails = images.length > 0 && <div className="tool-note flex flex-wrap gap-2 pb-2">
     {images.map((path) => <ChatImageView key={path} alt={path.split(/[\\/]/).at(-1) || "Image"} source={{ kind: "file", path }} />)}
   </div>;
   const label = toolLabel(tool, tool.status === "running");

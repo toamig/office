@@ -8,7 +8,7 @@ import { slashMenu } from "./commands";
 import { ChatMessage } from "./Messages";
 import { QueuedMessage } from "./QueuedMessage";
 
-const sampleImage = "data:image/png;base64,undefined";
+const sampleImage = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAEAAAAAoCAIAAADBrGu+AAAAX0lEQVR42u3PMQ3AQAwEwUcXVm4C4kCkMYOvDSsYtrS00hCY87wDNRSokGPAgAEDBgzsDmSghgIVYsCAAQMGDCwPfAM1FKgQAwYMGDBgYHngDtRQoEIMGDBgwICB1YEfGmNV4tYMTL4AAAAASUVORK5CYII=";
 
 const examples: ChatItem[] = [
   { kind: "user", id: "owner", text: "Build the preview using this reference.", images: 1 },
@@ -50,8 +50,10 @@ export function GalleryChat() {
     onRecover={item.kind === "error" ? () => undefined : undefined} />;
 
   return <div className="grid w-full gap-3">
-    <SegmentedControl label="Chat width" value={width} onChange={(value) => setWidth(value === "narrow" ? "narrow" : "wide")}
-      options={[{ value: "narrow", label: "Narrow" }, { value: "wide", label: "Wide" }]} />
+    <div className="w-fit">
+      <SegmentedControl label="Chat width" value={width} onChange={(value) => setWidth(value === "narrow" ? "narrow" : "wide")}
+        options={[{ value: "narrow", label: "Narrow" }, { value: "wide", label: "Wide" }]} />
+    </div>
     <ChatAssets.Provider value={{ id: "gallery", sampleImage, openFile: setSelection, openPreview: setSelection }}>
       <div className="mx-auto w-full rounded-[var(--radius-md)] border border-[var(--line)]" style={{ maxWidth: width === "narrow" ? 420 : 960 }}>
         <div className="chat-column py-4">

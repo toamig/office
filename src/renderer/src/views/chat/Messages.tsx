@@ -67,8 +67,8 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit, onRewind }
             <span className="tool-summary" title={item.task}>{item.task}</span>
             <span className="ui-muted">{item.status === "working" ? "Working" : item.status === "done" ? "Done" : "Failed"}</span>
           </div>
-          {item.progress && item.status === "working" && <p className="ui-muted px-3">{item.progress}</p>}
-          {item.verdict && <div className="px-3"><Markdown>{item.verdict}</Markdown></div>}
+          {item.progress && item.status === "working" && <p className="ui-muted tool-note">{item.progress}</p>}
+          {item.verdict && <div className="tool-note"><Markdown>{item.verdict}</Markdown></div>}
         </div>
       );
     case "error": {
