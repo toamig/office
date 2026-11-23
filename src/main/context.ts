@@ -1,7 +1,7 @@
 import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import type { SetupState, SyncReport, WorkspaceView } from "../shared/models";
-import type { MachineSettings } from "../shared/types";
+import type { MachineSettings, Pipeline } from "../shared/types";
 import { Bus } from "./core/bus";
 import { openDb, type Db } from "./core/db";
 import { resolveTool, run } from "./core/exec";
@@ -44,6 +44,7 @@ import { AskService } from "./modules/ask/ask";
 import { RequestRouter } from "./modules/ask/router";
 import { ChatService } from "./modules/chat/service";
 import { UsageService } from "./modules/usage/usage";
+import { draftPipeline } from "./modules/tasks/pipeline-draft";
 import { DevServers, stopWithSession } from "./modules/chat/dev-servers";
 import { OfficeTools } from "./modules/chat/office-tools";
 import { RunService } from "./modules/runs/service";
@@ -124,6 +125,8 @@ export interface AppContext {
   officeTools: OfficeTools;
   devServers: DevServers;
   usage: UsageService;
+  /** Drafts a pipeline from a sentence with the cheapest agent. */
+  pipelineDraft: (description: string) => Promise<Pipeline>;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
   /** Starting a brain, adding projects, the agent pointer (M9). */
@@ -892,6 +895,8 @@ export async function createContext(
     requestRouter,
     officeTools,
     devServers,
+    pipelineDraft: (description) => draftPipeline(
+      { runs: agents.runs, provider: cheapestProvider, cwd: dataDir }, description, store.state.workspace?.roles ?? {}),
     starterPack,
     globalRules,
     gitRuleHooks,

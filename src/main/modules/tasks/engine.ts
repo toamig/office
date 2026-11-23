@@ -15,7 +15,7 @@ import type { RunService } from "../runs/service";
 import { FanOut } from "./fanout";
 import { fileArtTask } from "./file-art";
 import { integrateTask } from "./integrate";
-import { renderTemplate } from "./templates";
+import { buildStagePrompt, stageName, type StageContext, type StageLike } from "../../../shared/pipeline-prompt";
 
 export interface TaskEngineDeps {
   db: Db;
@@ -527,6 +527,37 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
     return "stop";
   }
 
+  private outputPath(taskId: string, stageId: string): string {
+    return slash(resolve(this.deps.tasksDir, taskId, `${stageId}.md`));
+  }
+
+  /** What a stage is told about its task and about every earlier stage, read from the files they left. */
+  private stageContext(t: TaskRow, current: TaskRow, idx: number, defs: StageLike[]): StageContext {
+    const project = this.deps.workspace()?.projects.find((entry) => entry.id === t.project_id);
+    const rows = this.stages(t.id);
+    return {
+      task: {
+        id: t.id, title: current.title, description: current.description, project: project?.name ?? t.project_id,
+        projectId: t.project_id, branch: current.branch, worktree: current.worktree,
+      },
+      outputPath: (stageId) => this.outputPath(t.id, stageId),
+      earlier: rows.filter((row) => row.idx < idx).map((row) => {
+        const def = defs[row.idx] ?? { id: row.stage_id, prompt: "" };
+        const path = this.outputPath(t.id, row.stage_id);
+        const file = row.output_path && existsSync(row.output_path) ? row.output_path : existsSync(path) ? path : null;
+        return { id: row.stage_id, name: stageName(def), path, text: file ? readFileSync(file, "utf8").slice(0, MAX_OUTPUT_BYTES) : null };
+      }),
+    };
+  }
+
+  /** The prompt a stage of a task is sent, as the engine builds it for a run. */
+  stagePrompt(taskId: string, idx: number): string {
+    const t = this.task(taskId);
+    const stage = this.deps.workspace()?.pipelines[t.pipeline]?.stages[idx];
+    if (!stage) throw new IpcFailure("not-found", "The pipeline no longer has this stage");
+    return buildStagePrompt(stage, this.stageContext(t, t, idx, this.deps.workspace()?.pipelines[t.pipeline]?.stages ?? []));
+  }
+
   private async runStage(t: TaskRow, idx: number, feedback?: string): Promise<"continue" | "stop"> {
     const ws = this.deps.workspace();
     const stage = ws?.pipelines[t.pipeline]?.stages[idx];
@@ -548,24 +579,8 @@ ${succeeded} of ${o.current.fanout} builders finished. Pick one result to keep.
         });
         current = this.task(t.id);
       }
-      const outputPath = slash(resolve(this.deps.tasksDir, t.id, `${stage.id}.md`));
-      const stagesCtx: Record<string, { outputPath: string }> = {};
-      for (const s of this.stages(t.id))
-        stagesCtx[s.stage_id] = {
-          outputPath: slash(resolve(this.deps.tasksDir, t.id, `${s.stage_id}.md`)),
-        };
-      let prompt = renderTemplate(stage.prompt, {
-        task: {
-          id: t.id,
-          title: current.title,
-          description: current.description,
-          branch: current.branch,
-          worktree: current.worktree,
-          project: t.project_id,
-        },
-        stage: { id: stage.id, outputPath },
-        stages: stagesCtx,
-      });
+      const outputPath = this.outputPath(t.id, stage.id);
+      let prompt = buildStagePrompt(stage, this.stageContext(t, current, idx, ws.pipelines[t.pipeline]?.stages ?? []));
       if (feedback)
         prompt += `\n\nThe owner rejected the previous attempt with this feedback. Address it:\n${feedback}`;
 

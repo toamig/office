@@ -4,7 +4,7 @@ import { OfficeConfirmation } from "./office-tools";
 import { LimitWindow, UsageTotals, UsageView } from "./usage";
 import { InstalledPlugin, ToolEdit, ToolEditPreview, ToolEntry, ToolTest, ToolTestResult } from "./tool-config";
 import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
-import { PermissionProfile, Pipeline, Role } from "./schemas";
+import { PermissionProfile, Pipeline, Role, Stage } from "./schemas";
 import {
   AppSettings,
   AppSettingsPatch,
@@ -487,6 +487,13 @@ export const channels = {
   "profiles.save": { req: z.object({ id: z.string(), profile: PermissionProfile }), res: z.void() },
   "profiles.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "pipelines.save": { req: z.object({ id: z.string(), pipeline: Pipeline }), res: z.void() },
+  /** What a stage of a pipeline being edited would be sent, for a made-up task, or for a real one once it is saved. */
+  "pipelines.preview": {
+    req: z.object({ stages: z.array(Stage), index: z.number().int().min(0), taskId: z.string().optional() }),
+    res: z.object({ prompt: z.string(), unknown: z.array(z.string()) }),
+  },
+  /** A pipeline drafted by the cheapest agent from a sentence, to be edited before saving. */
+  "pipelines.draft": { req: z.object({ description: z.string().trim().min(3).max(1000) }), res: Pipeline },
   "pipelines.remove": { req: z.object({ id: z.string() }), res: z.void() },
   "chat.state": { req: z.object({ id: z.string() }), res: ChatState },
   "chat.history": { req: z.object({ id: z.string() }), res: z.array(ChatLine) },

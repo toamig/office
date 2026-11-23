@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { AppSettings, GithubOverview, Inventory, ProviderStatus } from "../shared/models";
 import { workspaceView, type AppContext } from "./context";
+import { samplePrompt, unknownVariables } from "../shared/pipeline-prompt";
 import { startsWithWindows } from "./core/background";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { normPath } from "./core/util";
@@ -551,6 +552,11 @@ function registerConfigHandlers(ctx: AppContext): void {
   ctx.ipc.handle("profiles.save", (req) => ctx.editor.saveProfile(req.id, req.profile));
   ctx.ipc.handle("profiles.remove", (req) => ctx.editor.removeProfile(req.id));
   ctx.ipc.handle("pipelines.save", (req) => ctx.editor.savePipeline(req.id, req.pipeline));
+  ctx.ipc.handle("pipelines.preview", (req) => {
+    const prompt = req.taskId ? ctx.tasks.stagePrompt(req.taskId, req.index) : samplePrompt(req.stages, req.index);
+    return { prompt, unknown: unknownVariables(req.stages[req.index]?.prompt ?? "", req.stages) };
+  });
+  ctx.ipc.handle("pipelines.draft", (req) => ctx.pipelineDraft(req.description));
   ctx.ipc.handle("pipelines.remove", (req) => ctx.editor.removePipeline(req.id));
   ctx.ipc.handle("projects.update", (req) => {
     const { id, ...patch } = req;

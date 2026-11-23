@@ -16,6 +16,10 @@ export interface DiagramStage {
   /** pending, running, waiting-gate, waiting-permission, approved, done, failed or skipped. */
   status: string;
   startedAt?: string | null;
+  /** What passes on to the next stage along the arrow after this one ("Plan result"), drawn on the arrow. */
+  passes?: string;
+  /** The stage's own name, when it has one; the id is made from it. */
+  name?: string;
   /** The builders of a fan-out stage, stacked in the node. */
   variants?: Array<{ n: number; status: string }>;
 }
@@ -109,9 +113,9 @@ export function PipelineDiagram({
                   data-status={buttonTestId ? s.status : undefined}
                   onClick={() => onPick?.(s.id)}
                   disabled={!onPick}
-                  aria-label={`${sentence(s.id)}: ${labelOf(s.status)}`}
+                  aria-label={`${s.name ?? sentence(s.id)}: ${labelOf(s.status)}`}
                 >
-                  <span className="diagram-name">{sentence(s.id)}</span>
+                  <span className="diagram-name">{s.name ?? sentence(s.id)}</span>
                   <span className="diagram-who">
                     <ProviderIcon provider={s.provider} />
                     {sentence(s.role)}
@@ -140,7 +144,12 @@ export function PipelineDiagram({
                   <User size={13} aria-hidden /> You
                 </li>
               )}
-              {i < stages.length - 1 && !s.gate && <li className="diagram-line" aria-hidden />}
+              {i < stages.length - 1 && s.passes && (
+                <li className="diagram-pass" data-testid="diagram-pass" aria-label={`Passes on: ${s.passes}`}>
+                  <span>{s.passes}</span>
+                </li>
+              )}
+              {i < stages.length - 1 && !s.gate && !s.passes && <li className="diagram-line" aria-hidden />}
             </Fragment>
           );
         })}

@@ -119,7 +119,11 @@ export const Role = z.object({
 
 export const Stage = z.object({
   id: z.string(),
+  /** What the owner calls the stage; the id is made from it once and never changes. */
+  name: z.string().optional(),
   role: z.string(),
+  /** Earlier stages whose result this stage does not get. Every earlier result is passed on unless it is listed. */
+  exclude: z.array(z.string()).default([]),
   gate: z.boolean().default(false),
   worktree: z.boolean().default(false),
   prompt: z.string(),

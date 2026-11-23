@@ -1719,3 +1719,60 @@ input[type="checkbox"][role="switch"]:focus-visible {
 .usage-meter > span[data-tone="bad"] {
   color: var(--danger-fg);
 }
+
+.diagram-pass {
+  display: flex;
+  flex: 0 0 auto;
+  min-width: 92px;
+  flex-direction: column;
+  align-items: center;
+  align-self: center;
+  gap: 2px;
+  color: var(--muted);
+  font-size: var(--text-xs);
+  text-align: center;
+}
+.diagram-pass::after {
+  content: "";
+  width: 100%;
+  height: 1px;
+  background: var(--line);
+}
+.diagram[data-vertical="true"] .diagram-pass {
+  min-width: 0;
+  padding: var(--space-1) 0;
+}
+.diagram[data-vertical="true"] .diagram-pass::after {
+  width: 1px;
+  height: var(--space-3);
+}
+.prompt-editor {
+  min-height: 7rem;
+  padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--line);
+  border-radius: var(--radius-md);
+  background: var(--bg);
+  font: inherit;
+  line-height: 1.7;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.prompt-editor:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.prompt-chip {
+  display: inline-block;
+  margin: 0 1px;
+  padding: 0 8px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--accent) 16%, transparent);
+  color: var(--text);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+  user-select: all;
+}
+.prompt-chip[data-unknown="true"] {
+  background: color-mix(in srgb, var(--danger-fg) 16%, transparent);
+  color: var(--danger-fg);
+}
