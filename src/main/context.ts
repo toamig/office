@@ -311,6 +311,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
     providers,
     sessions,
     chatsDir: join(dataDir(), "chats"),
+    projectFolder: folderOf(projects),
     broker,
     writeMcpConfig: (id, dir) => writePermissionMcpConfig(dir, id, bridgeScript),
   });

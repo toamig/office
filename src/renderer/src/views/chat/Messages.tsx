@@ -2,7 +2,7 @@ import { ChevronRight } from "lucide-react";
 import { useState } from "react";
 import { formatDuration, type ChatItem } from "@shared/chat";
 import { chatFailure } from "@shared/chat-failure";
-import { Markdown } from "../../components/Markdown";
+import { ChatImageView, ChatMarkdown as Markdown } from "./ChatAssets";
 import { InteractionCard } from "../../components/InteractionCard";
 import { Button, OverflowMenu, Textarea } from "../../ui";
 import { ToolCard } from "./ToolCard";
@@ -127,7 +127,10 @@ function OwnerMessage({ item, working, onEdit, onRewind }: {
         {draft === undefined ? <Markdown>{item.text}</Markdown> : (
           <Textarea label="Edit message" value={draft} rows={4} onChange={(event) => setDraft(event.target.value)} />
         )}
-        {item.images > 0 && <div className="bubble-note">{item.images} image{item.images > 1 ? "s" : ""} attached</div>}
+        {item.images > 0 && <div className="flex flex-wrap gap-2 py-1">
+          {Array.from({ length: item.images }, (_, index) => <ChatImageView key={index} alt={`Attached image ${index + 1}`}
+            source={{ kind: "attachment", messageId: item.id, index }} />)}
+        </div>}
         {rewind}
         {onEdit && (draft === undefined
           ? <Button variant="ghost" size="sm" disabled={working} onClick={() => setDraft(item.text)}>Edit and resend</Button>

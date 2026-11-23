@@ -46,6 +46,7 @@ export const READ_CHANNELS: readonly ChannelName[] = [
   "github.overview",
   "chat.state",
   "chat.history",
+  "chat.image",
   "chat.commands",
   "chat.rewindPreview",
   "chat.files",

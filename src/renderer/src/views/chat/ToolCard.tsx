@@ -11,6 +11,7 @@ import {
 import { useState, type ReactNode } from "react";
 import { runningLabel, toolSummary, type ChatItem } from "@shared/chat";
 import { Elapsed } from "./Activity";
+import { ChatImageView, isImagePath, toolPaths } from "./ChatAssets";
 
 type Tool = Extract<ChatItem, { kind: "tool" }>;
 
@@ -73,6 +74,11 @@ function Collapsible({
  */
 export function ToolCard({ tool }: { tool: Tool }) {
   const summary = toolSummary(tool.input);
+  const images = tool.status === "done" && (READ_LIKE.has(tool.name) || EDIT_LIKE.has(tool.name))
+    ? toolPaths(tool.input).filter(isImagePath) : [];
+  const thumbnails = images.length > 0 && <div className="flex flex-wrap gap-2 px-2 pb-2">
+    {images.map((path) => <ChatImageView key={path} alt={path.split(/[\\/]/).at(-1) || "Image"} source={{ kind: "file", path }} />)}
+  </div>;
   const head = (icon: ReactNode, label: string): ReactNode => (
     <>
       {icon}
@@ -90,6 +96,7 @@ export function ToolCard({ tool }: { tool: Tool }) {
         <div className="tool-head static">
           {head(tool.name === "Read" ? <FileText size={13} /> : <Search size={13} />, tool.name)}
         </div>
+        {thumbnails}
       </div>
     );
   }
@@ -101,6 +108,7 @@ export function ToolCard({ tool }: { tool: Tool }) {
       <div className="tool-card" data-testid="tool-card" data-tool={tool.name}>
         <div className="tool-head static">{head(<Pencil size={13} />, tool.name)}</div>
         {(oldText || newText) && <EditDiff oldText={oldText} newText={newText} />}
+        {thumbnails}
       </div>
     );
   }

@@ -14,6 +14,7 @@ import { Button, Dropdown, OverflowMenu, notifyError } from "../../ui";
 import { ToolRunDialog, type ToolRun } from "../setup/ToolRunDialog";
 import { LivePlan, ToolGroup, TurnStatus } from "./Activity";
 import { Composer } from "./Composer";
+import { ChatAssets } from "./ChatAssets";
 import { slashMenu, type SlashCommand } from "./commands";
 import { ChatMessage } from "./Messages";
 import { QueuedMessage } from "./QueuedMessage";
@@ -193,6 +194,7 @@ export function ChatView({ session, onChanged, headerActions }: {
     if (item.kind === "error" && lastMessage) retryTargets.set(index, lastMessage);
   }
   return (
+    <ChatAssets.Provider value={{ id }}>
     <div className="chat" ref={chat} data-testid="chat" data-session={id}>
       <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>
@@ -265,5 +267,6 @@ export function ChatView({ session, onChanged, headerActions }: {
         messages={items.filter((item) => item.kind === "user").filter((item) => snapshots.has(item.id)).reverse()}
         terminal={claude && !plain && !working ? openTerminal : undefined} onClose={() => setRewind(undefined)} />}
     </div>
+    </ChatAssets.Provider>
   );
 }

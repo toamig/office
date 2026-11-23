@@ -510,6 +510,25 @@ button,
 .bubble-row.user {
   justify-content: flex-end;
 }
+.chat-image {
+  overflow: hidden;
+  display: inline-block;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  vertical-align: middle;
+}
+.chat-image img {
+  display: block;
+  width: auto;
+  height: auto;
+  max-width: 148px;
+  max-height: 100px;
+  object-fit: contain;
+}
+.chat-image.inline img {
+  max-width: min(100%, 680px);
+  max-height: 420px;
+}
 .bubble {
   max-width: 82%;
   padding: 8px 13px;

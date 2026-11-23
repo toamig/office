@@ -2,7 +2,7 @@ import { ArrowUp, Square } from "lucide-react";
 import { useEffect, useId, useRef, useState, type ReactNode } from "react";
 import type { ChatImage } from "@shared/models";
 import { office } from "../../lib/ipc";
-import { OverflowMenu } from "../../ui";
+import { OverflowMenu, notifyError } from "../../ui";
 import type { SlashCommand } from "./commands";
 
 const PRESETS = [
@@ -133,8 +133,20 @@ export function Composer({
     else submit(() => onSend(body, images), true);
   };
 
+  const attach = (files: File[]) => {
+    void Promise.all(files.map(readImage)).then((read) => setImages((all) => [...all, ...read]),
+      (error: unknown) => notifyError(error, "Could not attach the images", sessionId));
+  };
+
   return (
-    <div className="composer" data-testid="composer">
+    <div className="composer" data-testid="composer" onDragOver={(event) => {
+      if ([...event.dataTransfer.items].some((item) => item.kind === "file" && item.type.startsWith("image/"))) event.preventDefault();
+    }} onDrop={(event) => {
+      const dropped = [...event.dataTransfer.files].filter((file) => file.type.startsWith("image/"));
+      if (!dropped.length) return;
+      event.preventDefault();
+      attach(dropped);
+    }}>
       {matches.length > 0 && <ul ref={commandList} id={commandListId} role="listbox" aria-label="Slash commands" className="mention-list">
         {matches.map((command, index) => <li key={command.name} role="presentation">
           <button type="button" tabIndex={-1} role="option" id={`${commandListId}-${index}`} aria-selected={index === selected}
@@ -169,6 +181,7 @@ export function Composer({
               key={i}
               className="composer-image"
               title="Remove this image"
+              aria-label={`Remove image ${i + 1}`}
               onClick={() => setImages(images.filter((_, j) => j !== i))}
             >
               <img
@@ -260,9 +273,7 @@ export function Composer({
             const pasted = [...e.clipboardData.files].filter((f) => f.type.startsWith("image/"));
             if (pasted.length === 0) return;
             e.preventDefault();
-            void Promise.all(pasted.map(readImage)).then((read) =>
-              setImages((all) => [...all, ...read]),
-            );
+            attach(pasted);
           }}
         />
       </div>

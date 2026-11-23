@@ -7,10 +7,13 @@ import {
   nativeImage,
   nativeTheme,
   Notification,
+  protocol,
   screen,
   safeStorage,
   shell,
 } from "electron";
+import { createReadStream } from "node:fs";
+import { Readable } from "node:stream";
 import { join } from "node:path";
 import type { NotificationRow } from "../shared/models";
 import {
@@ -37,7 +40,9 @@ import { createElectronPlatform } from "./electron-platform";
 import { registerShellHandlers } from "./shell-handlers";
 
 const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'";
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: office-file:; font-src 'self' data:; connect-src 'self'";
+
+protocol.registerSchemesAsPrivileged([{ scheme: "office-file", privileges: { standard: true, secure: true, stream: true } }]);
 
 let mainWindow: BrowserWindow | null = null;
 let ctx: AppContext | null = null;
@@ -176,7 +181,7 @@ function createWindow(): BrowserWindow {
     const appId = win.webContents.id;
     win.webContents.session.webRequest.onHeadersReceived((details, callback) => {
       // The preview pane shares this session; a previewed site keeps its own policy.
-      if (!isAppRequest(details.webContentsId, appId)) return callback({});
+      if (!isAppRequest(details.webContentsId, appId) || details.resourceType !== "mainFrame") return callback({});
       callback({
         responseHeaders: { ...details.responseHeaders, "Content-Security-Policy": [CSP] },
       });
@@ -242,6 +247,19 @@ async function boot(): Promise<void> {
       : join(app.getAppPath(), "resources", "relay", "office-relay.mjs"));
   const context = await createContext(!app.isPackaged, relayScript, safeStorage);
   ctx = context;
+  protocol.handle("office-file", async (request) => {
+    try {
+      if (request.method !== "GET") return new Response(null, { status: 405 });
+      const asset = await context.chat.images.read(request.url);
+      if (!asset) return new Response(null, { status: 404 });
+      const body = asset.file ? Readable.toWeb(createReadStream(asset.file)) as unknown as ReadableStream
+        : asset.bytes ? new Uint8Array(asset.bytes) : null;
+      return new Response(body, { headers: {
+        "Content-Type": asset.mime, "X-Content-Type-Options": "nosniff", "Cache-Control": "no-store",
+        "Content-Security-Policy": "default-src 'none'; sandbox",
+      } });
+    } catch { return new Response(null, { status: 404 }); }
+  });
   registerHandlers(context);
   const preview = new PreviewPane(
     () => mainWindow,

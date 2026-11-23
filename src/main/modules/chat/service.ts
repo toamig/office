@@ -27,6 +27,7 @@ import { activityLabel, emptyActivity, REWIND_LIMIT, trackActivity, trackQueue, 
 import { redactClaudeToken } from "../../core/claude-secret";
 import { ClaudeCodeProvider } from "../providers/claude-code";
 import { dropSnapshot, previewSnapshot, pruneSnapshots, restoreSnapshot, rewindRoot, saveSnapshot } from "./rewind";
+import { ChatImages, type FileScope } from "./files";
 
 export interface ChatServiceDeps {
   bus: Bus;
@@ -37,6 +38,7 @@ export interface ChatServiceDeps {
   broker: PermissionBroker;
   /** Writes the MCP config that serves office_permission to this chat's program; returns its path. */
   writeMcpConfig: (id: string, dir: string) => string;
+  projectFolder?: (id: string) => string | undefined;
 }
 
 /** What a new saved chat is called until its first message names it. */
@@ -71,6 +73,24 @@ interface Live {
  * replayed when a past chat is reopened. Approvals use the same office_permission tool as builder stages.
  */
 export class ChatService {
+  readonly images = new ChatImages((id) => this.fileScope(id), (id, message, index) => {
+    this.session(id);
+    const event = this.history(id).find(({ event }) => event.t === "user" && event.id === message)?.event;
+    if (event?.t !== "user" || index >= event.images) return;
+    return this.readImages(id, message, event.images)[index];
+  });
+
+  fileScope(id: string): FileScope {
+    const session = this.session(id);
+    const brain = this.deps.sessions.brainForSession(session);
+    const project = session.projectId ? this.deps.projectFolder?.(session.projectId) : undefined;
+    const chat = session.incognito ? join(session.cwd, ".chat") : join(this.deps.chatsDir, id);
+    return {
+      cwd: session.cwd,
+      roots: [chat, ...(session.projectId ? [session.cwd, ...(project ? [project] : [])] : []), ...(brain ? [brain.root] : [])],
+      private: brain?.private ?? [],
+    };
+  }
   private readonly live = new Map<string, Live>();
   private readonly seqs = new Map<string, number>();
   private readonly activities = new Map<string, TurnActivity>();
