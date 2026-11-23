@@ -252,6 +252,42 @@ function fromEvents(events: unknown[]): string | null {
   return null;
 }
 
+/** One `[time] kind: text` line of the condensed log Claude Code returns (seen 2026-11-23, claude 2.1.280). */
+const TIMED_LINE = /^\[[^\]]+\]\s+([A-Za-z_][\w/ -]*?):\s?(.*)$/;
+/** The mark the log puts where it cut a long line short. */
+const CUT = /\s*…\s*\[\+\d+ chars\]\s*$/;
+/** A result line reads "success is_error=false turns=7 duration=20s <long dash> <text>". */
+const RESULT_TEXT = /^\S+(?:\s+\w+=\S+)*\s+—\s+([\s\S]+)$/;
+
+function uncut(text: string): string {
+  return CUT.test(text) ? `${text.replace(CUT, "")}\n\n(Cut short in the log; Open in Claude for the rest.)` : text;
+}
+
+/**
+ * The final answer in the real condensed log: `[time] kind: text` lines, oldest first within the page. The page
+ * holds the newest events, so the run's last `result` line is on it. Its text is cut short, so the last thing the
+ * assistant said before it is preferred; the result's own text is the fallback.
+ */
+function fromTimedLines(lines: string[]): string | null {
+  const parsed = lines.flatMap((line) => {
+    const match = TIMED_LINE.exec(line.trim());
+    return match ? [{ kind: (match[1] ?? "").trim().toLowerCase(), text: (match[2] ?? "").trim() }] : [];
+  });
+  if (parsed.length === 0) return null;
+  let last = -1;
+  for (let index = parsed.length - 1; index >= 0; index -= 1) if (parsed[index]!.kind === "result") { last = index; break; }
+  const end = last === -1 ? parsed.length : last;
+  for (let index = end - 1; index >= 0; index -= 1) {
+    const line = parsed[index]!;
+    if (line.kind === "result") break;
+    if (line.kind === "assistant" && line.text && line.text !== "[thinking]") return uncut(line.text);
+  }
+  if (last === -1) return null;
+  const result = parsed[last]!.text;
+  const said = RESULT_TEXT.exec(result)?.[1]?.trim();
+  return said ? uncut(said) : null;
+}
+
 /**
  * The final result in a `get_run_log` reply, kept at most 20000 characters. The reply is a small JSON header and a
  * condensed log with the newest events first, so the shape is read loosely: a result event, else the last thing the
@@ -273,8 +309,9 @@ export function parseRunLog(body: string): string | null {
     const lines = body.split("\n");
     // The header is the first line when it is a JSON object; the log follows, newest first.
     const rest = lines.length > 0 && asJson(lines[0]?.trim() ?? "") ? lines.slice(1) : lines;
+    found = fromTimedLines(rest);
     const events = rest.flatMap((line) => { const event = asJson(line.trim()); return event ? [event] : []; });
-    found = fromEvents(events);
+    if (!found) found = fromEvents(events);
     if (!found) {
       for (const line of rest) {
         const match = /^\W*(?:result|final result|assistant)\b\W*:?\s*(.+)$/i.exec(line.trim());
