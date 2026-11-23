@@ -14,6 +14,24 @@ const asJson = (line: string): Json | null => {
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const obj = (v: unknown): Json => (v && typeof v === "object" ? (v as Json) : {});
 
+export const CHAT_INTERACTION_HOOK = "office-chat-interaction";
+
+export function interactionHook(line: string) {
+  const message = asJson(line);
+  const request = obj(message?.["request"]);
+  const data = obj(request["input"]);
+  const tool = str(data["tool_name"]);
+  const requestId = str(message?.["request_id"]);
+  if (message?.["type"] !== "control_request" || request["subtype"] !== "hook_callback" ||
+    request["callback_id"] !== CHAT_INTERACTION_HOOK || !requestId) return;
+  return { requestId, tool, id: str(request["tool_use_id"]) || str(data["tool_use_id"]) || requestId, input: obj(data["tool_input"]) };
+}
+
+export function initialized(line: string, requestId: string): boolean {
+  const message = asJson(line);
+  return message?.["type"] === "control_response" && obj(message["response"])["request_id"] === requestId;
+}
+
 export function commandNames(value: unknown): string[] {
   if (!Array.isArray(value)) return [];
   const names = value.map((item: unknown) => str(item) || str(obj(item)["name"]));

@@ -30,7 +30,7 @@ export function chatToolFlags(addDirs: string[], model?: string, officeMcp?: Run
   return [
     ...(model ? ["--model", model] : []),
     "--tools",
-    CHAT_TOOLS,
+    `${CHAT_TOOLS},AskUserQuestion,ExitPlanMode`,
     "--allowedTools",
     CHAT_TOOLS,
     ...(officeMcp ? [OFFICE_TOOLS_RULE, "--mcp-config", claudeMcpConfig(officeMcp)] : []),

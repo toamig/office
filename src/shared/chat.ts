@@ -1,4 +1,4 @@
-import type { ChatEvent, ChatLine, OfficeBrief, PlanStep, QueuedMessage } from "./models";
+import type { AgentInteraction, ChatEvent, ChatLine, InteractionAnswer, OfficeBrief, PlanStep, QueuedMessage } from "./models";
 
 /** What the chat view draws, in order. */
 export type ChatItem =
@@ -14,6 +14,7 @@ export type ChatItem =
       startedAt?: number;
     }
   | { kind: "plan"; id: string }
+  | { kind: "interaction"; id: string; requestId: string; interaction: AgentInteraction; pending: boolean; answer?: InteractionAnswer }
   | { kind: "error"; message: string }
   | { kind: "subagent"; id: string; task: string; progress: string; verdict: string; status: "working" | "done" | "error" }
   | { kind: "turn"; ok: boolean; durationMs: number | null; error: string | undefined }
@@ -135,6 +136,7 @@ const indexOfAssistant = (items: ChatItem[], id: string): number =>
 function settle(items: ChatItem[], toolStatus: "done" | "error"): ChatItem[] {
   return items.map((item) => {
     if (item.kind === "assistant" && item.streaming) return { ...item, streaming: false };
+    if (item.kind === "interaction" && item.pending) return { ...item, pending: false };
     if (item.kind === "tool" && item.status === "running") return { ...item, status: toolStatus };
     if (item.kind === "subagent" && item.status === "working" && toolStatus === "error")
       return { ...item, status: "error" };
@@ -170,6 +172,15 @@ export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): Ch
   switch (event.t) {
     case "commands":
       return { ...state, commands: event.names };
+    case "interaction": {
+      const next: ChatItem = { kind: "interaction", id: event.id, requestId: event.requestId, interaction: event.interaction, pending: true };
+      const previous = items.findIndex((item) => (item.kind === "tool" || item.kind === "interaction") && item.id === event.id);
+      if (previous === -1) return { ...state, items: [...items, next] };
+      return { ...state, items: items.map((item, index) => index === previous ? next : item) };
+    }
+    case "interaction-result":
+      return { ...state, items: items.map((item) => item.kind === "interaction" && item.id === event.id
+        ? { ...item, pending: false, answer: event.answer } : item) };
     case "cleared":
       return { ...emptyChat(), queue: state.queue, commands: state.commands };
     case "snapshot":
@@ -238,7 +249,7 @@ export function reduceChat(previous: ChatState, raw: ChatEvent, at?: number): Ch
       return { ...state, items: next };
     }
     case "tool-use": {
-      if (items.some((i) => i.kind === "tool" && i.id === event.id)) return state;
+      if (items.some((i) => (i.kind === "tool" || i.kind === "interaction") && i.id === event.id)) return state;
       return {
         ...state,
         items: [

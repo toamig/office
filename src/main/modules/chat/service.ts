@@ -17,11 +17,11 @@ import { run, spawnStream, type StreamHandle } from "../../core/exec";
 import { IpcFailure } from "../../core/ipc";
 import { writeTextFile } from "../../core/settings";
 import { nowIso } from "../../core/util";
-import type { PermissionBroker } from "../runs/permissions";
+import { interactionFor, type PermissionBroker } from "../runs/permissions";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
-import { ClaudeChatParser, CodexChatParser, initializationCommands } from "./events";
+import { CHAT_INTERACTION_HOOK, ClaudeChatParser, CodexChatParser, initializationCommands, initialized, interactionHook } from "./events";
 import { chatFailure } from "../../../shared/chat-failure";
 import { activityLabel, emptyActivity, REWIND_LIMIT, trackActivity, trackQueue, type TurnActivity } from "../../../shared/chat";
 import { redactClaudeToken } from "../../core/claude-secret";
@@ -59,6 +59,8 @@ interface Live {
   authFailure?: (message: string) => void;
   credentialRevision?: number;
   succeeded?: boolean;
+  initialize?: { id: string; timer: NodeJS.Timeout; prompt?: string };
+  lastAssistant?: string;
   interruption?: { done: Promise<void>; finish: () => void; timer: NodeJS.Timeout; detail?: string };
 }
 
@@ -522,7 +524,7 @@ export class ChatService {
       live.working = true;
       live.started = Date.now();
       live.turn = { text, images, attempts: 1 };
-      live.handle.write(JSON.stringify(userMessage(text, images)));
+      this.writeClaude(live, text, images);
       return;
     }
     // Codex: one program per turn.
@@ -642,18 +644,78 @@ export class ChatService {
       credentialRevision: provider instanceof ClaudeCodeProvider ? provider.auth.revision : undefined,
     };
     this.live.set(id, live);
+    if (provider instanceof ClaudeCodeProvider) {
+      const requestId = randomUUID();
+      live.initialize = { id: requestId, timer: setTimeout(() => this.finishInitialize(live), 4000) };
+      handle.write(JSON.stringify({
+        type: "control_request", request_id: requestId, request: { subtype: "initialize", hooks: {
+          PreToolUse: [{ matcher: "^(AskUserQuestion|ExitPlanMode)$", hookCallbackIds: [CHAT_INTERACTION_HOOK], timeout: 604800 }],
+        } },
+      }));
+    }
     // A process for this conversation has run, so from now on it is resumed, never started again.
     this.deps.sessions.markStarted(id);
     void this.readClaude(id, live);
     return live;
   }
 
+  private writeClaude(live: Live, text: string, images: ChatImage[]): void {
+    const prompt = JSON.stringify(userMessage(text, images));
+    if (live.initialize) live.initialize.prompt = prompt;
+    else live.handle.write(prompt);
+  }
+
+  private finishInitialize(live: Live): void {
+    const init = live.initialize;
+    if (!init) return;
+    clearTimeout(init.timer);
+    live.initialize = undefined;
+    if (init.prompt && live.working && !live.stopped && !live.interruption) live.handle.write(init.prompt);
+  }
+
   private async readClaude(id: string, live: Live): Promise<void> {
     const parser = new ClaudeChatParser();
     for await (const line of live.handle.lines) {
-      for (const event of parser.parse(line)) this.take(id, live, event);
+      if (live.initialize && initialized(line, live.initialize.id)) this.finishInitialize(live);
+      const hook = interactionHook(line);
+      if (hook) {
+        void this.answerClaudeHook(id, live, hook);
+        continue;
+      }
+      for (const event of parser.parse(line)) {
+        if (event.t === "assistant" && event.text) live.lastAssistant = event.text;
+        this.take(id, live, event);
+      }
     }
     await this.ended(id, live);
+  }
+
+  private async answerClaudeHook(id: string, live: Live, hook: NonNullable<ReturnType<typeof interactionHook>>): Promise<void> {
+    const interaction = interactionFor(hook.tool, hook.input, live.lastAssistant ?? "");
+    const deny = (message: string) => ({ behavior: "deny" as const, message });
+    let decision = deny("The question or plan is unavailable.");
+    try {
+      const reply = live.working && !live.stopped && !live.interruption && interaction
+        ? await this.deps.broker.request(id, { tool_name: hook.tool, input: hook.input }, undefined, {
+          interaction, private: this.secret.get(id)?.incognito,
+          onRequest: (requestId) => this.append(id, { t: "interaction", id: hook.id, requestId, interaction }),
+          onAnswer: (answer) => this.append(id, { t: "interaction-result", id: hook.id, answer }),
+        }) : decision;
+      if (!live.stopped && this.live.get(id) === live) this.writeInteractionDecision(live, hook.requestId, reply);
+      return;
+    } catch {
+      decision = deny("Office could not collect the answer.");
+    }
+    if (!live.stopped && this.live.get(id) === live) this.writeInteractionDecision(live, hook.requestId, decision);
+  }
+
+  private writeInteractionDecision(live: Live, requestId: string, decision: import("../runs/permissions").PermissionDecision): void {
+    live.handle.write(JSON.stringify({ type: "control_response", response: {
+      subtype: "success", request_id: requestId, response: { hookSpecificOutput: {
+        hookEventName: "PreToolUse", permissionDecision: decision.behavior,
+        ...(decision.behavior === "allow" ? { updatedInput: decision.updatedInput } : { permissionDecisionReason: decision.message }),
+      } },
+    } }));
   }
 
   private async readCodex(id: string, live: Live): Promise<void> {
@@ -713,6 +775,7 @@ export class ChatService {
     const exit = await live.handle.exit;
     if (this.live.get(id) !== live) return;
     this.live.delete(id);
+    if (live.initialize) clearTimeout(live.initialize.timer);
     if (live.interruption) {
       this.finishInterrupt(id, live);
       return;
@@ -739,7 +802,7 @@ export class ChatService {
           ...live.turn,
           attempts: live.turn.attempts + 1,
         });
-        again.handle.write(JSON.stringify(userMessage(live.turn.text, live.turn.images)));
+        this.writeClaude(again, live.turn.text, live.turn.images);
         return;
       }
     }
@@ -772,6 +835,7 @@ export class ChatService {
 
   private endIdle(id: string, live: Live): void {
     live.stopped = true;
+    if (live.initialize) clearTimeout(live.initialize.timer);
     if (this.live.get(id) === live) this.live.delete(id);
     live.handle.kill();
   }
@@ -793,6 +857,7 @@ export class ChatService {
     live.handle.write(JSON.stringify({
       type: "control_request", request_id: randomUUID(), request: { subtype: "interrupt" },
     }));
+    this.deps.broker.cancelRun(id);
     return done;
   }
 

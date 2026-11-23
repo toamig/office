@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import type { PermissionRequest } from "../../../shared/models";
+import { AgentInteraction, type InteractionAnswer, type PermissionRequest } from "../../../shared/models";
 import type { Bus } from "../../core/bus";
 import type { Db } from "../../core/db";
 import type { Notifier } from "../../core/notifier";
@@ -20,9 +20,24 @@ export interface PermissionBrokerDeps {
 
 interface Pending {
   request: PermissionRequest;
-  notificationId: string;
+  private: boolean;
   input: Record<string, unknown>;
   resolve: (decision: PermissionDecision) => void;
+  onAnswer?: (answer?: InteractionAnswer) => void;
+}
+
+interface RequestOptions {
+  private?: boolean;
+  interaction?: AgentInteraction;
+  onRequest?: (id: string) => void;
+  onAnswer?: (answer?: InteractionAnswer) => void;
+}
+
+export function interactionFor(tool: string, input: Record<string, unknown>, plan: string): AgentInteraction | undefined {
+  if (tool === "ExitPlanMode") return { kind: "plan", plan: typeof input["plan"] === "string" ? input["plan"] : plan };
+  if (tool !== "AskUserQuestion") return;
+  const parsed = AgentInteraction.safeParse({ kind: "questions", questions: input["questions"] });
+  if (parsed.success) return parsed.data;
 }
 
 /** A tool's input as one line: the command for Bash, the path for file tools, else the JSON. */
@@ -76,14 +91,17 @@ export class PermissionBroker {
     runId: string,
     body: Record<string, unknown>,
     signal?: AbortSignal,
+    options: RequestOptions = {},
   ): Promise<PermissionDecision> {
+    if (signal?.aborted) return Promise.resolve(deny("The run stopped asking."));
     const toolName = typeof body["tool_name"] === "string" ? body["tool_name"] : "a tool";
     const input =
       body["input"] && typeof body["input"] === "object"
         ? (body["input"] as Record<string, unknown>)
         : {};
     const about = this.describe(runId);
-    const summary = summariseToolInput(toolName, input);
+    const summary = options.interaction?.kind === "questions" ? "Answer the agent's questions"
+      : options.interaction?.kind === "plan" ? "Review the agent's plan" : summariseToolInput(toolName, input);
     const id = randomUUID();
     const request: PermissionRequest = {
       id,
@@ -93,18 +111,20 @@ export class PermissionBroker {
       subject: about.subject,
       toolName,
       summary,
-      detail: JSON.stringify(input, null, 2),
+      detail: options.interaction ? "" : JSON.stringify(input, null, 2),
       createdAt: nowIso(),
+      interaction: options.interaction,
     };
     return new Promise<PermissionDecision>((resolve) => {
-      const row = this.deps.notifier.notify({
+      if (!options.private) this.deps.notifier.notify({
         kind: "permission.request",
         ...(about.projectId ? { projectId: about.projectId } : {}),
-        title: `${about.subject} wants to run: ${summary}`,
+        title: options.interaction ? `${summary} in ${about.subject}` : `${about.subject} wants to run: ${summary}`,
         body: request.detail,
         link: { view: "inbox" },
       });
-      this.pending.set(id, { request, notificationId: row.id, input, resolve });
+      this.pending.set(id, { request, private: options.private === true, input, resolve, onAnswer: options.onAnswer });
+      options.onRequest?.(id);
       this.deps.onWaiting?.(runId, true);
       this.deps.bus.emit("permission.changed", { id, pending: true }, about.projectId ?? undefined);
       signal?.addEventListener("abort", () => this.finish(id, deny("The run stopped asking.")));
@@ -112,17 +132,40 @@ export class PermissionBroker {
   }
 
   list(): PermissionRequest[] {
-    return [...this.pending.values()].map((p) => p.request);
+    return [...this.pending.values()].filter((p) => !p.private).map((p) => p.request);
   }
 
   /** The owner's answer. Throws when nobody is waiting for it any more. */
   answer(id: string, allow: boolean, reason?: string): void {
     const pending = this.pending.get(id);
     if (!pending) throw new Error("That request is no longer waiting");
+    if (pending.request.interaction) throw new Error("Use the question or plan card to answer this request.");
     const message = reason?.trim()
       ? `The owner declined: ${reason.trim()}`
       : "The owner declined this request.";
     this.finish(id, allow ? { behavior: "allow", updatedInput: pending.input } : deny(message));
+  }
+
+  answerInteraction(id: string, answer: InteractionAnswer): void {
+    const pending = this.pending.get(id);
+    const interaction = pending?.request.interaction;
+    if (!pending || !interaction || interaction.kind !== answer.kind) throw new Error("That request is no longer waiting.");
+    if (interaction.kind === "questions" && answer.kind === "questions") {
+      if (answer.answers.length !== interaction.questions.length) throw new Error("Answer each question.");
+      const entries = interaction.questions.map((question, index) => {
+        const selection = answer.answers[index]!;
+        const values = [...new Set(selection.choices), ...(selection.other?.trim() ? [selection.other.trim()] : [])];
+        if (!values.length || (!question.multiSelect && values.length !== 1) ||
+          selection.choices.some((label) => !question.options.some((option) => option.label === label))) {
+          throw new Error("Choose a valid answer for each question.");
+        }
+        return [question.question, values.join(", ")];
+      });
+      this.finish(id, { behavior: "allow", updatedInput: { ...pending.input, answers: Object.fromEntries(entries) } }, answer);
+    } else if (answer.kind === "plan") {
+      this.finish(id, answer.approve ? { behavior: "allow", updatedInput: pending.input }
+        : deny(answer.reason?.trim() || "Keep planning. The owner did not approve the plan yet."), answer);
+    }
   }
 
   /** A run ended or was cancelled: its open questions are denied and dropped. */
@@ -132,7 +175,7 @@ export class PermissionBroker {
     }
   }
 
-  private finish(id: string, decision: PermissionDecision): void {
+  private finish(id: string, decision: PermissionDecision, answer?: InteractionAnswer): void {
     const pending = this.pending.get(id);
     if (!pending) return;
     this.pending.delete(id);
@@ -146,6 +189,7 @@ export class PermissionBroker {
       pending.request.projectId ?? undefined,
     );
     pending.resolve(decision);
+    pending.onAnswer?.(answer);
   }
 }
 

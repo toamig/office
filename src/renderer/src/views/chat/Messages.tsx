@@ -3,6 +3,7 @@ import { useState } from "react";
 import { formatDuration, type ChatItem } from "@shared/chat";
 import { chatFailure } from "@shared/chat-failure";
 import { Markdown } from "../../components/Markdown";
+import { InteractionCard } from "../../components/InteractionCard";
 import { Button, OverflowMenu, Textarea } from "../../ui";
 import { ToolCard } from "./ToolCard";
 
@@ -50,6 +51,8 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit, onRewind }
       return <ToolCard tool={item} />;
     case "plan":
       return <div className="turn-footer">Updated the plan</div>;
+    case "interaction":
+      return <InteractionCard requestId={item.requestId} interaction={item.interaction} pending={item.pending} answer={item.answer} />;
     case "subagent":
       return (
         <div className="tool-card" data-testid="subagent-card">

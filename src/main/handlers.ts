@@ -629,6 +629,10 @@ function registerTaskHandlers(ctx: AppContext): void {
   ctx.ipc.handle("chat.toTerminal", (req) => ctx.chat.toTerminal(req.id));
   ctx.ipc.handle("chat.toChat", (req) => ctx.chat.toChat(req.id));
   ctx.ipc.handle("permissions.list", () => ctx.permissions.list());
+  ctx.ipc.handle("permissions.interact", (req) => {
+    try { ctx.permissions.answerInteraction(req.id, req.answer); }
+    catch (error) { throw new IpcFailure("not-waiting", (error as Error).message); }
+  });
   ctx.ipc.handle("permissions.answer", (req) => {
     try {
       ctx.permissions.answer(req.id, req.allow, req.reason);

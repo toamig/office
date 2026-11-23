@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
 import { Button, Input, StatusBadge, notifyError } from "../ui";
+import { InteractionCard } from "./InteractionCard";
 
 /**
  * Questions from headless builders ("may I run this?"), each with Allow and Deny. Allow is for this one
@@ -29,11 +30,11 @@ export function PermissionRequests({
     }
     requests.reload();
   };
-  const list = (requests.data ?? []).filter((r) => !runId || r.runId === runId);
+  const list = (requests.data ?? []).filter((r) => !runId || (r.runId === runId && !r.interaction));
   if (list.length === 0) return null;
   return (
     <div data-testid="permission-requests" className={compact ? "" : "mb-4"}>
-      {list.map((r) => (
+      {list.map((r) => r.interaction ? <InteractionCard key={r.id} requestId={r.id} interaction={r.interaction} pending /> : (
         <div key={r.id} data-testid="permission-request" className="ui-ask">
           <div className="flex flex-wrap items-center gap-2">
             <StatusBadge status="waiting-permission" />

@@ -68,6 +68,7 @@ import {
   RunSummary,
   BackgroundRun,
   PermissionRequest,
+  InteractionAnswer,
   ChatImage,
   ChatLine,
   RewindPreview,
@@ -489,6 +490,7 @@ export const channels = {
   "chat.toTerminal": { req: z.object({ id: z.string() }), res: SessionRow },
   "chat.toChat": { req: z.object({ id: z.string() }), res: SessionRow },
   "permissions.list": { req: z.void(), res: z.array(PermissionRequest) },
+  "permissions.interact": { req: z.object({ id: z.string(), answer: InteractionAnswer }), res: z.void() },
   /** Answers one waiting request: allow it once, or deny it with an optional reason. */
   "permissions.answer": {
     req: z.object({ id: z.string(), allow: z.boolean(), reason: z.string().optional() }),

@@ -341,6 +341,21 @@ export type FixSubject = z.infer<typeof FixSubject>;
 export const FixEntry = z.object({ key: z.string(), sessionId: z.string(), title: z.string() });
 export type FixEntry = z.infer<typeof FixEntry>;
 
+export const AgentInteraction = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("questions"), questions: z.array(z.object({
+    question: z.string().min(1), header: z.string().optional(), multiSelect: z.boolean().default(false),
+    options: z.array(z.object({ label: z.string().min(1), description: z.string().optional() })),
+  })).min(1) }),
+  z.object({ kind: z.literal("plan"), plan: z.string() }),
+]);
+export type AgentInteraction = z.infer<typeof AgentInteraction>;
+
+export const InteractionAnswer = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("questions"), answers: z.array(z.object({ choices: z.array(z.string()), other: z.string().optional() })) }),
+  z.object({ kind: z.literal("plan"), approve: z.boolean(), reason: z.string().optional() }),
+]);
+export type InteractionAnswer = z.infer<typeof InteractionAnswer>;
+
 export const PermissionRequest = z.object({
   id: z.string(),
   runId: z.string(),
@@ -354,6 +369,7 @@ export const PermissionRequest = z.object({
   /** The tool's full input as text. */
   detail: z.string(),
   createdAt: z.string(),
+  interaction: AgentInteraction.optional(),
 });
 export type PermissionRequest = z.infer<typeof PermissionRequest>;
 
@@ -602,6 +618,8 @@ export const ChatEvent = z.discriminatedUnion("t", [
   z.object({ t: z.literal("queue-remove"), id: z.string() }),
   z.object({ t: z.literal("turn-start") }),
   z.object({ t: z.literal("commands"), names: z.array(z.string()) }),
+  z.object({ t: z.literal("interaction"), id: z.string(), requestId: z.string(), interaction: AgentInteraction }),
+  z.object({ t: z.literal("interaction-result"), id: z.string(), answer: InteractionAnswer.optional() }),
   z.object({ t: z.literal("cleared") }),
   z.object({ t: z.literal("snapshot"), id: z.string() }),
   z.object({ t: z.literal("rewound"), id: z.string() }),
