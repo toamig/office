@@ -56,6 +56,8 @@ export const MachineSettings = z.object({
   sessionIdleDays: z.number().int().min(1).default(2),
   /** Whether Sessions shows several sessions at once; off, it shows one at a time. */
   sessionsMulti: z.boolean().default(false),
+  /** Start Office with Windows. Absent: on once a scheduled workflow is on. */
+  startWithWindows: z.boolean().optional(),
   modules: z.record(z.string(), z.boolean()).default({}),
   /**
    * Whether the welcome flow was finished. Absent means the setting was never recorded: a machine that was set

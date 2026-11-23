@@ -2,12 +2,16 @@ import { randomUUID } from "node:crypto";
 import { closeSync, openSync, readSync } from "node:fs";
 import { join, resolve, sep } from "node:path";
 import { Cron } from "croner";
+import { applyAutonomy, effectiveAutonomy, type AutonomyLevel } from "../../shared/autonomy";
+import { nextRuns, validCron } from "../../shared/schedule";
 import { WorkflowRunStatus, workflowsFor, type Workflow, type WorkflowItem, type WorkflowView } from "../../shared/workflow";
-import type { Workspace } from "../../shared/types";
+import type { Role, Workspace } from "../../shared/types";
 import type { HealthView } from "../../shared/models";
 import type { Db } from "./db";
 import type { Notifier } from "./notifier";
 import type { RunRequest, RunService } from "../modules/runs/service";
+import { git } from "../modules/git/run";
+import { claudePath } from "../modules/providers/claude-code";
 import { brainScope, notesPath, type BrainScope } from "../modules/vault/scope";
 import { parseWorkflowItems, workflowItemProjects, WORKFLOW_ITEM_FORMAT } from "../modules/runs/workflow-items";
 
@@ -30,6 +34,7 @@ export interface SchedulerDeps {
   changed?: () => void;
   validate?: (root: string) => Promise<HealthView["validate"]>;
   now?: () => Date;
+  fullAutoConfirmed?: () => boolean;
 }
 
 function nextRunOf(pattern: string, from: Date): Date | null {
@@ -40,14 +45,7 @@ function nextRunOf(pattern: string, from: Date): Date | null {
   }
 }
 
-export function validCron(pattern: string): boolean {
-  try {
-    new Cron(pattern, { paused: true });
-    return true;
-  } catch {
-    return false;
-  }
-}
+export { validCron };
 
 export const cheapestModel = (provider: string): string =>
   provider === "codex" ? "gpt-5.4-mini" : "haiku";
@@ -67,6 +65,65 @@ function historicalResult(path: string | null): string | null {
   }
 }
 
+const slash = (path: string): string => path.replaceAll("\\", "/");
+const GIT_READS = ["status", "diff", "log"];
+const GIT_WRITES = ["add", "commit"];
+const WRITE_TOOLS = "Read,Grep,Glob,Edit,Write,Bash";
+
+/** The model a workflow that writes uses: the one it names, else a capable default, never the cheapest. */
+export const writingModel = (provider: string): string | undefined => provider === "codex" ? undefined : "sonnet";
+
+/** What a workflow that writes in the Brain may run: git in the folders it may edit, and the Brain's own checks. */
+export function brainCommands(root: string, folders: string[]): string[] {
+  const tool = `${slash(root)}/Common/tools/brain.mjs`;
+  return [
+    ...folders.slice(0, 40).flatMap((dir) => [...GIT_READS, ...GIT_WRITES].map((verb) => `Bash(git -C ${slash(dir)} ${verb}:*)`)),
+    "Bash(node Common/tools/brain.mjs:*)", `Bash(node ${tool}:*)`,
+  ];
+}
+
+function writingBrainRequest(workflow: Workflow, ws: Workspace | null, root: string, provider: string, projectRoot: string | undefined): Pick<RunRequest, "brain" | "role" | "tools" | "addDirs"> {
+  const base = brainScope(ws, root, workflow.projectId ?? undefined)!;
+  const own = base.writable.length > 0;
+  const writable = own ? base.writable : base.readOnly;
+  const scope: BrainScope = {
+    ...base, writable, readOnly: own ? base.readOnly : [], private: [...base.private, join(root, ".git")],
+    restrictedRead: true,
+    instructions: `${base.instructions}
+
+This workflow may write notes in: ${writable.map(slash).join(", ")}. `
+      + "Follow the Brain rules. After writing, run `node Common/tools/brain.mjs validate` from the Brain root, then commit each changed file in the folder that owns it with "
+      + "`git -C <folder> add <file>` and `git -C <folder> commit -m <message>`, writing the folder exactly as listed, without quotes. Never push, reset or rewrite history.",
+  };
+  const role: Role = {
+    provider, instructions: "", readOnly: false, codexSandbox: "workspace-write",
+    ...(workflow.model || writingModel(provider) ? { model: workflow.model || writingModel(provider)! } : {}),
+    allowedCommands: [...writable.map((dir) => `Edit(${claudePath(dir)}/**)`), ...brainCommands(root, writable)],
+  };
+  const reachesProject = projectRoot && (workflow.read === "project" || workflow.read === "both");
+  return {
+    brain: scope, role, tools: `${WRITE_TOOLS}${workflow.web ? ",WebSearch,WebFetch" : ""}`,
+    ...(reachesProject ? { addDirs: [projectRoot] } : {}),
+  };
+}
+
+function workingRole(workflow: Workflow, provider: string, project: string, confirmed: boolean): Role {
+  const wanted: AutonomyLevel = workflow.autonomy === "full-auto" ? "full-auto" : "act-on-risk";
+  const level = effectiveAutonomy(wanted, confirmed);
+  const model = workflow.model || writingModel(provider);
+  const role = applyAutonomy({ provider, instructions: "", readOnly: false, allowedCommands: [], ...(model ? { model } : {}) }, level);
+  return {
+    ...role,
+    allowedCommands: [...role.allowedCommands, `Edit(${claudePath(project)}/**)`],
+    ...(workflow.web ? {} : level === "full-auto" ? { deniedCommands: ["WebSearch", "WebFetch"] } : {}),
+  };
+}
+
+export interface WorkflowRequestOptions {
+  /** Whether the owner confirmed Full auto once; without it a Full auto workflow works at the default level. */
+  fullAutoConfirmed?: boolean;
+}
+
 /** Resolves the working directory and read scope before asking the agent to run. */
 export function workflowRequest(
   workflow: Workflow,
@@ -76,12 +133,38 @@ export function workflowRequest(
   neutralFolder: string,
   provider: string,
   projects = workflowItemProjects(ws, root, workflow.projectId),
+  options: WorkflowRequestOptions = {},
 ): RunRequest {
   if (workflow.projectId && !project) throw new Error("The workflow project is unavailable on this machine.");
   const canReadProject = workflow.read === "project" || workflow.read === "both";
   const canReadBrain = workflow.read === "brain" || workflow.read === "both";
   if (canReadProject && !project) throw new Error("Choose a project for this workflow's read scope.");
   if (canReadBrain && (!root || ws?.vault.kind === "none")) throw new Error("The workflow has no Brain to read.");
+  const output = workflow.output === "worth-a-look"
+    ? `${WORKFLOW_ITEM_FORMAT}
+Available projects: ${JSON.stringify(projects.map(({ id, name }) => ({ id, name })))}`
+    : "Return the result as concise Markdown.";
+  const common = {
+    kind: "workflow" as const, title: workflow.name, providerId: provider, prompt: `${workflow.prompt}
+
+${output}`,
+    ...(workflow.projectId ? { projectId: workflow.projectId } : {}),
+  };
+  if (workflow.mayDo === "brain") {
+    if (!root || ws?.vault.kind === "none" || !brainScope(ws, root, workflow.projectId ?? undefined))
+      throw new Error("The workflow has no Brain to write in.");
+    return { ...common, cwd: root, ...writingBrainRequest(workflow, ws, root, provider, project) };
+  }
+  if (workflow.mayDo === "project") {
+    if (!project) throw new Error("Choose a project for a workflow that works in its project.");
+    const role = workingRole(workflow, provider, project, options.fullAutoConfirmed === true);
+    const full = role.autonomy === "full-auto";
+    return {
+      ...common, cwd: project, role,
+      ...(full ? {} : { tools: `${WRITE_TOOLS}${workflow.web ? ",WebSearch,WebFetch" : ""}` }),
+      ...(canReadBrain && root ? { addDirs: [root], brain: { ...(brainScope(ws, root, workflow.projectId ?? undefined) ?? { root, instructions: "", writable: [], readOnly: [], private: [] }), writable: [], restrictedRead: false } } : {}),
+    };
+  }
   const cwd = canReadProject ? project! : canReadBrain ? root : neutralFolder;
   const brain: BrainScope | undefined = canReadBrain ? brainScope(ws, root, workflow.projectId ?? undefined) : undefined;
   const readScope: BrainScope | undefined = brain ? {
@@ -95,22 +178,37 @@ export function workflowRequest(
     root: cwd, writable: [], readOnly: [], private: root && root !== cwd ? [root] : [],
     instructions: "Read only files in this project.", restrictedRead: true,
   } : undefined;
-  const output = workflow.output === "worth-a-look"
-    ? `${WORKFLOW_ITEM_FORMAT}\nAvailable projects: ${JSON.stringify(projects.map(({ id, name }) => ({ id, name })))}`
-    : "Return the result as concise Markdown.";
+  const web = workflow.web && workflow.template !== "brain-upkeep" ? ",WebSearch,WebFetch" : "";
   return {
-    kind: "workflow",
-    title: workflow.name,
-    providerId: provider,
+    ...common,
     cwd,
-    prompt: `${workflow.prompt}\n\n${output}`,
-    tools: workflow.read === "none" ? "" : workflow.template === "brain-upkeep" ? "Read,Grep,Glob" : "Read,Grep,Glob,WebSearch",
+    tools: workflow.read === "none" ? (web ? web.slice(1) : "") : `Read,Grep,Glob${web}`,
     role: { provider, model: workflow.model || cheapestModel(provider), instructions: "", readOnly: true, allowedCommands: [] },
-    ...(workflow.projectId ? { projectId: workflow.projectId } : {}),
     ...(readScope ? { brain: readScope } : {}),
     ...(canReadBrain && canReadProject ? { addDirs: [root] } : {}),
   };
 }
+
+async function headOf(folder: string): Promise<string | null> {
+  const result = await git(folder, ["rev-parse", "HEAD"]);
+  return result.code === 0 ? result.stdout.trim() : null;
+}
+
+/** The commits a workflow made in the folders it may write in, as "folder: abbreviated id subject". */
+export async function commitsMade(folders: string[], before: Map<string, string | null>): Promise<string[]> {
+  const lines: string[] = [];
+  for (const folder of folders) {
+    const from = before.get(folder);
+    const after = await headOf(folder);
+    if (!after || after === from) continue;
+    const log = await git(folder, ["log", "--format=%h %s", ...(from ? [`${from}..HEAD`] : ["-5"])]);
+    for (const line of log.stdout.split(/\r?\n/).filter(Boolean).slice(0, 20)) lines.push(`${folder.split(/[\\/]/).pop()}: ${line}`);
+  }
+  return lines;
+}
+
+/** A run more than this long after its slot was missed because Office was closed. */
+const LATE_AFTER_MS = 120_000;
 
 export class Scheduler {
   private timer: NodeJS.Timeout | undefined;
@@ -131,20 +229,20 @@ export class Scheduler {
     return row.at;
   }
 
-  private mark(root: string, id: string, at: Date, status?: "running"): string {
+  private mark(root: string, id: string, at: Date, status?: "running", lateFor?: Date): string {
     const key = randomUUID();
-    this.deps.db.prepare("INSERT INTO automations_log (id, automation, fired_at, workspace, status) VALUES (?, ?, ?, ?, ?)")
-      .run(key, id, at.toISOString(), root, status ?? null);
+    this.deps.db.prepare("INSERT INTO automations_log (id, automation, fired_at, workspace, status, late_for) VALUES (?, ?, ?, ?, ?, ?)")
+      .run(key, id, at.toISOString(), root, status ?? null, lateFor?.toISOString() ?? null);
     return key;
   }
 
   private latestRun(root: string, id: string): Pick<WorkflowView, "lastRun" | "lastFiredAt"> {
     const row = this.deps.db.prepare(`SELECT l.fired_at AS at, l.status, l.result,
-      r.status AS agentStatus, r.error, r.output_path AS outputPath
+      l.late_for AS lateFor, r.status AS agentStatus, r.error, r.output_path AS outputPath
       FROM automations_log l LEFT JOIN runs r ON r.id = l.run_id
       WHERE l.workspace = ? AND l.automation = ? AND (l.status IS NOT NULL OR l.run_id IS NOT NULL)
       ORDER BY l.fired_at DESC, l.rowid DESC LIMIT 1`).get(root, id) as {
-        at: string; status: string | null; result: string | null; agentStatus: string | null;
+        at: string; status: string | null; result: string | null; agentStatus: string | null; lateFor: string | null;
         error: string | null; outputPath: string | null;
       } | undefined;
     if (!row) return { lastFiredAt: null, lastRun: null };
@@ -153,6 +251,7 @@ export class Scheduler {
       lastFiredAt: row.at,
       lastRun: status.success ? {
         status: status.data, result: row.result ?? row.error ?? (row.status === null ? historicalResult(row.outputPath) : null),
+        lateFor: row.lateFor,
       } : null,
     };
   }
@@ -164,6 +263,7 @@ export class Scheduler {
       valid: workflow.schedule === null || validCron(workflow.schedule),
       ...this.latestRun(root, workflow.id),
       nextRun: workflow.enabled && workflow.schedule ? nextRunOf(workflow.schedule, this.now())?.toISOString() ?? null : null,
+      upcoming: workflow.schedule ? nextRuns(workflow.schedule, 3, this.now()).map((at) => at.toISOString()) : [],
     }));
   }
 
@@ -180,12 +280,12 @@ export class Scheduler {
       }
       const due = nextRunOf(workflow.schedule, new Date(last));
       if (!due || due > now) continue;
-      if (workflow.enabled) void this.fire(workflow.id, now).catch(() => undefined);
+      if (workflow.enabled) void this.fire(workflow.id, now, now.getTime() - due.getTime() > LATE_AFTER_MS ? due : undefined).catch(() => undefined);
       else this.mark(root, workflow.id, now);
     }
   }
 
-  async fire(id: string, at = this.now()): Promise<string | null> {
+  async fire(id: string, at = this.now(), lateFor?: Date): Promise<string | null> {
     const root = this.deps.root();
     const ws = this.deps.workspace();
     const workflow = workflowsFor(ws).find((entry) => entry.id === id);
@@ -196,15 +296,17 @@ export class Scheduler {
     this.inFlight.add(key);
     let logId: string | undefined;
     try {
-      logId = this.mark(root, id, at, "running");
+      logId = this.mark(root, id, at, "running", lateFor);
       this.deps.changed?.();
       const project = workflow.projectId ? this.deps.projectPath(workflow.projectId) : undefined;
       const projects = workflowItemProjects(ws, root, workflow.projectId);
       const request = workflowRequest(workflow, ws, root, project, this.deps.neutralFolder(),
-        workflow.provider || this.deps.defaultProvider(), projects);
+        workflow.provider || this.deps.defaultProvider(), projects, { fullAutoConfirmed: this.deps.fullAutoConfirmed?.() === true });
       if (workflow.template === "brain-upkeep" && request.brain?.root === root)
         await this.addValidationWarnings(root, request);
       if (this.deps.root() !== root) throw new Error("The Brain changed before the workflow could start.");
+      const written = request.role?.readOnly === false ? (request.brain?.writable ?? []) : [];
+      const before = new Map(await Promise.all(written.map(async (folder): Promise<[string, string | null]> => [folder, await headOf(folder)])));
       const handle = this.deps.runs.start(request);
       this.deps.db.prepare("UPDATE automations_log SET run_id = ? WHERE id = ?").run(handle.id, logId);
       const result = await handle.result;
@@ -221,10 +323,13 @@ export class Scheduler {
           return stopped.id;
         }
       }
+      const commits = written.length ? await commitsMade(written, before) : [];
+      if (commits.length && !output.items) output.text = `${output.text.trim()}\n\nCommits made\n${commits.map((line) => `- ${line}`).join("\n")}`;
       if (this.deps.root() === root) await this.deps.output(root, workflow, output);
-      const summary = output.items
-        ? output.items.map((item) => item.title).join("\n") || "No items suggested."
-        : output.text;
+      const summary = [
+        output.items ? output.items.map((item) => item.title).join("\n") || "No items suggested." : output.text,
+        ...(commits.length && output.items ? ["", "Commits made", ...commits.map((line) => `- ${line}`)] : []),
+      ].join("\n");
       this.finish(logId, "done", summary);
       return handle.id;
     } catch (error) {

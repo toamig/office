@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { officeTools, type OfficeConfirmation, type OfficeTool, type ToolInput } from "../../../shared/office-tools";
-import { describeSchedule, workflowOutputLabels, workflowReadLabels, type Workflow } from "../../../shared/workflow";
+import { describeSchedule, workflowMayDoLabels, workflowOutputLabels, workflowReadLabels, type Workflow } from "../../../shared/workflow";
 import type { Project } from "../../../shared/types";
 
 export type OfficeCall = {
@@ -80,8 +80,10 @@ export function workflowPreview(workflow: Workflow, project: string | undefined)
     { label: "Name", text: workflow.name },
     { label: "Schedule", text: describeSchedule(workflow.schedule) },
     { label: "Project", text: project ?? "Brain" },
-    { label: "Model", text: workflow.model || "Cheapest available" },
+    { label: "Model", text: workflow.model || (workflow.mayDo === "read" ? "Cheapest available" : "Standard model") },
+    { label: "May do", text: workflowMayDoLabels[workflow.mayDo] },
     { label: "May read", text: workflowReadLabels[workflow.read] },
+    { label: "Web search", text: workflow.web ? "On" : "Off" },
     { label: "Result goes to", text: workflowOutputLabels[workflow.output] },
     { label: "Prompt", text: workflow.prompt },
     ...(workflow.schedule && describeSchedule(workflow.schedule) === "Custom schedule" ? [{ label: "Cron expression", text: workflow.schedule }] : []),

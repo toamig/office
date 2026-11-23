@@ -490,6 +490,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     root: () => box.current.workspaceRoot,
     neutralFolder: dataDir,
     defaultProvider: cheapestProvider,
+    fullAutoConfirmed: () => box.current.confirmedFullAuto,
     output: (root, workflow, result) => workflowResults.save(root, workflow, result),
     changed: () => bus.emit("workflow.changed", {}),
     validate: (root) => runValidate(root, notes.folderTools.enabled() ? () => notes.folderTools.validate(root) : undefined),

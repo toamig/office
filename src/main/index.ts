@@ -11,6 +11,7 @@ import {
   screen,
   safeStorage,
   shell,
+  Tray,
 } from "electron";
 import { createReadStream } from "node:fs";
 import { Readable } from "node:stream";
@@ -26,6 +27,7 @@ import {
 import { createContext, type AppContext } from "./context";
 import { isE2E, unseenWindowOptions, watchVisibility } from "./e2e";
 import { badgePng } from "./core/badge";
+import { HIDDEN_FLAG, staysInTray, startedHidden, startsWithWindows } from "./core/background";
 import { applyChrome, startingChrome } from "./chrome";
 import { buildContextMenu, type MenuAction } from "./core/context-menu";
 import { classifyKey, nextZoom } from "./core/keys";
@@ -49,6 +51,30 @@ protocol.registerSchemesAsPrivileged([
 
 let mainWindow: BrowserWindow | null = null;
 let ctx: AppContext | null = null;
+let tray: Tray | null = null;
+let quitting = false;
+const launchedHidden = startedHidden(process.argv);
+
+/** Keeps the Windows login item and the tray in step with the settings and the workflows that are on. */
+function syncBackground(): void {
+  if (!ctx || isE2E()) return;
+  const workspace = ctx.store.state.workspace;
+  if (app.isPackaged && !process.env["OFFICE_DATA"])
+    app.setLoginItemSettings({ openAtLogin: startsWithWindows(ctx.settings().startWithWindows, workspace), args: [HIDDEN_FLAG] });
+  if (staysInTray(workspace) && !tray) {
+    tray = new Tray(nativeImage.createFromBuffer(badgePng(0, true)));
+    tray.setToolTip("Office");
+    tray.on("click", focusWindow);
+    tray.setContextMenu(Menu.buildFromTemplate([
+      { label: "Open Office", click: focusWindow },
+      { type: "separator" },
+      { label: "Quit", click: () => { quitting = true; app.quit(); } },
+    ]));
+  } else if (!staysInTray(workspace) && tray) {
+    tray.destroy();
+    tray = null;
+  }
+}
 
 function isHttps(url: string): boolean {
   try {
@@ -158,7 +184,7 @@ function createWindow(): BrowserWindow {
   installNativeBehaviour(win);
   if (placed.maximized) win.maximize();
   if (isE2E()) watchVisibility(win);
-  else win.once("ready-to-show", () => win.show());
+  else win.once("ready-to-show", () => { if (!launchedHidden) win.show(); });
 
   // The window reopens where it was left, maximised or not.
   let saveTimer: NodeJS.Timeout | undefined;
@@ -174,9 +200,14 @@ function createWindow(): BrowserWindow {
   win.on("move", rememberSoon);
   win.on("maximize", rememberSoon);
   win.on("unmaximize", rememberSoon);
-  win.on("close", () => {
+  win.on("close", (event) => {
     clearTimeout(saveTimer);
     remember();
+    // A scheduled workflow keeps Office alive in the tray; Quit in the tray menu ends it.
+    if (!quitting && tray && ctx && staysInTray(ctx.store.state.workspace)) {
+      event.preventDefault();
+      win.hide();
+    }
   });
 
   // Packaged builds get the strict CSP as a header too (the page also carries it as a meta tag).
@@ -305,6 +336,8 @@ async function boot(): Promise<void> {
     applyZoom(mainWindow);
   };
   context.bus.on("settings.changed", refreshChrome);
+  context.bus.on("settings.changed", syncBackground);
+  context.bus.on("workspace.changed", syncBackground);
   nativeTheme.on("updated", refreshChrome);
   context.notifier.addChannel({ id: "desktop", send: showDesktopNotification });
   context.pending.onCount = updateBadge;
@@ -312,6 +345,7 @@ async function boot(): Promise<void> {
   mainWindow.webContents.once("did-finish-load", () => context.pending.changed(true));
   app.on("browser-window-focus", () => void context.projects.refreshAll());
   await context.start();
+  syncBackground();
   void updates.check();
 }
 
@@ -342,6 +376,7 @@ if (!gotLock) {
     if (process.platform !== "darwin") app.quit();
   });
   app.on("before-quit", () => {
+    quitting = true;
     ctx?.sessions.shutdown();
     void ctx?.stop();
   });

@@ -1,6 +1,7 @@
 import { Plus } from "lucide-react";
 import { useState } from "react";
-import { brainUpkeepTemplate, describeSchedule, workflowOutputLabels, type Workflow, type WorkflowView } from "@shared/workflow";
+import { describeNext } from "@shared/schedule";
+import { brainUpkeepTemplate, describeSchedule, workflowMayDoLabels, workflowOutputLabels, type Workflow, type WorkflowView } from "@shared/workflow";
 import { BackgroundRuns, useBackgroundRuns } from "../components/BackgroundRuns";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
@@ -8,20 +9,21 @@ import { Banner, Button, Card, Dialog, EmptyState, OverflowMenu, Page, Time, not
 import { WorkflowForm } from "./workflows/WorkflowForm";
 
 const runLabels = { running: "Running", done: "Completed", failed: "Failed", cancelled: "Stopped" };
-const dateTime = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeStyle: "short" });
+
+const clock = new Intl.DateTimeFormat(undefined, { hour: "2-digit", minute: "2-digit", hour12: false });
 
 function WorkflowTimes({ workflow }: { workflow: WorkflowView }) {
   const schedule = describeSchedule(workflow.schedule);
   const last = workflow.lastRun;
   return <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-4 gap-y-1">
     <dt className="ui-muted">Schedule</dt>
-    <dd>{workflow.valid ? <span title={workflow.schedule ?? undefined}>{schedule}</span>
-      : <span className="ui-bad" title={workflow.schedule ?? undefined}>Invalid schedule</span>}</dd>
-    <dt className="ui-muted">Next run</dt>
-    <dd>{workflow.nextRun ? <time dateTime={workflow.nextRun}>{dateTime.format(new Date(workflow.nextRun))}</time>
-      : workflow.enabled ? "None scheduled" : "Off"}</dd>
+    <dd>{workflow.valid ? <span>{schedule}</span> : <span className="ui-bad">Not a valid schedule</span>}</dd>
+    <dt className="ui-muted">Next</dt>
+    <dd>{workflow.nextRun ? <time dateTime={workflow.nextRun}>{describeNext(new Date(workflow.nextRun), new Date())}</time>
+      : workflow.enabled ? "Only when you run it" : "Off"}</dd>
     <dt className="ui-muted">Last run</dt>
-    <dd>{workflow.lastFiredAt ? <Time iso={workflow.lastFiredAt} /> : "Never"}</dd>
+    <dd>{workflow.lastFiredAt ? <Time iso={workflow.lastFiredAt} /> : "Never"}
+      {last?.lateFor && <span className="ui-muted"> {"·"} Ran late (Office was closed at {clock.format(new Date(last.lateFor))})</span>}</dd>
     {last && <>
       <dt className="ui-muted">Result</dt>
       <dd>
@@ -78,8 +80,9 @@ export function Workflows() {
           <Card key={workflow.id} title={workflow.name}>
             <div className="grid gap-4 lg:grid-cols-[minmax(10rem,1fr)_minmax(16rem,2fr)_auto]">
               <div className="min-w-0">
-                <p className="ui-muted">{projectName ?? workflow.projectId ?? "Brain"}</p>
-                <p>{workflowOutputLabels[workflow.output]}</p>
+                <p className="ui-muted">{projectName ?? "Brain"}</p>
+                <p>{workflowMayDoLabels[workflow.mayDo]}{workflow.web ? ", web on" : ""}</p>
+                <p className="ui-muted">Result: {workflowOutputLabels[workflow.output]}</p>
               </div>
               <WorkflowTimes workflow={workflow} />
               <div className="flex flex-wrap items-start gap-2">

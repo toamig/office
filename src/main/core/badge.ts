@@ -32,10 +32,10 @@ function chunk(type: string, data: Buffer): Buffer {
   return Buffer.concat([length, body, crc]);
 }
 
-/** A 16x16 red dot with the unread count drawn in white (1 to 9, "+" above 9), as PNG bytes. */
-export function badgePng(count: number): Buffer {
+/** A 16x16 red dot (or, as the tray icon, an accent dot) with the unread count drawn in white (1 to 9, "+" above 9), as PNG bytes. */
+export function badgePng(count: number, tray = false): Buffer {
   const size = 16;
-  const glyph = DIGITS[count > 9 ? "+" : String(Math.max(count, 0))] ?? DIGITS["0"]!;
+  const glyph = tray ? [] : DIGITS[count > 9 ? "+" : String(Math.max(count, 0))] ?? DIGITS["0"]!;
   const pixels = Buffer.alloc(size * size * 4);
   const set = (x: number, y: number, rgba: [number, number, number, number]): void => {
     pixels.set(rgba, (y * size + x) * 4);
@@ -44,7 +44,7 @@ export function badgePng(count: number): Buffer {
     for (let x = 0; x < size; x++) {
       const dx = x - 7.5;
       const dy = y - 7.5;
-      if (dx * dx + dy * dy <= 7.5 * 7.5) set(x, y, [207, 74, 74, 255]);
+      if (dx * dx + dy * dy <= 7.5 * 7.5) set(x, y, tray ? [108, 99, 255, 255] : [207, 74, 74, 255]);
     }
   }
   // Each glyph cell is drawn 2x2 pixels, centred: 6 wide and 10 tall.

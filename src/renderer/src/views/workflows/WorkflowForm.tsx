@@ -1,12 +1,15 @@
 import { useState } from "react";
-import { WorkflowOutput, WorkflowRead, workflowOutputLabels, type Workflow } from "@shared/workflow";
+import {
+  WorkflowMayDo, WorkflowOutput, WorkflowRead, workflowMayDoLabels, workflowOutputLabels, type Workflow,
+} from "@shared/workflow";
+import { validCron } from "@shared/schedule";
 import { Button, Dialog, Dropdown, Input, Textarea } from "../../ui";
+import { SchedulePicker } from "./SchedulePicker";
 
-const schedules = {
-  manual: { pattern: null, label: "On demand" },
-  daily: { pattern: "0 8 * * *", label: "Daily at 08:00" },
-  weekly: { pattern: "0 8 * * 1", label: "Mondays at 08:00" },
-  custom: { pattern: "", label: "Custom schedule" },
+const mayDoHelp = {
+  read: "Reads notes or files and reports back. Never changes anything.",
+  brain: "Writes notes in the Brain, checks them and saves them with a commit.",
+  project: "Edits files and runs checks in the chosen project.",
 } as const;
 
 export function WorkflowForm({ workflow, template, projects, providers, onSave, onClose, busy }: {
@@ -19,23 +22,23 @@ export function WorkflowForm({ workflow, template, projects, providers, onSave, 
   busy: boolean;
 }) {
   const [draft, setDraft] = useState<Workflow>(workflow ?? template ?? {
-    id: "", name: "", schedule: null, projectId: null, read: "brain", prompt: "",
+    id: "", name: "", schedule: null, projectId: null, read: "brain", mayDo: "read", web: true, prompt: "",
     enabled: true, output: "worth-a-look",
   });
-  const initial = Object.entries(schedules).find(([, item]) => item.pattern === draft.schedule)?.[0];
-  const [frequency, setFrequency] = useState(initial ?? "custom");
   const update = (patch: Partial<Workflow>) => setDraft((value) => ({ ...value, ...patch }));
   const id = workflow?.id ?? draft.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
-  const schedule = frequency === "custom" ? draft.schedule?.trim() : schedules[frequency as keyof typeof schedules].pattern;
+  const scheduleBad = draft.schedule !== null && (!draft.schedule.trim() || !validCron(draft.schedule));
+  const needsProject = draft.mayDo === "project" && !draft.projectId;
+  const writes = draft.mayDo !== "read";
   const save = (): void => {
-    if (schedule === undefined || (frequency === "custom" && !schedule)) return;
-    void onSave({ ...draft, id, name: draft.name.trim(), schedule });
+    if (scheduleBad || needsProject) return;
+    void onSave({ ...draft, id, name: draft.name.trim(), schedule: draft.schedule?.trim() || null });
   };
   return (
     <Dialog title={workflow ? "Edit workflow" : "Add workflow"} onClose={onClose} wide footer={
       <>
         <Button onClick={onClose}>Cancel</Button>
-        <Button variant="primary" disabled={busy || !id || !draft.name.trim() || !draft.prompt.trim() || (frequency === "custom" && !schedule)}
+        <Button variant="primary" disabled={busy || !id || !draft.name.trim() || !draft.prompt.trim() || scheduleBad || needsProject}
           onClick={save}>Save workflow</Button>
       </>
     }>
@@ -43,6 +46,18 @@ export function WorkflowForm({ workflow, template, projects, providers, onSave, 
         {template && !workflow && <p className="ui-muted">This workflow starts off. Turn it on from Workflows when you are ready.</p>}
         <Input label="Name" value={draft.name} onChange={(event) => update({ name: event.target.value })} maxLength={100} />
         <Textarea label="Prompt" value={draft.prompt} onChange={(event) => update({ prompt: event.target.value })} rows={4} maxLength={20000} />
+        <SchedulePicker value={draft.schedule} onChange={(schedule) => update({ schedule })} />
+        <label className="grid gap-1">
+          <span className="ui-label">May do</span>
+          <Dropdown aria-label="May do" value={draft.mayDo} onChange={(event) => update({ mayDo: WorkflowMayDo.parse(event.target.value) })}>
+            {WorkflowMayDo.options.map((option) => <option key={option} value={option}>{workflowMayDoLabels[option]}</option>)}
+          </Dropdown>
+          <span className="ui-helper">{mayDoHelp[draft.mayDo]}</span>
+        </label>
+        <label className="flex items-center gap-2">
+          <input type="checkbox" checked={draft.web} onChange={(event) => update({ web: event.target.checked })} />
+          Web search and fetch
+        </label>
         <label className="grid gap-1">
           <span className="ui-label">Run in</span>
           <Dropdown aria-label="Run in" value={draft.projectId ?? ""} onChange={(event) => {
@@ -52,8 +67,9 @@ export function WorkflowForm({ workflow, template, projects, providers, onSave, 
             <option value="">Brain</option>
             {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
           </Dropdown>
+          {needsProject && <span className="ui-helper ui-bad">Choose the project this workflow works in.</span>}
         </label>
-        <label className="grid gap-1">
+        {draft.mayDo === "read" && <label className="grid gap-1">
           <span className="ui-label">May read</span>
           <Dropdown aria-label="May read" value={draft.read} onChange={(event) => update({ read: WorkflowRead.parse(event.target.value) })}>
             <option value="brain">Brain notes</option>
@@ -61,14 +77,15 @@ export function WorkflowForm({ workflow, template, projects, providers, onSave, 
             {draft.projectId && <option value="both">Project files and Brain notes</option>}
             <option value="none">Prompt only</option>
           </Dropdown>
-        </label>
-        <label className="grid gap-1">
-          <span className="ui-label">Schedule</span>
-          <Dropdown aria-label="Schedule" value={frequency} onChange={(event) => setFrequency(event.target.value)}>
-            {Object.entries(schedules).map(([key, item]) => <option key={key} value={key}>{item.label}</option>)}
+        </label>}
+        {draft.mayDo === "project" && <label className="grid gap-1">
+          <span className="ui-label">How freely</span>
+          <Dropdown aria-label="How freely" value={draft.autonomy ?? "act-on-risk"}
+            onChange={(event) => update({ autonomy: event.target.value === "full-auto" ? "full-auto" : "act-on-risk" })}>
+            <option value="act-on-risk">Act, ask on risk (risky steps are refused, nobody is there to ask)</option>
+            <option value="full-auto">Full auto</option>
           </Dropdown>
-        </label>
-        {frequency === "custom" && <Input label="Cron schedule" value={draft.schedule ?? ""} onChange={(event) => update({ schedule: event.target.value })} />}
+        </label>}
         <label className="grid gap-1">
           <span className="ui-label">Send result to</span>
           <Dropdown aria-label="Send result to" value={draft.output} onChange={(event) => update({ output: WorkflowOutput.parse(event.target.value) })}>
@@ -82,7 +99,8 @@ export function WorkflowForm({ workflow, template, projects, providers, onSave, 
               <option value="">Choose automatically</option>
               {providers.map((provider) => <option key={provider.id} value={provider.id}>{provider.label}</option>)}
             </Dropdown>
-            <Input label="Model" placeholder="Cheapest available" value={draft.model ?? ""} onChange={(event) => update({ model: event.target.value })} />
+            <Input label="Model" placeholder={writes ? "Sonnet" : "Cheapest available"} value={draft.model ?? ""}
+              onChange={(event) => update({ model: event.target.value })} />
           </div>
         </details>
       </div>

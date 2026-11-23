@@ -60,7 +60,7 @@ export interface RunServiceDeps {
 }
 
 /** Runs that only read: they get read tools and nothing ever asks. */
-const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route", "workflow"];
+const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route"];
 
 const TITLES: Record<RunKind, string> = {
   ask: "Ask Brain", brief: "Morning brief", stage: "Builder", capture: "Session capture",
@@ -169,7 +169,7 @@ export class RunService {
       return { kind: "readonly" };
     }
     const permissions = this.deps.permissions;
-    if (req.kind === "stage" && req.role.autonomy === "full-auto") return { kind: "full" };
+    if ((req.kind === "stage" || req.kind === "workflow") && req.role.autonomy === "full-auto") return { kind: "full" };
     if (req.kind === "stage" && permissions) {
       return { kind: "ask", mcpConfig: permissions.writeMcpConfig(id, dir) };
     }

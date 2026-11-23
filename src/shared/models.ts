@@ -1129,6 +1129,7 @@ export const AppSettings = z.object({
   requestRouterModel: z.string(),
   sessionIdleDays: z.number(),
   sessionsMulti: z.boolean(),
+  startWithWindows: z.boolean(),
   quietHours: z.object({ from: z.string(), to: z.string() }).nullable(),
   editorCommand: z.string(),
   artVaultRoot: z.string(),
@@ -1164,6 +1165,7 @@ export const AppSettingsPatch = z.object({
   requestRouterModel: z.string().max(120).optional(),
   sessionIdleDays: z.number().int().min(1).max(60).optional(),
   sessionsMulti: z.boolean().optional(),
+  startWithWindows: z.boolean().optional(),
   quietHours: z
     .object({
       from: z.string().regex(/^\d{2}:\d{2}$/),

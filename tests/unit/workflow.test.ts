@@ -52,7 +52,7 @@ describe("workflow migration and safety", () => {
     expect(options.brain?.private).toContain(join(root, "Projects/Secret"));
     expect(options.brain?.restrictedRead).toBe(true);
     expect(options.addDirs).toBeUndefined();
-    expect(workflowRequest({ ...workflow, read: "none" }, Workspace.parse(config), root, join(root, "Code"), root, "codex").tools).toBe("");
+    expect(workflowRequest({ ...workflow, read: "none", web: false }, Workspace.parse(config), root, join(root, "Code"), root, "codex").tools).toBe("");
   });
 
   it("skips scheduled slots while off and stores bounded results in the correct workspace", async () => {

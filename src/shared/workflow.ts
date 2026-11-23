@@ -1,7 +1,11 @@
 import { z } from "zod";
+import { AutonomyLevel } from "./autonomy";
 import type { Workspace } from "./types";
 
 export const WorkflowOutput = z.enum(["worth-a-look", "pending", "note"]);
+/** What a workflow may do: read only, write notes in the Brain, or work in its project. */
+export const WorkflowMayDo = z.enum(["read", "brain", "project"]);
+export type WorkflowMayDo = z.infer<typeof WorkflowMayDo>;
 export const WorkflowRead = z.enum(["brain", "project", "both", "none"]);
 
 export const Workflow = z.object({
@@ -12,6 +16,11 @@ export const Workflow = z.object({
   read: WorkflowRead.default("brain"),
   provider: z.string().optional(),
   model: z.string().optional(),
+  mayDo: WorkflowMayDo.default("read"),
+  /** Web search and fetch, on by default at every level. */
+  web: z.boolean().default(true),
+  /** The autonomy of a workflow that works in its project (never asks, since nobody is there). */
+  autonomy: AutonomyLevel.optional(),
   prompt: z.string().trim().min(1).max(20_000),
   output: WorkflowOutput.default("worth-a-look"),
   enabled: z.boolean().default(true),
@@ -21,7 +30,7 @@ export type Workflow = z.infer<typeof Workflow>;
 
 export const brainUpkeepTemplate: Workflow = {
   id: "brain-upkeep", name: "Brain upkeep", schedule: "0 8 * * 1", projectId: null,
-  read: "brain", output: "worth-a-look", enabled: false, template: "brain-upkeep",
+  read: "brain", mayDo: "read", web: false, output: "worth-a-look", enabled: false, template: "brain-upkeep",
   prompt: [
     "Review the Brain using its rule pack and the validation size warnings supplied by Office.",
     "Follow the routers to compare relevant notes. Look for duplicate facts across current projects, contradictions, settled decisions without an ADR, and long notes that answer several questions.",
@@ -36,7 +45,14 @@ export const WorkflowView = Workflow.extend({
   valid: z.boolean(),
   lastFiredAt: z.string().nullable(),
   nextRun: z.string().nullable(),
-  lastRun: z.object({ status: WorkflowRunStatus, result: z.string().nullable() }).nullable(),
+  lastRun: z.object({
+    status: WorkflowRunStatus, result: z.string().nullable(),
+    /** The slot this run was for when Office was closed at that time. */
+    lateFor: z.string().nullable().default(null),
+  }).nullable(),
+  /** The next three runs. */
+  upcoming: z.array(z.string()).default([]),
+
 });
 export type WorkflowView = z.infer<typeof WorkflowView>;
 
@@ -66,50 +82,15 @@ export const workflowOutputLabels: Record<Workflow["output"], string> = {
   "worth-a-look": "Worth a look", pending: "Needs you", note: "Brain note",
 };
 
+export const workflowMayDoLabels: Record<WorkflowMayDo, string> = {
+  read: "Read only", brain: "Write in the Brain", project: "Work in the project",
+};
+
 export const workflowReadLabels: Record<Workflow["read"], string> = {
   brain: "Brain notes", project: "Project files", both: "Project files and Brain notes", none: "Prompt only",
 };
 
-const weekdays = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
-
-function weekdayName(value: string): string | undefined {
-  if (/^[0-7]$/.test(value)) return weekdays[Number(value) % 7];
-  return weekdays.find((day) => day.slice(0, 3).toLowerCase() === value.toLowerCase());
-}
-
-function describeWeekdays(pattern: string): string | undefined {
-  const parts = pattern.split(",").map((part) => {
-    const [first, last, extra] = part.split("-");
-    if (!first || extra !== undefined) return undefined;
-    const start = weekdayName(first);
-    const end = last === undefined ? undefined : weekdayName(last);
-    if (!start || (last !== undefined && !end)) return undefined;
-    return end ? `${start} through ${end}` : start;
-  });
-  return parts.every(Boolean) ? parts.join(", ") : undefined;
-}
-
-export function describeSchedule(schedule: string | null): string {
-  if (!schedule) return "On demand";
-  const fields = schedule.trim().split(/\s+/);
-  if (fields.length !== 5) return "Custom schedule";
-  const [minute, hour, day, month, weekday] = fields;
-  if (schedule === "* * * * *") return "Every minute";
-  if (minute && /^\*\/\d+$/.test(minute) && hour === "*" && day === "*" && month === "*" && weekday === "*")
-    return `Every ${minute.slice(2)} minutes`;
-  if (minute && /^\d{1,2}$/.test(minute) && hour === "*" && day === "*" && month === "*" && weekday === "*")
-    return Number(minute) === 0 ? "Every hour" : `At minute ${Number(minute)} of every hour`;
-  if (minute && hour && /^\d{1,2}$/.test(minute) && /^\d{1,2}$/.test(hour) && month === "*") {
-    const time = `${hour.padStart(2, "0")}:${minute.padStart(2, "0")}`;
-    if (day === "*" && weekday === "*") return `Daily at ${time}`;
-    if (day === "*" && weekday) {
-      const days = describeWeekdays(weekday);
-      if (days) return `Every ${days} at ${time}`;
-    }
-    if (day && /^\d{1,2}$/.test(day) && weekday === "*") return `Day ${day} of each month at ${time}`;
-  }
-  return "Custom schedule";
-}
+export { describeSchedule } from "./schedule";
 
 export function workflowsFor(workspace: Workspace | null): Workflow[] {
   if (!workspace) return [];
@@ -122,7 +103,7 @@ export function workflowsFor(workspace: Workspace | null): Workflow[] {
     return [{
       id: automation.id, name: automation.id, schedule: automation.cron,
       projectId: automation.project, read: workspace.vault.kind === "none" ? "project" : "both",
-      prompt: automation.prompt, enabled: automation.enabled,
+      mayDo: "read", web: true, prompt: automation.prompt, enabled: automation.enabled,
       output: "worth-a-look", ...(role?.provider ? { provider: role.provider } : {}),
       ...(role?.model ? { model: role.model } : {}),
     }];

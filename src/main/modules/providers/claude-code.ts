@@ -111,7 +111,7 @@ export function claudePath(path: string): string {
   return `/${normalized.replace(/([*?[\]])/g, "\\$1")}`;
 }
 
-function sessionSettings(o: Pick<RunOptions, "brain" | "role">): string[] {
+export function sessionSettings(o: Pick<RunOptions, "brain" | "role">): string[] {
   const ask = o.role?.autonomy === "ask-first" ? ["Edit", "Write", "NotebookEdit", "Bash", "PowerShell"] : [];
   const denied = o.brain ? [
     ...o.brain.private.map((dir) => `Read(${claudePath(dir)}/**)`),

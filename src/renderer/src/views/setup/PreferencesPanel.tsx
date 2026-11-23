@@ -159,6 +159,19 @@ export function PreferencesPanel() {
           </div>
         )}
       </Card>
+      <Card title="Background" testId="panel-background">
+        {s && (
+          <label className="flex items-center gap-2">
+            <input type="checkbox" checked={s.startWithWindows} data-testid="start-with-windows"
+              onChange={(event) => void set({ startWithWindows: event.target.checked })} />
+            Start Office with Windows
+          </label>
+        )}
+        <p className="ui-helper">
+          Office then starts minimised to the tray. While a scheduled workflow is on, closing the window keeps Office
+          running in the tray, so the workflow still runs. Quit is in the tray menu.
+        </p>
+      </Card>
       <Card title="Art vault" testId="panel-art-vault">
         {s && (
           <div className="flex flex-wrap items-center gap-2">

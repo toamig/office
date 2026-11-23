@@ -2,6 +2,7 @@ import { existsSync, statSync } from "node:fs";
 import { join, resolve } from "node:path";
 import type { AppSettings, GithubOverview, Inventory, ProviderStatus } from "../shared/models";
 import { workspaceView, type AppContext } from "./context";
+import { startsWithWindows } from "./core/background";
 import { resolveCommand, resolveTool } from "./core/exec";
 import { normPath } from "./core/util";
 import { loadWorkspaceFile } from "./core/workspace";
@@ -571,6 +572,7 @@ function registerConfigHandlers(ctx: AppContext): void {
       requestRouterModel: s.requestRouterModel,
       sessionIdleDays: s.sessionIdleDays,
       sessionsMulti: s.sessionsMulti,
+      startWithWindows: startsWithWindows(s.startWithWindows, ctx.store.state.workspace),
       quietHours: s.quietHours ?? null,
       editorCommand: s.editorCommand,
       artVaultRoot: s.artVaultRoot,
