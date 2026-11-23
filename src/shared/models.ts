@@ -1246,3 +1246,16 @@ export const BrainSyncState = z.object({
   lastResultOk: z.boolean().nullable(),
 });
 export type BrainSyncState = z.infer<typeof BrainSyncState>;
+
+/** A dev server started for a chat: what it runs, whether its page is up, and its recent output. */
+export const DevServerState = z.object({
+  running: z.boolean(),
+  command: z.string().nullable(),
+  port: z.number().nullable(),
+  url: z.string().nullable(),
+  output: z.array(z.string()),
+  exitCode: z.number().nullable(),
+  ready: z.boolean(),
+  error: z.string().nullable(),
+});
+export type DevServerState = z.infer<typeof DevServerState>;

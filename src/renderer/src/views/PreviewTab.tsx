@@ -1,12 +1,18 @@
-import { ArrowLeft, ArrowRight, ExternalLink, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, ExternalLink, Play, RefreshCw, Search, Square } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
-import type { PreviewBounds, PreviewState } from "@shared/models";
+import type { DevServerState, PreviewBounds, PreviewState } from "@shared/models";
 import { Button, EmptyState, IconButton, Input, notify, notifyError } from "../ui";
 import { office } from "../lib/ipc";
 import { useNativeBounds } from "../lib/native-bounds";
 
+const NEWLINE = String.fromCharCode(10);
+
 /** A browser pane for the project's page or local dev server: back, forward, reload, open externally. */
-export function PreviewTab({ projectId, owner, initialUrl, transient = false }: { projectId: string; owner?: string; initialUrl?: string; transient?: boolean }) {
+export function PreviewTab({ projectId, owner, initialUrl, transient = false, devSession }: {
+  projectId: string; owner?: string; initialUrl?: string; transient?: boolean;
+  /** The chat whose dev server this tab can start, show and stop. */
+  devSession?: string;
+}) {
   const storeKey = `preview-url:${owner ?? projectId}`;
   const [url, setUrl] = useState(() => localStorage.getItem(storeKey) ?? "");
   const [state, setState] = useState<PreviewState | null>(null);
@@ -56,6 +62,22 @@ export function PreviewTab({ projectId, owner, initialUrl, transient = false }: 
     const timer = window.setTimeout(() => void go(target), 0);
     return () => window.clearTimeout(timer);
   }, [initialUrl, owner, storeKey, transient, go]);
+  const [server, setServer] = useState<DevServerState | null>(null);
+  const [suggested, setSuggested] = useState<{ command: string; port: number | null } | null>(null);
+  useEffect(() => {
+    if (!devSession) return;
+    const load = (): void => { void office.invoke("devserver.state", { sessionId: devSession }).then(setServer); };
+    load();
+    void office.invoke("devserver.suggest", { sessionId: devSession }).then(setSuggested);
+    return office.on("devserver.changed", (event) => {
+      if ((event.payload as { sessionId?: string }).sessionId === devSession) load();
+    });
+  }, [devSession]);
+  const startServer = (): void => {
+    if (!devSession || !suggested) return;
+    void office.invoke("devserver.start", { sessionId: devSession, command: suggested.command, port: suggested.port }).then(setServer)
+      .catch((error: unknown) => notifyError(error, "Could not start the dev server", `preview-${projectId}`));
+  };
   const act = (action: "back" | "forward" | "reload" | "external"): void => {
     void office.invoke("preview.act", { action, owner }).then(setState);
   };
@@ -116,6 +138,17 @@ export function PreviewTab({ projectId, owner, initialUrl, transient = false }: 
         <Button type="button" onClick={() => void detect()} data-testid="preview-detect">
           <Search /> Find dev server
         </Button>
+        {devSession && !server?.running && (
+          <Button type="button" disabled={!suggested} onClick={startServer} data-testid="preview-start-server"
+            title={suggested ? `Runs ${suggested.command}` : "This folder has no dev or start script"}>
+            <Play /> Start dev server
+          </Button>
+        )}
+        {devSession && server?.running && (
+          <Button type="button" onClick={() => void office.invoke("devserver.stop", { sessionId: devSession })} data-testid="preview-stop-server">
+            <Square /> Stop server
+          </Button>
+        )}
         <Button
           type="button"
           disabled={!state?.open}
@@ -125,6 +158,16 @@ export function PreviewTab({ projectId, owner, initialUrl, transient = false }: 
           <ExternalLink /> Open externally
         </Button>
       </form>
+      {devSession && server && (server.running || server.output.length > 0 || server.error) && (
+        <details className="mb-2" open={server.running && !server.ready} data-testid="dev-server-output">
+          <summary className="cursor-pointer ui-label">
+            {server.running ? (server.ready ? "Dev server running" : "Dev server starting") : "Dev server stopped"}
+            {server.command ? `: ${server.command}` : ""}
+          </summary>
+          {server.error && <p className="ui-bad">{server.error}</p>}
+          <pre className="tool-output max-h-40 overflow-auto text-selectable">{server.output.slice(-40).join(NEWLINE)}</pre>
+        </details>
+      )}
       <div ref={holder} data-testid="preview-holder" className="ui-preview-holder">
         {!state?.open && (
           <EmptyState title="Nothing to preview yet">

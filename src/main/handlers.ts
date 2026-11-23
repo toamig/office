@@ -213,6 +213,10 @@ function registerSetupHandlers(ctx: AppContext): void {
   );
   ctx.ipc.handle("setup.inventory", (req) => inventory.get(req.projectId));
   ctx.ipc.handle("tools.list", (req) => ctx.toolConfig.list(req.projectId));
+  ctx.ipc.handle("devserver.state", (req) => ctx.devServers.state(req.sessionId));
+  ctx.ipc.handle("devserver.suggest", (req) => ctx.devServers.suggestion(req.sessionId));
+  ctx.ipc.handle("devserver.start", (req) => ctx.devServers.start(req.sessionId, { command: req.command, port: req.port ?? null }));
+  ctx.ipc.handle("devserver.stop", (req) => ctx.devServers.stop(req.sessionId));
   ctx.ipc.handle("tools.plugins", (req) => ctx.toolConfig.availablePlugins(req.provider, req.projectId));
   ctx.ipc.handle("tools.test", (req) => {
     if ("address" in req) return testConnection({ address: req.address });

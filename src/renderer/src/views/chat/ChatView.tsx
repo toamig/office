@@ -104,7 +104,12 @@ export function ChatView({ session, onChanged, headerActions }: {
   const { conversation, ready } = useConversation(id);
   const { items, working, activity, queue } = conversation;
   const panelKey = `office.chat-panel:${id}`;
-  const [panelVisible, setPanelVisible] = useState(() => !session.incognito && localStorage.getItem(panelKey) === "1");
+  // The side panel is hidden, beside the chat, or filling the chat area; which one is remembered per chat.
+  const [panelMode, setPanelMode] = useState<"hidden" | "side" | "full">(() => {
+    const saved = session.incognito ? null : localStorage.getItem(panelKey);
+    return saved === "full" ? "full" : saved === "1" ? "side" : "hidden";
+  });
+  const panelVisible = panelMode !== "hidden";
   const [sideTab, setSideTab] = useState<SideTab>("preview");
   const [sideFile, setSideFile] = useState<string>();
   const [sideUrl, setSideUrl] = useState<string>();
@@ -123,10 +128,11 @@ export function ChatView({ session, onChanged, headerActions }: {
   }, []);
   const { wrapUp } = useSessionActions();
 
-  const showPanel = (show: boolean) => {
-    setPanelVisible(show);
-    if (!session.incognito) localStorage.setItem(panelKey, show ? "1" : "0");
+  const setMode = (mode: "hidden" | "side" | "full") => {
+    setPanelMode(mode);
+    if (!session.incognito) localStorage.setItem(panelKey, mode === "full" ? "full" : mode === "side" ? "1" : "0");
   };
+  const showPanel = (show: boolean) => setMode(show ? (panelMode === "full" ? "full" : "side") : "hidden");
   const openFile = (path: string) => {
     setSideFile(path);
     setSideTab("file");
@@ -137,6 +143,23 @@ export function ChatView({ session, onChanged, headerActions }: {
     setSideTab("preview");
     showPanel(true);
   };
+
+  // An agent can ask for a page or a file to be shown beside the chat.
+  useEffect(() => office.on("chat.preview", (event) => {
+    const request = event.payload as { sessionId: string; url?: string; path?: string };
+    if (request.sessionId !== id) return;
+    if (request.url) openPreview(request.url);
+    else if (request.path) openFile(request.path);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [id]);
+  // Esc returns the full-screen panel to its place beside the chat.
+  useEffect(() => {
+    if (panelMode !== "full") return;
+    const onKey = (event: KeyboardEvent) => { if (event.key === "Escape" && !event.defaultPrevented) setMode("side"); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [panelMode]);
 
   useEffect(() => {
     if (!ready) return;
@@ -231,9 +254,9 @@ export function ChatView({ session, onChanged, headerActions }: {
   return (
     <ChatAssets.Provider value={{ id, openFile, openPreview }}>
     <SplitPane id={session.incognito ? "chat-side-incognito" : `chat-side:${id}`} fixedSide="right"
-      defaultSize={430} min={280} minSecond={280} showSecond={panelVisible} label="Resize chat side panel"
-      second={<ChatSidePanel session={session} tab={sideTab} path={sideFile} url={sideUrl} onTab={setSideTab}
-        onClose={() => showPanel(false)} />} first={
+      defaultSize={430} min={280} minSecond={280} showSecond={panelVisible} fullSecond={panelMode === "full"} secondWhenNarrow label="Resize chat side panel"
+      second={<ChatSidePanel session={session} tab={sideTab} path={sideFile} url={sideUrl} onTab={setSideTab} full={panelMode === "full"}
+        onFull={() => setMode(panelMode === "full" ? "side" : "full")} onClose={() => showPanel(false)} />} first={
     <div className="chat" ref={chat} data-testid="chat" data-session={id}>
       <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>

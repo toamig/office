@@ -1,4 +1,4 @@
-import { ExternalLink, FolderOpen, PanelRightClose, RefreshCw } from "lucide-react";
+import { ExternalLink, FolderOpen, Maximize2, Minimize2, PanelRightClose, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { ChatFile, PreviewBounds, SessionRow } from "@shared/models";
 import { useNativeBounds } from "../../lib/native-bounds";
@@ -78,19 +78,24 @@ function FileTab({ id, path }: { id: string; path: string }) {
   </>;
 }
 
-export function ChatSidePanel({ session, tab, path, url, onTab, onClose }: {
-  session: SessionRow; tab: SideTab; path?: string; url?: string;
-  onTab: (tab: SideTab) => void; onClose: () => void;
+export function ChatSidePanel({ session, tab, path, url, full, onTab, onFull, onClose }: {
+  session: SessionRow; tab: SideTab; path?: string; url?: string; full: boolean;
+  onTab: (tab: SideTab) => void; onFull: () => void; onClose: () => void;
 }) {
   return <aside className="flex h-full min-w-0 flex-col border-l border-[var(--line)]" aria-label="Chat side panel">
-    <div className="flex items-center justify-between border-b border-[var(--line)] px-2">
-      <Tabs items={tabs} value={tab} onChange={onTab} label="Chat side panel" />
-      <IconButton size="sm" label="Hide chat side panel" onClick={onClose}><PanelRightClose /></IconButton>
+    <div className="flex items-center justify-between gap-1 border-b border-[var(--line)] px-2">
+      <div className="min-w-0 flex-1 overflow-x-auto [scrollbar-width:none]"><Tabs items={tabs} value={tab} onChange={onTab} label="Chat side panel" /></div>
+      <div className="flex flex-none items-center gap-1">
+        <IconButton size="sm" label={full ? "Exit full screen" : "Full screen"} onClick={onFull} data-testid="side-full">
+          {full ? <Minimize2 /> : <Maximize2 />}
+        </IconButton>
+        <IconButton size="sm" label="Hide chat side panel" onClick={onClose}><PanelRightClose /></IconButton>
+      </div>
     </div>
     {tab === "file" && (path ? <FileTab key={path} id={session.id} path={path} /> :
       <EmptyState title="No file open">Select a file in the conversation to open it here.</EmptyState>)}
     {tab === "preview" && <div className="min-h-0 flex-1">
-      <PreviewTab projectId={session.projectId ?? session.id} owner={session.id} initialUrl={url} transient={session.incognito} />
+      <PreviewTab projectId={session.projectId ?? session.id} owner={session.id} initialUrl={url} transient={session.incognito} devSession={session.id} />
     </div>}
     {tab === "changes" && <div className="min-h-0 flex-1 overflow-auto p-3">
       {session.projectId ? <DiffTab projectId={session.projectId} workingDir={session.cwd} inspect={false} /> :

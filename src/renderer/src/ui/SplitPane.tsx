@@ -1,5 +1,6 @@
 import {
   useCallback,
+  useEffect,
   useRef,
   useState,
   type KeyboardEvent,
@@ -26,6 +27,8 @@ export function SplitPane({
   label = "Resize the panes",
   fixedSide = "left",
   showSecond = true,
+  fullSecond = false,
+  secondWhenNarrow = false,
 }: {
   id: string;
   first: ReactNode;
@@ -39,12 +42,25 @@ export function SplitPane({
   label?: string;
   fixedSide?: "left" | "right";
   showSecond?: boolean;
+  /** The second pane fills the whole area; the first stays mounted, out of sight. */
+  fullSecond?: boolean;
+  /** With no room for both panes, show only the second. */
+  secondWhenNarrow?: boolean;
 }) {
   const settings = useQuery("settings.get", undefined, ["settings.changed"]);
   const saved = settings.data?.panes[id];
   const [local, setLocal] = useState<number | null>(null);
   const box = useRef<HTMLDivElement>(null);
   const size = local ?? saved ?? defaultSize;
+  // With no room for both panes the second one takes the whole area, so its own controls stay reachable.
+  const [narrow, setNarrow] = useState(false);
+  useEffect(() => {
+    const element = box.current;
+    if (!element || typeof ResizeObserver === "undefined") return;
+    const watch = new ResizeObserver(() => setNarrow(element.getBoundingClientRect().width < min + minSecond + HANDLE));
+    watch.observe(element);
+    return () => watch.disconnect();
+  }, [min, minSecond]);
 
   const clamp = useCallback(
     (value: number): number => {
@@ -74,7 +90,8 @@ export function SplitPane({
   };
   const fixed = `max(${min}px, min(${size}px, calc(100% - ${minSecond + HANDLE}px)))`;
   const flexible = "minmax(0, 1fr)";
-  const columns = !showSecond ? flexible : fixedSide === "right" ? `${flexible} ${HANDLE}px ${fixed}` : `${fixed} ${HANDLE}px ${flexible}`;
+  const full = showSecond && (fullSecond || (secondWhenNarrow && narrow));
+  const columns = full ? `0px 0px ${flexible}` : !showSecond ? flexible : fixedSide === "right" ? `${flexible} ${HANDLE}px ${fixed}` : `${fixed} ${HANDLE}px ${flexible}`;
   return (
     <div
       ref={box}
@@ -84,9 +101,10 @@ export function SplitPane({
       }}
       data-testid={`split-${id}`}
     >
-      <div className="ui-split-pane">{first}</div>
+      <div className="ui-split-pane" style={full ? { visibility: "hidden", overflow: "hidden" } : undefined} aria-hidden={full || undefined}>{first}</div>
       {showSecond && <><div
         className="ui-split-handle"
+        style={full ? { visibility: "hidden" } : undefined}
         role="separator"
         aria-orientation="vertical"
         aria-label={label}

@@ -110,7 +110,7 @@ function unwrapCmdShim(shim: string): string | null {
   }
 }
 
-function spawnResolved(cmd: string, args: string[], opts: RunOptions, group = false): ChildProcess {
+export function spawnResolved(cmd: string, args: string[], opts: RunOptions, group = false): ChildProcess {
   const tool = cmd.includes("/") || cmd.includes("\\") ? cmd : (resolveTool(cmd) ?? cmd);
   const resolved = resolveCommand(tool, args);
   return spawn(resolved.file, resolved.args, {
@@ -169,7 +169,7 @@ export function runBytes(cmd: string, args: string[], opts: RunOptions = {}): Pr
   });
 }
 
-function killTree(child: ChildProcess, group = false): void {
+export function killTree(child: ChildProcess, group = false): void {
   if (!child.pid) return;
   if (process.platform === "win32") {
     const killer = spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { windowsHide: true, stdio: "ignore" });

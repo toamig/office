@@ -8,7 +8,7 @@ export type OfficeCall = {
 }[OfficeTool];
 
 export function readOnlyTool(name: OfficeTool): boolean {
-  return name === "office_list_workflows" || name === "office_open";
+  return name === "office_list_workflows" || name === "office_open" || name === "office_preview_open";
 }
 
 export function parseOfficeCall(name: unknown, input: unknown): OfficeCall {

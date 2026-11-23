@@ -77,6 +77,7 @@ import {
   ChatOptions,
   ChatState,
   BrainSyncState,
+  DevServerState,
 } from "./models";
 
 /** Every event type the main process can publish on the bus (plan 4.5). */
@@ -116,6 +117,10 @@ export const eventTypes = [
   "session.activity",
   "chat.state",
   "app.update",
+  /** An agent or a click asked the chat side panel to show a page or a file. */
+  "chat.preview",
+  /** A dev server started for a session changed (output, ready, stopped). */
+  "devserver.changed",
   /** The brain's health (validation, hub status) was refreshed by the background job. */
   "vault.health",
   /** Something the welcome flow looks at changed: the settings it reads, the tools, the hooks. */
@@ -278,6 +283,13 @@ export const channels = {
     req: z.object({ provider: z.enum(["claude-code", "codex"]), projectId: z.string().optional() }),
     res: z.array(InstalledPlugin),
   },
+  "devserver.state": { req: z.object({ sessionId: z.string() }), res: DevServerState },
+  "devserver.suggest": { req: z.object({ sessionId: z.string() }), res: z.object({ command: z.string(), port: z.number().nullable() }).nullable() },
+  "devserver.start": {
+    req: z.object({ sessionId: z.string(), command: z.string().trim().min(1).max(500), port: z.number().int().min(1).max(65535).nullable().optional() }),
+    res: DevServerState,
+  },
+  "devserver.stop": { req: z.object({ sessionId: z.string() }), res: z.void() },
   "tools.test": { req: ToolTest, res: ToolTestResult },
   "tools.preview": { req: ToolEdit, res: ToolEditPreview },
   "tools.apply": { req: z.object({ id: z.string() }), res: z.void() },

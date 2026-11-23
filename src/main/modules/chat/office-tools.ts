@@ -1,17 +1,21 @@
 import { randomUUID } from "node:crypto";
+import { existsSync, statSync } from "node:fs";
+import { isAbsolute, relative, resolve } from "node:path";
 import type { NotificationLink, SessionRow } from "../../../shared/models";
 import type { OfficeConfirmation } from "../../../shared/office-tools";
 import type { Project } from "../../../shared/types";
 import { Workflow, workflowsFor, type Workflow as WorkflowDefinition } from "../../../shared/workflow";
 import type { AppContext } from "../../context";
+import { checkPreviewUrl } from "../../core/dev-server";
 import { validCron } from "../../core/scheduler";
+import type { DevServers } from "./dev-servers";
 import { reminderDate } from "../ask/router";
 import { slugify } from "../explore/files";
 import { readNote } from "../notes/notes";
 import { privateNotes } from "../vault/scope";
 import { fieldsPreview, officeCatalog, parseOfficeCall, toolFields, workflowPreview, type OfficeCall } from "./office-tool-plan";
 
-type Deps = Pick<AppContext, "bus" | "sessions" | "settings" | "store" | "scheduler" | "editor" | "explore" | "recorder" | "ops" | "tasks" | "workflowResults">;
+type Deps = Pick<AppContext, "bus" | "sessions" | "settings" | "store" | "scheduler" | "editor" | "explore" | "recorder" | "ops" | "tasks" | "workflowResults"> & { devServers: DevServers };
 type Output = Record<string, unknown>;
 type Mutation = {
   title: string;
@@ -55,6 +59,8 @@ export class OfficeTools {
       const call = parseOfficeCall(body["name"], body["arguments"]);
       if (call.name === "office_list_workflows") return this.catalog(session);
       if (call.name === "office_open") return this.open(session, call.input);
+      if (call.name === "office_preview_open") return this.previewOpen(session, call.input);
+      if (call.name === "office_preview_start") return await this.previewStart(session, call, signal);
       const mutation = this.plan(session, call);
       if (session.autonomy === "full-auto" && !mutation.public)
         return await this.apply(id, this.deps.settings().workspaceRoot, call, mutation);
@@ -118,6 +124,42 @@ export class OfficeTools {
     const result = await mutation.run();
     if (discussionActions.has(call.name)) this.deps.workflowResults.resolveDiscussion(sessionId, root);
     return result;
+  }
+
+  /** Shows an address or one of the session's files in the chat's side panel, at once and without asking. */
+  private previewOpen(session: SessionRow, input: Extract<OfficeCall, { name: "office_preview_open" }>["input"]): Output {
+    if (Boolean(input.address) === Boolean(input.file)) throw new Error("Give either an address or a file, not both.");
+    if (input.address) {
+      const url = checkPreviewUrl(input.address);
+      this.deps.bus.emit("chat.preview", { sessionId: session.id, url });
+      return { message: `Showing ${url} in the side panel.` };
+    }
+    const folder = session.cwd;
+    const path = resolve(folder, input.file!);
+    const inside = relative(folder, path);
+    if (inside.startsWith("..") || isAbsolute(inside)) throw new Error("A file can only be shown from this session's folder.");
+    if (!existsSync(path) || !statSync(path).isFile()) throw new Error("That file does not exist.");
+    this.deps.bus.emit("chat.preview", { sessionId: session.id, path });
+    return { message: `Showing ${inside.replaceAll("\\", "/")} in the side panel.` };
+  }
+
+  /** Starts a dev server for the session. Ask first asks the owner; the other levels start it, since it stays in the folder. */
+  private async previewStart(session: SessionRow, call: Extract<OfficeCall, { name: "office_preview_start" }>, signal: AbortSignal): Promise<Output> {
+    const { command, port, folder } = call.input;
+    const run = async (): Promise<Output> => {
+      const state = this.deps.devServers.start(session.id, { command, port: port ?? null, folder });
+      return { message: `Started ${command}. Its output shows in the side panel and the page opens when it is ready.`, running: state.running };
+    };
+    if (session.autonomy !== "ask-first") return run();
+    const mutation: Mutation = {
+      title: "Start a dev server", run,
+      fields: [],
+      preview: [
+        { label: "Command", text: command }, { label: "Folder", text: folder ?? session.cwd },
+        ...(port ? [{ label: "Port", text: String(port) }] : []),
+      ],
+    };
+    return this.confirm(session.id, call, mutation, signal);
   }
 
   private projects(session: SessionRow): Project[] {

@@ -43,6 +43,7 @@ import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
 import { RequestRouter } from "./modules/ask/router";
 import { ChatService } from "./modules/chat/service";
+import { DevServers, stopWithSession } from "./modules/chat/dev-servers";
 import { OfficeTools } from "./modules/chat/office-tools";
 import { RunService } from "./modules/runs/service";
 import { WorkflowResults } from "./modules/runs/workflow-results";
@@ -120,6 +121,7 @@ export interface AppContext {
   /** Agent conversations shown as chats (M6.5). */
   chat: ChatService;
   officeTools: OfficeTools;
+  devServers: DevServers;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
   /** Starting a brain, adding projects, the agent pointer (M9). */
@@ -713,8 +715,12 @@ export async function createContext(
   const agents = createAgents(base, notes, relayScript, tokens);
   const orch = createOrchestration(base, notes, agents);
   const { box, store, db, bus, notifier, ntfy } = base;
+  const devServers = new DevServers({
+    bus, cwdOf: (id) => agents.sessions.find(id)?.cwd,
+  });
+  stopWithSession(bus, devServers, (id) => Boolean(agents.sessions.find(id)?.archivedAt));
   const officeTools = new OfficeTools({
-    bus, store, settings: () => box.current, sessions: agents.sessions, explore: agents.explore,
+    devServers, bus, store, settings: () => box.current, sessions: agents.sessions, explore: agents.explore,
     recorder: agents.recorder, ops: notes.ops, scheduler: orch.scheduler, editor: orch.editor, tasks: orch.tasks,
     workflowResults: orch.workflowResults,
   });
@@ -878,6 +884,7 @@ export async function createContext(
     toolConfig,
     requestRouter,
     officeTools,
+    devServers,
     starterPack,
     globalRules,
     gitRuleHooks,
@@ -903,7 +910,7 @@ export async function createContext(
     ...lifecycle,
     start: async () => { await lifecycle.start(); refreshGlobal(); void updateStarter(); },
     sync: async () => { const result = await lifecycle.sync(); await updateStarter(); refreshGlobal(); return result; },
-    stop: async () => { claudeSignIn.cancel(); await lifecycle.stop(); },
+    stop: async () => { claudeSignIn.cancel(); devServers.stopAll(); await lifecycle.stop(); },
   };
 }
 
