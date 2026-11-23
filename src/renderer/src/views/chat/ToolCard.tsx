@@ -9,7 +9,7 @@ import {
   X,
 } from "lucide-react";
 import { useContext, useState, type ReactNode } from "react";
-import { runningLabel, toolSummary, type ChatItem } from "@shared/chat";
+import { toolLabel, toolSummary, type ChatItem } from "@shared/chat";
 import { Elapsed } from "./Activity";
 import { ChatAssets, ChatImageView, isArtifactPath, isImagePath, localAddress, toolPaths } from "./ChatAssets";
 
@@ -60,8 +60,8 @@ function Collapsible({
   return (
     <div>
       <button className="tool-head" onClick={() => setShown(!shown)} aria-expanded={shown}>
-        <ChevronRight size={13} className={shown ? "tool-chevron open" : "tool-chevron"} />
         {head}
+        <ChevronRight size={13} className={shown ? "tool-chevron open" : "tool-chevron"} />
       </button>
       {shown && <div className="tool-body">{children}</div>}
     </div>
@@ -86,14 +86,15 @@ export function ToolCard({ tool }: { tool: Tool }) {
   const thumbnails = images.length > 0 && <div className="flex flex-wrap gap-2 px-2 pb-2">
     {images.map((path) => <ChatImageView key={path} alt={path.split(/[\\/]/).at(-1) || "Image"} source={{ kind: "file", path }} />)}
   </div>;
-  const head = (icon: ReactNode, label: string): ReactNode => (
+  const label = toolLabel(tool, tool.status === "running");
+  const head = (icon: ReactNode): ReactNode => (
     <>
       {icon}
-      {tool.status === "running" && tool.startedAt !== undefined
-        ? <><span className="tool-summary" title={runningLabel(tool)}>{runningLabel(tool)}</span>, <Elapsed since={tool.startedAt} /></>
-        : <><span className="tool-name">{label}</span><span className="tool-summary">{summary}</span></>}
-      <span className="flex-1" />
-      <StatusIcon status={tool.status} />
+      <span className="tool-summary" title={label}>{label}</span>
+      <span className="tool-status">
+        {tool.status === "running" && tool.startedAt !== undefined && <Elapsed since={tool.startedAt} />}
+        <StatusIcon status={tool.status} />
+      </span>
     </>
   );
 
@@ -101,7 +102,7 @@ export function ToolCard({ tool }: { tool: Tool }) {
     return (
       <div className="tool-card" data-testid="tool-card" data-tool={tool.name}>
         <div className="tool-head static">
-          {head(tool.name === "Read" ? <FileText size={13} /> : <Search size={13} />, tool.name)}
+          {head(tool.name === "Read" ? <FileText size={13} /> : <Search size={13} />)}
         </div>
         {thumbnails}
         {links}
@@ -114,7 +115,7 @@ export function ToolCard({ tool }: { tool: Tool }) {
     const newText = text(tool.input["new_string"]) || text(tool.input["content"]);
     return (
       <div className="tool-card" data-testid="tool-card" data-tool={tool.name}>
-        <div className="tool-head static">{head(<Pencil size={13} />, tool.name)}</div>
+        <div className="tool-head static">{head(<Pencil size={13} />)}</div>
         {(oldText || newText) && <EditDiff oldText={oldText} newText={newText} />}
         {thumbnails}
         {links}
@@ -126,7 +127,7 @@ export function ToolCard({ tool }: { tool: Tool }) {
     const address = localAddress(tool.output);
     return (
       <div className="tool-card" data-testid="tool-card" data-tool={tool.name}>
-        <Collapsible head={head(<Terminal size={13} />, tool.name)}>
+        <Collapsible head={head(<Terminal size={13} />)}>
           <pre className="tool-output" data-testid="tool-output">
             {tool.output || (tool.status === "running" ? "Running..." : "(no output)")}
           </pre>
@@ -138,10 +139,9 @@ export function ToolCard({ tool }: { tool: Tool }) {
 
   return (
     <div className="tool-card" data-testid="tool-card" data-tool={tool.name}>
-      <Collapsible head={head(<Terminal size={13} />, tool.name)}>
-        <pre className="tool-output">{JSON.stringify(tool.input, null, 2)}</pre>
-        {tool.output && <pre className="tool-output">{tool.output}</pre>}
-      </Collapsible>
+      {tool.output || summary ? <Collapsible head={head(<Terminal size={13} />)}>
+        <pre className="tool-output">{tool.output || summary}</pre>
+      </Collapsible> : <div className="tool-head static">{head(<Terminal size={13} />)}</div>}
       {links}
     </div>
   );

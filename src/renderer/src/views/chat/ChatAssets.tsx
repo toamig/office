@@ -4,7 +4,7 @@ import { Markdown } from "../../components/Markdown";
 import { office } from "../../lib/ipc";
 import { Button, Dialog } from "../../ui";
 
-export const ChatAssets = createContext<{ id: string; openFile?: (path: string) => void; openPreview?: (url: string) => void } | null>(null);
+export const ChatAssets = createContext<{ id: string; openFile?: (path: string) => void; openPreview?: (url: string) => void; sampleImage?: string } | null>(null);
 export const isImagePath = (path: string) => /\.(?:avif|bmp|gif|ico|jpe?g|png|svg|webp)$/i.test(path);
 export const isLocalFile = (path: string) => !/^(?:#|\/\/)/.test(path) &&
   (!/^[a-z][a-z0-9+.-]*:/i.test(path) || /^(?:file:\/\/|[a-z]:[\\/])/i.test(path));
@@ -40,15 +40,17 @@ export function toolPaths(input: Record<string, unknown>): string[] {
 }
 
 export function ChatImageView({ source, alt, inline = false }: { source: ChatImageSource; alt: string; inline?: boolean }) {
-  const id = useContext(ChatAssets)?.id;
-  const [image, setImage] = useState<string>();
+  const assets = useContext(ChatAssets);
+  const id = assets?.id;
+  const sampleImage = assets?.sampleImage;
+  const [image, setImage] = useState(sampleImage);
   const [unavailable, setUnavailable] = useState(false);
   const [opened, setOpened] = useState(false);
   const path = source.kind === "file" ? source.path : undefined;
   const messageId = source.kind === "attachment" ? source.messageId : undefined;
   const index = source.kind === "attachment" ? source.index : undefined;
   useEffect(() => {
-    if (!id) return;
+    if (!id || sampleImage) return;
     let current = true;
     const request: ChatImageSource | undefined = path !== undefined ? { kind: "file", path } :
       messageId && index !== undefined ? { kind: "attachment", messageId, index } : undefined;
@@ -56,7 +58,7 @@ export function ChatImageView({ source, alt, inline = false }: { source: ChatIma
       if (current) { setImage(next); setUnavailable(false); }
     }, () => { if (current) setUnavailable(true); });
     return () => { current = false; };
-  }, [id, path, messageId, index]);
+  }, [id, sampleImage, path, messageId, index]);
   if (!id || unavailable) return <span className="ui-muted">{alt} (unavailable)</span>;
   if (!image) return <span className="ui-muted">Loading {alt.toLowerCase()}</span>;
   return <>

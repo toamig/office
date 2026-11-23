@@ -1,4 +1,5 @@
 import { useEffect, useState, type ReactNode } from "react";
+import { ChevronRight, ClipboardList, Layers } from "lucide-react";
 import { activityLabel, formatElapsed, runningLabel, toolGroup, type ChatItem, type TurnActivity } from "@shared/chat";
 
 type Tool = Extract<ChatItem, { kind: "tool" }>;
@@ -16,7 +17,7 @@ export function LivePlan({ steps }: { steps: TurnActivity["plan"] }) {
   if (!steps.length) return null;
   const done = steps.filter((step) => step.status === "completed").length;
   return <details className="tool-card" data-testid="live-plan">
-    <summary className="cursor-pointer px-2 py-1">Plan: {done} of {steps.length}</summary>
+    <summary className="tool-head cursor-pointer"><ClipboardList size={14} /><span className="tool-summary">Plan: {done} of {steps.length}</span><ChevronRight className="tool-chevron" size={13} /></summary>
     <ul className="todo-list max-h-40 overflow-auto">
       {steps.map((step, index) => {
         const status = step.status === "completed" ? "Done" : step.status === "in_progress" ? "Working" : "Not started";
@@ -54,9 +55,13 @@ export function ToolGroup({ tools, children }: { tools: Tool[]; children: ReactN
   ].filter(Boolean).join(", ").replace(/, Ran/g, ", ran");
   const latest = tools.findLast((tool) => tool.status === "running");
   return <details className="tool-card" data-testid="tool-group">
-    <summary className="cursor-pointer truncate px-2 py-1">
-      {label}
-      {latest && <span className="ui-muted"> · {runningLabel(latest)}{latest.startedAt !== undefined && <>, <Elapsed since={latest.startedAt} /></>}</span>}
+    <summary className="tool-head cursor-pointer">
+      <Layers size={14} />
+      <span className="tool-summary" title={latest ? `${label}, ${runningLabel(latest)}` : label}>
+        {label}{latest && `, ${runningLabel(latest)}`}
+      </span>
+      {latest?.startedAt !== undefined && <Elapsed since={latest.startedAt} />}
+      <ChevronRight className="tool-chevron" size={13} />
     </summary>
     <div className="tool-body">{children}</div>
   </details>;

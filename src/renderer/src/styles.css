@@ -488,8 +488,7 @@ button,
 }
 .chat-column {
   width: 100%;
-  /* The one place the reading measure sets the width: the hint and the composer share one column. */
-  max-width: calc(var(--measure, 72ch) + 36px);
+  max-width: 760px;
   margin: 0 auto;
   padding: 0 18px;
   box-sizing: border-box;
@@ -561,6 +560,9 @@ button,
 .assistant .markdown > :first-child {
   margin-top: 0;
 }
+.assistant .markdown > :is(p, ul, ol, blockquote) {
+  max-width: var(--measure, 72ch);
+}
 .caret {
   display: inline-block;
   width: 7px;
@@ -591,7 +593,8 @@ button,
   overflow: hidden;
 }
 .tool-head {
-  display: flex;
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto;
   width: 100%;
   align-items: center;
   gap: 7px;
@@ -601,25 +604,33 @@ button,
   color: var(--muted);
   text-align: left;
 }
+.tool-head > svg:first-child { justify-self: center; }
+.tool-head::-webkit-details-marker { display: none; }
+.tool-head::marker { content: ""; }
+.tool-status { display: inline-flex; align-items: center; gap: 6px; }
+.chat-card-row {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr);
+  gap: 7px;
+  padding: 4px 8px;
+}
+.chat-card-row > span { display: flex; justify-content: center; padding-top: 8px; color: var(--muted); }
 .tool-head.static {
   cursor: default;
-}
-.tool-name {
-  color: var(--text);
-  font-weight: 600;
 }
 .tool-summary {
   min-width: 0;
   overflow: hidden;
-  font-family: var(--font-mono);
-  font-size: var(--text-xs);
+  color: var(--text);
+  font-size: var(--text-sm);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 .tool-chevron {
   transition: transform var(--ease);
 }
-.tool-chevron.open {
+.tool-chevron.open,
+.tool-card[open] > summary > .tool-chevron {
   transform: rotate(90deg);
 }
 .tool-body {

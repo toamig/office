@@ -1,6 +1,7 @@
 import { Plus, RefreshCw, Settings } from "lucide-react";
 import { useState, type ReactNode } from "react";
 import { STATUS } from "@shared/tone";
+import { GalleryChat } from "./chat/GalleryChat";
 import {
   Banner,
   Button,
@@ -231,6 +232,8 @@ export function Gallery() {
           </Card>
         </div>
       </Section>
+
+      <Section title="Chat"><GalleryChat /></Section>
 
       <Section title="Surfaces">
         <div className="w-[420px]">

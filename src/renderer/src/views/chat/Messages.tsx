@@ -1,5 +1,5 @@
-import { ChevronRight } from "lucide-react";
-import { useState } from "react";
+import { Bot, ChevronRight, CircleHelp, ClipboardList, Lightbulb, TriangleAlert } from "lucide-react";
+import { useState, type ReactNode } from "react";
 import { formatDuration, type ChatItem } from "@shared/chat";
 import { chatFailure } from "@shared/chat-failure";
 import { ChatImageView, ChatMarkdown as Markdown } from "./ChatAssets";
@@ -13,12 +13,16 @@ function Thinking({ text }: { text: string }) {
   return (
     <div className="thinking" data-testid="thinking">
       <button className="tool-head" onClick={() => setShown(!shown)} aria-expanded={shown}>
+        <Lightbulb size={14} /><span className="tool-summary">Thinking</span>
         <ChevronRight size={13} className={shown ? "tool-chevron open" : "tool-chevron"} />
-        <span className="tool-name">Thinking</span>
       </button>
       {shown && <div className="thinking-text text-selectable">{text}</div>}
     </div>
   );
+}
+
+function CardRow({ icon, children }: { icon: ReactNode; children: ReactNode }) {
+  return <div className="chat-card-row"><span aria-hidden>{icon}</span><div className="min-w-0">{children}</div></div>;
 }
 
 /** One thing in the conversation: a bubble, an answer, a tool card, a quiet error, a turn footer. */
@@ -50,14 +54,17 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit, onRewind }
     case "tool":
       return <ToolCard tool={item} />;
     case "plan":
-      return <div className="turn-footer">Updated the plan</div>;
+      return <div className="tool-head static"><ClipboardList size={14} /><span className="tool-summary">Updated the plan</span></div>;
     case "interaction":
-      return <InteractionCard requestId={item.requestId} interaction={item.interaction} pending={item.pending} answer={item.answer} />;
+      return <CardRow icon={item.interaction.kind === "plan" ? <ClipboardList size={14} /> : <CircleHelp size={14} />}>
+        <InteractionCard requestId={item.requestId} interaction={item.interaction} pending={item.pending} answer={item.answer} />
+      </CardRow>;
     case "subagent":
       return (
         <div className="tool-card" data-testid="subagent-card">
-          <div className="tool-head">
-            <span className="tool-name">{item.task}</span>
+          <div className="tool-head static">
+            <Bot size={14} />
+            <span className="tool-summary" title={item.task}>{item.task}</span>
             <span className="ui-muted">{item.status === "working" ? "Working" : item.status === "done" ? "Done" : "Failed"}</span>
           </div>
           {item.progress && item.status === "working" && <p className="ui-muted px-3">{item.progress}</p>}
@@ -67,14 +74,14 @@ export function ChatMessage({ item, tool, working, onRecover, onEdit, onRewind }
     case "error": {
       const failure = chatFailure(item.message, tool);
       return (
-        <div className="ui-ask text-selectable" data-testid="chat-error" role="status">
+        <CardRow icon={<TriangleAlert size={14} />}><div className="ui-ask text-selectable" data-testid="chat-error" role="status">
           <p>{failure.text}</p>
           {failure.kind === "unknown" && failure.details && <details>
             <summary className="cursor-pointer ui-muted">Details</summary>
             <pre className="whitespace-pre-wrap break-words">{failure.details}</pre>
           </details>}
           {onRecover && <div><Button size="sm" disabled={working} onClick={() => onRecover(failure.kind)}>{failure.action}</Button></div>}
-        </div>
+        </div></CardRow>
       );
     }
     case "turn":

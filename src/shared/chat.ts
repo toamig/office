@@ -79,12 +79,24 @@ export function toolGroup(name: string): "read" | "search" | "command" | undefin
   return undefined;
 }
 
-export function runningLabel(tool: { name: string; input: Record<string, unknown> }): string {
-  const summary = toolSummary(tool.input).slice(0, 140);
+export function toolLabel(tool: { name: string; input: Record<string, unknown> }, running = false): string {
+  const detail = toolSummary(tool.input);
   const group = toolGroup(tool.name);
-  const verb = group === "read" ? "Reading" : group === "search" ? "Searching" : "Running";
-  return `${verb} ${summary || tool.name}`;
+  if (group === "read") return detail ? `${running ? "Reading" : "Read"} ${detail}` : "Read a file";
+  if (group === "search") return detail ? `${running ? "Searching for" : "Searched for"} ${detail}` : "Searched";
+  if (group === "command") {
+    const description = typeof tool.input["description"] === "string" ? tool.input["description"].trim() : "";
+    return `${running ? "Running" : "Ran"} ${description || detail || "a command"}`;
+  }
+  if (["Edit", "MultiEdit", "Write", "NotebookEdit", "apply_patch"].includes(tool.name)) {
+    const verb = tool.name === "Write" ? (running ? "Writing" : "Wrote") : (running ? "Editing" : "Edited");
+    return `${verb} ${detail || "a file"}`;
+  }
+  const name = tool.name === "mcp_tool_call" && typeof tool.input["tool"] === "string" ? tool.input["tool"] : tool.name;
+  return [name, detail].filter(Boolean).join(" ");
 }
+
+export const runningLabel = (tool: Parameters<typeof toolLabel>[0]): string => toolLabel(tool, true).slice(0, 140);
 
 export function trackActivity(state: TurnActivity, event: ChatEvent, at?: number): TurnActivity {
   switch (event.t) {
@@ -331,8 +343,9 @@ export function toolSummary(input: Record<string, unknown>): string {
   const text = (key: string): string =>
     typeof input[key] === "string" ? (input[key] as string) : "";
   const first =
-    text("command") || text("file_path") || text("path") || text("pattern") || text("url");
-  if (first) return first.replace(/\s+/g, " ").trim();
-  const keys = Object.keys(input);
-  return keys.length === 0 ? "" : JSON.stringify(input).slice(0, 140);
+    text("command") || text("file_path") || text("path") || text("pattern") || text("query") || text("url");
+  const args = input["arguments"];
+  const values = args && typeof args === "object" ? Object.values(args) : Object.values(input);
+  const fallback = values.find((value): value is string => typeof value === "string" && value.trim() !== "");
+  return (first || fallback || "").replace(/\s+/g, " ").trim();
 }

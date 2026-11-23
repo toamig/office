@@ -4,6 +4,7 @@ import type { Bus } from "../../core/bus";
 import type { Db } from "../../core/db";
 import type { Notifier } from "../../core/notifier";
 import { nowIso } from "../../core/util";
+import { toolSummary } from "../../../shared/chat";
 
 /** What the permission tool answers Claude Code with (plan 9.5). */
 export type PermissionDecision =
@@ -40,14 +41,10 @@ export function interactionFor(tool: string, input: Record<string, unknown>, pla
   if (parsed.success) return parsed.data;
 }
 
-/** A tool's input as one line: the command for Bash, the path for file tools, else the JSON. */
+/** A tool's input as one line: the command for Bash, the path for file tools, else the first text argument. */
 export function summariseToolInput(toolName: string, input: Record<string, unknown>): string {
-  const pick = (key: string): string | null =>
-    typeof input[key] === "string" ? (input[key] as string) : null;
-  const text =
-    pick("command") ?? pick("file_path") ?? pick("path") ?? pick("url") ?? JSON.stringify(input);
-  const flat = text.replace(/\s+/g, " ").trim();
-  const line = toolName === "Bash" ? flat : `${toolName}: ${flat}`;
+  const flat = toolSummary(input);
+  const line = !flat ? toolName : toolName === "Bash" ? flat : `${toolName}: ${flat}`;
   return line.length > 140 ? `${line.slice(0, 137)}...` : line;
 }
 
