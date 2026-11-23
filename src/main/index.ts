@@ -278,9 +278,12 @@ async function boot(): Promise<void> {
     onChange: (status) => context.bus.emit("app.update", status),
   });
   registerShellHandlers(context, createElectronPlatform(context, preview, updates));
-  ipcMain.handle(IPC_INVOKE, (_event, channel: unknown, payload: unknown) =>
-    context.ipc.dispatch(channel, payload),
-  );
+  ipcMain.handle(IPC_INVOKE, (event, channel: unknown, payload: unknown) => {
+    if (event.sender.id !== mainWindow?.webContents.id || event.senderFrame?.routingId !== event.sender.mainFrame.routingId) {
+      return { ok: false, error: { code: "untrusted-frame", message: "This view cannot call Office." } };
+    }
+    return context.ipc.dispatch(channel, payload);
+  });
   context.bus.on("*", (event) => {
     for (const win of BrowserWindow.getAllWindows()) win.webContents.send(IPC_EVENT, event);
   });

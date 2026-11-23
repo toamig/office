@@ -19,9 +19,12 @@ export function localAddress(value: string): string | undefined {
   return /^https?:\/\//i.test(raw) ? raw : `http://${raw}`;
 }
 
-function fileLink(value: string): string {
+function fileLink(value: string, relativeTo?: string): string {
   if (/^file:/i.test(value)) return value;
-  try { return decodeURIComponent(value); } catch { return value; }
+  let path = value;
+  try { path = decodeURIComponent(value); } catch { /* Keep a literal percent in a file name. */ }
+  if (!relativeTo || /^(?:[\\/]|[a-z]:)/i.test(path)) return path;
+  return relativeTo.slice(0, Math.max(relativeTo.lastIndexOf("/"), relativeTo.lastIndexOf("\\")) + 1) + path;
 }
 
 function isLoopbackLink(value: string): boolean {
@@ -71,19 +74,19 @@ export function ChatImageView({ source, alt, inline = false }: { source: ChatIma
   </>;
 }
 
-export function ChatMarkdown({ children }: { children: string }) {
+export function ChatMarkdown({ children, relativeTo }: { children: string; relativeTo?: string }) {
   const assets = useContext(ChatAssets);
   return <Markdown localLinks components={{
-    img: ({ src, alt }) => src && isLocalFile(src) ? <ChatImageView key={src} source={{ kind: "file", path: fileLink(src) }} alt={alt || "Image"} inline /> : <span>{alt}</span>,
+    img: ({ src, alt }) => src && isLocalFile(src) ? <ChatImageView key={src} source={{ kind: "file", path: fileLink(src, relativeTo) }} alt={alt || "Image"} inline /> : <span>{alt}</span>,
     a: ({ node: _node, href, children: label, ...props }) => {
       if (href && isLoopbackLink(href) && assets?.openPreview) return <button type="button" className="chat-link" onClick={() => assets.openPreview?.(href)}>{label}</button>;
-      if (href && isFileReference(href) && assets?.openFile) return <button type="button" className="chat-link" onClick={() => assets.openFile?.(fileLink(href))}>{label}</button>;
+      if (href && isFileReference(href) && assets?.openFile) return <button type="button" className="chat-link" onClick={() => assets.openFile?.(fileLink(href, relativeTo))}>{label}</button>;
       return <a {...props} href={href} target="_blank" rel="noreferrer">{label}</a>;
     },
     code: ({ node: _node, children: code, ...props }) => {
       if (typeof code === "string" && !props.className && !code.includes("\n")) {
         if (isLoopbackLink(code) && assets?.openPreview) return <button type="button" className="chat-link" onClick={() => assets.openPreview?.(code)}><code>{code}</code></button>;
-        if (isFileReference(code) && assets?.openFile) return <button type="button" className="chat-link" onClick={() => assets.openFile?.(code)}><code>{code}</code></button>;
+        if (isFileReference(code) && assets?.openFile) return <button type="button" className="chat-link" onClick={() => assets.openFile?.(fileLink(code, relativeTo))}><code>{code}</code></button>;
       }
       return <code {...props}>{code}</code>;
     },

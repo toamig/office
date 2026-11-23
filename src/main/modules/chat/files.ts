@@ -50,7 +50,9 @@ export function insideFolder(folder: string, path: string): boolean {
 export async function scopedFile(scope: FileScope, path: string): Promise<string> {
   const refused = () => new IpcFailure("file-scope", "This file is outside the folders available to this chat.");
   try {
-    const raw = /^file:/i.test(path) ? fileURLToPath(path) : path;
+    const fileUrl = /^file:/i.test(path);
+    if (fileUrl && decodeURIComponent(path).split(/[\\/]/).includes("..")) throw refused();
+    const raw = fileUrl ? fileURLToPath(path) : path;
     if (!raw || raw.includes("\0") || raw.split(/[\\/]/).some((part) => part === ".." || part.toLowerCase() === ".git") ||
       (process.platform === "win32" && raw.replace(/^[a-z]:[\\/]/i, "").includes(":"))) throw refused();
     const lexical = resolve(scope.cwd, raw);

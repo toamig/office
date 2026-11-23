@@ -17,6 +17,7 @@ const PrRow = z.object({
   url: z.string(),
 });
 const RunRow = z.object({
+  workflowDatabaseId: z.number().int().optional(),
   name: z.string().optional().default(""),
   status: z.string(),
   conclusion: z.string().nullable().optional(),
@@ -49,7 +50,7 @@ export function isGithubOrigin(url: string | null): boolean {
 }
 
 export const PR_FIELDS = "number,title,state,headRefName,reviewDecision,url";
-export const RUN_FIELDS = "status,conclusion,name,headBranch,url";
+export const RUN_FIELDS = "status,conclusion,name,headBranch,url,workflowDatabaseId";
 
 /** Open PRs and the last CI runs of a repo, through `gh`. Failures come back as an error text. */
 export async function fetchOverview(
@@ -71,6 +72,27 @@ export async function fetchOverview(
     runs: runs.code === 0 ? parseRuns(runs.stdout) : [],
     ...(failed ? { error: (failed.stderr.trim().split("\n")[0] ?? "") || "gh failed" } : {}),
   };
+}
+
+/** CI alerts are useful only for workflows that the repository can still run. */
+async function relevantRuns(repoPath: string, runs: RunInfo[]): Promise<RunInfo[]> {
+  if (!runs.some((entry) => entry.conclusion === "failure")) return runs;
+  const api = (path: string, flags: string[]) => run("gh", ["api", `repos/{owner}/{repo}/${path}`, ...flags], {
+    cwd: repoPath, timeoutMs: 30_000,
+  });
+  const [permissions, workflows, files] = await Promise.all([
+    api("actions/permissions", ["--jq", ".enabled"]),
+    api("actions/workflows?per_page=100", ["--paginate", "--jq", '.workflows[] | select(.state == "active") | [.id, .path] | @tsv']),
+    api("contents/.github/workflows", ["--jq", '.[] | select(.type == "file") | .path']),
+  ]);
+  if (permissions.code === 0 && permissions.stdout.trim() === "false") return [];
+  if (workflows.code !== 0 || files.code !== 0) return [];
+  const present = new Set(files.stdout.split(/\r?\n/).filter(Boolean));
+  const active = new Set(workflows.stdout.split(/\r?\n/).flatMap((line) => {
+    const [id, path] = line.split("\t");
+    return path && id && present.has(path) ? [Number(id)] : [];
+  }));
+  return runs.filter((entry) => entry.workflowDatabaseId !== undefined && active.has(entry.workflowDatabaseId));
 }
 
 /** Polls GitHub for the projects that live there, and raises ci.failed and pr.review-requested. */
@@ -108,10 +130,13 @@ export class GithubService {
         if (this.live.delete(p.id)) this.onChange?.();
         return;
       }
-      this.notifyFailures(p.id, p.name, info.runs);
-      const reviews = await this.notifyReviewRequests(p.id, p.name);
+      const [runs, reviews] = await Promise.all([
+        relevantRuns(this.deps.projects.absPath(p), info.runs),
+        this.notifyReviewRequests(p.id, p.name),
+      ]);
+      this.notifyFailures(p.id, p.name, runs);
       // The newest finished run decides: red while it failed, gone once a later run passed.
-      const latest = info.runs.find((r) => r.status === "completed") ?? null;
+      const latest = runs.find((r) => r.status === "completed") ?? null;
       this.live.set(p.id, { ci: latest?.conclusion === "failure" ? latest : null, reviews });
       this.onChange?.();
     });

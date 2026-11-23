@@ -72,7 +72,7 @@ function FileTab({ id, path }: { id: string; path: string }) {
     {!result && !error && <p className="ui-muted p-3" role="status">Loading file…</p>}
     {(kind === "html" || kind === "pdf") && <NativeFile id={id} path={path} revision={revision} />}
     {kind === "image" && <div className="overflow-auto p-3"><ChatImageView key={revision} alt={result!.name} source={{ kind: "file", path }} inline /></div>}
-    {kind === "markdown" && <div className="overflow-auto p-3"><ChatMarkdown>{result?.text ?? ""}</ChatMarkdown></div>}
+    {kind === "markdown" && <div className="overflow-auto p-3"><ChatMarkdown relativeTo={path}>{result?.text ?? ""}</ChatMarkdown></div>}
     {kind === "text" && <div className="min-h-0 flex-1 overflow-auto"><Code text={result?.text ?? ""} /></div>}
     {kind === "binary" && <EmptyState title="No inline preview for this file" />}
   </>;

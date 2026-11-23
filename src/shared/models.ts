@@ -997,6 +997,7 @@ export const PrInfo = z.object({
 export type PrInfo = z.infer<typeof PrInfo>;
 
 export const RunInfo = z.object({
+  workflowDatabaseId: z.number().int().optional(),
   name: z.string(),
   status: z.string(),
   conclusion: z.string().nullable(),

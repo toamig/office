@@ -52,7 +52,9 @@ export function PreviewTab({ projectId, owner, initialUrl, transient = false }: 
   }, [owner, projectId, storeKey, transient]);
   useEffect(() => {
     const target = initialUrl ?? (owner && !transient ? localStorage.getItem(storeKey) : undefined);
-    if (target) void go(target);
+    if (!target) return;
+    const timer = window.setTimeout(() => void go(target), 0);
+    return () => window.clearTimeout(timer);
   }, [initialUrl, owner, storeKey, transient, go]);
   const act = (action: "back" | "forward" | "reload" | "external"): void => {
     void office.invoke("preview.act", { action, owner }).then(setState);
