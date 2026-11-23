@@ -44,16 +44,31 @@ export function requestInput(request: CloudRequest): Record<string, unknown> {
   }
 }
 
-/** The arguments of one headless run that makes the given calls, in order. */
+/** The whole system prompt of the headless run, instead of Claude Code's own. */
+const SYSTEM_PROMPT = "You call the RemoteTrigger tool exactly as asked.";
+
+/**
+ * The arguments of one headless run that makes the given calls, all in one turn. The run is kept lean, since every
+ * refresh pays for its context (measured 2026-11-23 with claude 2.1.280: list, list_runs and get_run_log together
+ * cost about 0.012 USD this way, against 0.083 USD with the owner's full setup):
+ * - only the RemoteTrigger tool, so it is loaded at once instead of through a tool search;
+ * - no MCP servers, skills, user or local settings (so no CLAUDE.md, rules or hooks), and a one-line system prompt;
+ * - one turn: the calls are made as parallel tool calls and the run stops before the model reads the replies, which
+ *   Office takes from the stream. It ends with error_max_turns, which is expected.
+ * Not --bare: it never reads the claude.ai sign-in that routines need.
+ */
 export function remoteTriggerArgs(requests: CloudRequest[], model: string): string[] {
   const lines = requests.map((request, index) => `${index + 1}. ${JSON.stringify(requestInput(request))}`);
   const prompt = [
-    "Call the RemoteTrigger tool once for each numbered request below, in order, with exactly that input.",
-    "Do not change the input, do not call any other tool, and do not explain the results. Finish with the word done.",
+    requests.length === 1
+      ? "Call the RemoteTrigger tool once with exactly the input below."
+      : "Call the RemoteTrigger tool once for each numbered request below, all in one message as parallel tool calls, each with exactly that input.",
+    "Do not change the input and do not call any other tool.",
     ...lines,
   ].join(" ");
-  return ["-p", prompt, "--allowedTools", "RemoteTrigger", "--model", model, "--no-session-persistence",
-    "--output-format", "stream-json", "--verbose"];
+  return ["-p", prompt, "--tools", "RemoteTrigger", "--allowedTools", "RemoteTrigger", "--model", model,
+    "--no-session-persistence", "--strict-mcp-config", "--disable-slash-commands", "--setting-sources", "project",
+    "--system-prompt", SYSTEM_PROMPT, "--max-turns", "1", "--output-format", "stream-json", "--verbose"];
 }
 
 export interface CloudReply {

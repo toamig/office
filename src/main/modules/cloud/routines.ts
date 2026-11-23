@@ -30,8 +30,16 @@ export function repoKey(url: string): string | null {
   return match ? `${match[1]}/${match[2]}`.toLowerCase() : null;
 }
 
-const EVERY = 30 * 60_000;
+/**
+ * Each read is a model call that counts against the owner's plan, so Office reads only when something can have
+ * changed: at start, ten minutes after a routine was due, every fifteen minutes while a run is still going, on
+ * Refresh, and every six hours in case a routine was added or changed in Claude.
+ */
+const EVERY = 6 * 60 * 60_000;
 const AFTER_NEXT = 10 * 60_000;
+const WHILE_RUNNING = 15 * 60_000;
+/** A run still going after this long is left to the six-hour read. */
+const RUNNING_FOR_AT_MOST = 6 * 60 * 60_000;
 const MAX_TIMER = 2_000_000_000;
 
 const succeeded = (status: string | null): boolean => status !== null && /SUCCEEDED/i.test(status);
@@ -134,14 +142,26 @@ export class CloudRoutines {
     }).catch(() => undefined);
   }
 
-  /** Reads again ten minutes after the earliest next run, so a run that just happened shows up. */
+  /** When the next read is due: ten minutes after the earliest next run, or soon while a run is still going. */
+  nextReadIn(): number | null {
+    const now = this.now().getTime();
+    const waits = this.routines.filter((routine) => routine.enabled && routine.endedReason === null && routine.nextRunAt)
+      .map((routine) => Date.parse(routine.nextRunAt ?? "")).filter((time) => Number.isFinite(time) && time + AFTER_NEXT > now)
+      .map((time) => time + AFTER_NEXT - now);
+    const going = this.routines.some((routine) => {
+      const fired = Date.parse(routine.lastRun?.firedAt ?? "");
+      return routine.lastRun !== null && routine.lastRun.finishedAt === null && !failed(routine.lastRun.status)
+        && Number.isFinite(fired) && now - fired < RUNNING_FOR_AT_MOST;
+    });
+    if (going) waits.push(WHILE_RUNNING);
+    return waits.length === 0 ? null : Math.min(...waits);
+  }
+
   private arm(): void {
     clearTimeout(this.after);
-    const now = this.now().getTime();
-    const times = this.routines.filter((routine) => routine.enabled && routine.endedReason === null && routine.nextRunAt)
-      .map((routine) => Date.parse(routine.nextRunAt ?? "")).filter((time) => Number.isFinite(time) && time + AFTER_NEXT > now);
-    if (times.length === 0) return;
-    const wait = Math.min(MAX_TIMER, Math.min(...times) + AFTER_NEXT - now);
+    const next = this.nextReadIn();
+    if (next === null) return;
+    const wait = Math.min(MAX_TIMER, next);
     this.after = setTimeout(() => void this.refresh(), Math.max(wait, 1000));
     this.after.unref?.();
   }

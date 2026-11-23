@@ -511,8 +511,13 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
   };
   const cloud: CloudRoutines = new CloudRoutines({
     claude: async (args) => {
+      // The program's own claude.ai sign-in first: it reaches routines (checked 2026-11-23). A long-lived token
+      // made for inference may not, so it is only the fallback when the sign-in gave no reply.
+      const first = await run("claude", args, { cwd: dataDir(), timeoutMs: 180_000 });
       let env: Record<string, string> = {};
-      try { env = claudeCode.auth.env(); } catch { /* the program uses its own sign-in */ }
+      try { env = claudeCode.auth.env(); } catch { /* no stored token */ }
+      if (/"(?:content|text)":"HTTP \d{3}/.test(first.stdout) || Object.keys(env).length === 0)
+        return { code: first.code, stdout: first.stdout, stderr: first.stderr };
       const result = await run("claude", args, { cwd: dataDir(), env, timeoutMs: 180_000 });
       return { code: result.code, stdout: result.stdout, stderr: result.stderr };
     },

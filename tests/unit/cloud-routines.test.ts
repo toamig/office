@@ -137,28 +137,54 @@ describe("cloud routines read through claude", () => {
     expect(seen().filter((entry) => entry["args"])).toHaveLength(2);
   });
 
-  it("refreshes every 30 minutes and ten minutes after a routine's next run", async () => {
+  const listing = (routine: Record<string, unknown>) => async (args: string[], calls: string[][]) => {
+    calls.push(args);
+    const stdout = [
+      { type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "RemoteTrigger", input: { action: "list" } }] } },
+      { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: `HTTP 200\n${JSON.stringify({ data: [routine] })}` }] } },
+    ].map((event) => JSON.stringify(event)).join("\n");
+    return { code: 1, stdout, stderr: "" };
+  };
+
+  it("reads only at start, ten minutes after a routine was due, and every six hours, since each read uses the plan", async () => {
     vi.useFakeTimers({ toFake: ["setInterval", "setTimeout", "clearInterval", "clearTimeout", "Date"] });
     try {
       vi.setSystemTime(new Date("2030-01-02T07:00:00Z"));
       const calls: string[][] = [];
-      const exec = async (args: string[]) => {
-        calls.push(args);
-        const stdout = [
-          { type: "assistant", message: { content: [{ type: "tool_use", id: "t1", name: "RemoteTrigger", input: { action: "list" } }] } },
-          { type: "user", message: { content: [{ type: "tool_result", tool_use_id: "t1", content: `HTTP 200\n${JSON.stringify({ data: [{ ...routineA, last_run: null, next_run_at: "2030-01-02T07:30:00Z" }] })}` }] } },
-        ].map((event) => JSON.stringify(event)).join("\n");
-        return { code: 0, stdout, stderr: "" };
-      };
-      const cloud = new CloudRoutines({ claude: exec, available: () => true, model: () => "haiku", changed: () => undefined });
+      const reply = listing({ ...routineA, last_run: null, next_run_at: "2030-01-02T07:30:00Z" });
+      const cloud = new CloudRoutines({ claude: (args) => reply(args, calls), available: () => true, model: () => "haiku", changed: () => undefined });
       cloud.start();
       await vi.advanceTimersByTimeAsync(10);
       expect(calls).toHaveLength(1);
-      // Ten minutes after 07:30 is 07:40: the 30 minute tick (07:30) comes first, then the one after the next run.
+      // Nothing at 07:30: the run is only looked for ten minutes after it was due.
       await vi.advanceTimersByTimeAsync(30 * 60_000);
-      expect(calls).toHaveLength(2);
+      expect(calls).toHaveLength(1);
       await vi.advanceTimersByTimeAsync(10 * 60_000 + 1000);
-      expect(calls.length).toBeGreaterThanOrEqual(3);
+      expect(calls).toHaveLength(2);
+      // Nothing more is due, so the next read is the six-hour one.
+      await vi.advanceTimersByTimeAsync(5 * 60 * 60_000);
+      expect(calls).toHaveLength(2);
+      await vi.advanceTimersByTimeAsync(60 * 60_000);
+      expect(calls).toHaveLength(3);
+      cloud.stop();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("reads every fifteen minutes while a run is still going, and the one-turn exit still counts as a reply", async () => {
+    vi.useFakeTimers({ toFake: ["setInterval", "setTimeout", "clearInterval", "clearTimeout", "Date"] });
+    try {
+      vi.setSystemTime(new Date("2030-01-02T07:00:00Z"));
+      const calls: string[][] = [];
+      const reply = listing({ ...routineA, next_run_at: "2030-01-03T07:00:00Z", last_run: { session_id: "cse_run1", status: "ROUTINE_RUN_STATUS_UNSPECIFIED", fired_at: "2030-01-02T06:55:00Z", finished_at: null } });
+      const cloud = new CloudRoutines({ claude: (args) => reply(args, calls), available: () => true, model: () => "haiku", changed: () => undefined });
+      cloud.start();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(cloud.state().status).toBe("ok");
+      const first = calls.length;
+      await vi.advanceTimersByTimeAsync(15 * 60_000 + 1000);
+      expect(calls.length).toBeGreaterThan(first);
       cloud.stop();
     } finally {
       vi.useRealTimers();
@@ -252,6 +278,13 @@ describe("what Office may ask Claude for", () => {
     expect(() => requestInput({ action: "update", triggerId: "trig_a", enabled: "no" as never })).toThrow();
     const args = remoteTriggerArgs([{ action: "list" }], "haiku");
     expect(args[1]).not.toContain("\n");
+    // Lean and one turn: only this tool, no MCP servers, skills or user settings, and not --bare (it drops the sign-in).
+    const flag = (name: string) => args[args.indexOf(name) + 1];
+    expect(flag("--tools")).toBe("RemoteTrigger");
+    expect(flag("--max-turns")).toBe("1");
+    expect(flag("--setting-sources")).toBe("project");
+    expect(args).toEqual(expect.arrayContaining(["--strict-mcp-config", "--disable-slash-commands", "--system-prompt"]));
+    expect(args).not.toContain("--bare");
   });
 
   it("reads no credentials file", () => {
