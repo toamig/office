@@ -30,7 +30,7 @@ describe("the exact flags of a Chat", () => {
       "--session-id",
       "chat-1",
       "--tools",
-      "Read,Grep,Glob,WebSearch,WebFetch,Agent",
+      "Read,Grep,Glob,WebSearch,WebFetch,Agent,AskUserQuestion,ExitPlanMode",
       "--allowedTools",
       "Read,Grep,Glob,WebSearch,WebFetch,Agent",
       "--permission-mode",

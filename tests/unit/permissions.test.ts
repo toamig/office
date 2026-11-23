@@ -218,7 +218,7 @@ describe("summaries", () => {
     expect(summariseToolInput("Write", { file_path: "/a/b.txt", content: "x" })).toBe(
       "Write: /a/b.txt",
     );
-    expect(summariseToolInput("Other", { a: 1 })).toBe('Other: {"a":1}');
+    expect(summariseToolInput("Other", { a: 1 })).toBe("Other");
     expect(summariseToolInput("Bash", { command: "x".repeat(300) }).length).toBe(140);
   });
 });

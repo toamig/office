@@ -124,7 +124,9 @@ describe("a new brain", () => {
     const loaded = loadWorkspaceFile(join(dir, "Office", "workspace.json"));
     expect(loaded.ok && loaded.workspace.projects).toEqual([]);
     expect(loaded.ok && loaded.workspace.vault.kind).toBe("folder");
-    expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Waiting on you");
+    // Since M16.2 the root AGENTS.md only points at the shipped rules; the rules themselves carry the convention.
+    expect(readFileSync(join(dir, "AGENTS.md"), "utf8")).toContain("Rules/AGENTS.md");
+    expect(readFileSync(join(dir, "Rules", "Authoring.md"), "utf8")).toContain("Waiting on you");
     expect(validateFolderBrain(dir, []).ok).toBe(true);
   });
 
