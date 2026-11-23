@@ -1,3 +1,4 @@
+import { FolderOpen } from "lucide-react";
 import { useState } from "react";
 import type { AppSettingsPatch } from "@shared/models";
 import { Button, Card, SegmentedControl as Segmented, notifyDone, notifyError } from "../../ui";
@@ -170,6 +171,21 @@ export function PreferencesPanel() {
               aria-label="Art vault folder"
               data-testid="art-vault"
             />
+            <Button
+              onClick={() =>
+                void office.invoke("setup.pickFolder", { title: "Choose the Art vault folder" }).then((folder) => {
+                  if (!folder) return;
+                  // A folder picked with Browse is saved at once, like every other path field.
+                  void set({ artVaultRoot: folder }).then(() => {
+                    setArtRoot(null);
+                    notifyDone("Saved", undefined, "preferences");
+                  });
+                })
+              }
+              data-testid="art-vault-browse"
+            >
+              <FolderOpen size={14} /> Browse
+            </Button>
             <Button
               onClick={() =>
                 void set({ artVaultRoot: (artRoot ?? s.artVaultRoot).trim() }).then(() => {
