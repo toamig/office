@@ -9,6 +9,7 @@ import { office } from "../lib/ipc";
 import { Banner, Button, Card, Dialog, EmptyState, OverflowMenu, Page, Time, notifyError } from "../ui";
 import { WorkflowForm } from "./workflows/WorkflowForm";
 import { ClaudeTasks } from "./workflows/ClaudeTasks";
+import { CloudRoutines } from "./workflows/CloudRoutines";
 
 const runLabels = { running: "Running", done: "Completed", failed: "Failed", cancelled: "Stopped" };
 
@@ -76,6 +77,7 @@ export function Workflows() {
       {runs.length > 0 && <Card title="Background runs"><BackgroundRuns runs={runs} /></Card>}
       {list.data?.length === 0 && <EmptyState title="No workflows yet" />}
       <ClaudeTasks onMoved={() => list.reload()} />
+      <CloudRoutines />
       {list.data?.map((workflow) => {
         const running = workflow.lastRun?.status === "running";
         const working = busy.includes(workflow.id);

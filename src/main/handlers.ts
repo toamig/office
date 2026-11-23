@@ -598,6 +598,8 @@ function registerConfigHandlers(ctx: AppContext): void {
     await ctx.editor.saveWorkflow(workflow, { absent: true });
     return { workflowId: workflow.id };
   });
+  ctx.ipc.handle("cloud.state", () => ctx.cloud.state());
+  ctx.ipc.handle("cloud.refresh", () => ctx.cloud.refresh());
   ctx.ipc.handle("workflows.results", () => ctx.workflowResults.list());
   ctx.ipc.handle("workflows.discuss", (req) => ctx.workflowResults.discuss(req.id));
   ctx.ipc.handle("workflows.later", (req) => ctx.workflowResults.later(req.id));

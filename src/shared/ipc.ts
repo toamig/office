@@ -4,6 +4,7 @@ import { OfficeConfirmation } from "./office-tools";
 import { SessionRecap } from "./recap";
 import { LimitWindow, UsageTotals, UsageView } from "./usage";
 import { InstalledPlugin, ToolEdit, ToolEditPreview, ToolEntry, ToolTest, ToolTestResult } from "./tool-config";
+import { CloudState } from "./cloud";
 import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
 import { PermissionProfile, Pipeline, Role, Stage } from "./schemas";
 import {
@@ -113,6 +114,8 @@ export const eventTypes = [
   "profiles.migrated",
   "recorder.changed",
   "workflow.changed",
+  /** The cloud routines were read again, or a run was reported. */
+  "cloud.changed",
   "rules.changed",
   "office.confirmation",
   "app.history",
@@ -583,6 +586,8 @@ export const channels = {
     req: z.object({ id: z.string(), schedule: z.string().nullable().optional(), projectId: z.string().nullable().optional() }),
     res: z.object({ workflowId: z.string() }),
   },
+  "cloud.state": { req: z.void(), res: CloudState },
+  "cloud.refresh": { req: z.void(), res: CloudState },
   "workflows.results": { req: z.void(), res: z.array(WorkflowResult) },
   "workflows.discuss": { req: z.object({ id: z.string() }), res: NotificationLink },
   "workflows.later": { req: z.object({ id: z.string() }), res: z.void() },

@@ -73,6 +73,11 @@ export class ProjectService {
     };
   }
 
+  /** The origin remote of a project as last read, or null when unread or none. */
+  originOf(id: string): string | null {
+    return this.cache.get(id)?.origin ?? null;
+  }
+
   /** Reads the project's git state now. A read already under way is shared, never repeated. */
   refresh(id: string): Promise<void> {
     const running = this.inflight.get(id);

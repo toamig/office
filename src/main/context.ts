@@ -10,6 +10,7 @@ import { NtfyChannel } from "./core/channels/ntfy";
 import { ModuleManager } from "./core/modules";
 import { Notifier } from "./core/notifier";
 import { readClaudeTasks } from "./modules/workflows/claude-tasks";
+import { CloudRoutines, repoKey } from "./modules/cloud/routines";
 import { cheapestModel, Scheduler } from "./core/scheduler";
 import { RelayServer } from "./core/relay-server";
 import {
@@ -99,6 +100,7 @@ export interface AppContext {
   tasks: TaskEngine;
   scheduler: Scheduler;
   workflowResults: WorkflowResults;
+  cloud: CloudRoutines;
   starterPack: () => StarterPack;
   globalRules: GlobalRules;
   gitRuleHooks: GitRuleHooks;
@@ -495,6 +497,27 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
       return session.id;
     },
   });
+  const claudeCode = agents.providers.get("claude-code") as ClaudeCodeProvider;
+  const cloud = new CloudRoutines({
+    claude: async (args) => {
+      let env: Record<string, string> = {};
+      try { env = claudeCode.auth.env(); } catch { /* the program uses its own sign-in */ }
+      const result = await run("claude", args, { cwd: dataDir(), env, timeoutMs: 180_000 });
+      return { code: result.code, stdout: result.stdout, stderr: result.stderr };
+    },
+    available: () => resolveTool("claude") !== null,
+    model: () => cheapestModel("claude-code"),
+    changed: () => bus.emit("cloud.changed", {}),
+    projectOf: (repositories) => {
+      const wanted = new Set(repositories.map(repoKey).filter((key): key is string => key !== null));
+      for (const project of store.state.workspace?.projects ?? []) {
+        const origin = projects.originOf(project.id);
+        const key = origin ? repoKey(origin) : null;
+        if (key && wanted.has(key)) return project.name;
+      }
+      return null;
+    },
+  });
   const scheduler = new Scheduler({
     db,
     runs,
@@ -527,7 +550,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     log: (m) => console.log(m),
   });
   agents.permissionHook.listeners.push((runId, waiting) => tasks.permissionWaiting(runId, waiting));
-  return { editor, tasks, scheduler, modules, workflowResults };
+  return { editor, tasks, scheduler, modules, workflowResults, cloud };
 }
 
 type Orchestration = ReturnType<typeof createOrchestration>;
@@ -656,6 +679,7 @@ function createLifecycle(
     health.stop();
     github.stop();
     scheduler.stop();
+    orch.cloud.stop();
     sessions.stopTimer();
     recorder.stop();
     await relay.stop();
@@ -683,6 +707,7 @@ function createLifecycle(
     projects.startAuto();
     github.start();
     scheduler.start();
+    if (process.env["OFFICE_E2E"] !== "1") orch.cloud.start();
     void projects.refreshAll();
     sessions.startTimer();
     recorder.start();
