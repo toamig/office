@@ -12,6 +12,8 @@ import { nowIso } from "../../core/util";
 import type { ProviderRegistry } from "../providers/registry";
 import type { AgentEvent, AgentRun, AgentRunResult, RunPermission } from "../providers/types";
 import type { PermissionBroker } from "./permissions";
+import type { UsageKind } from "../../../shared/usage";
+import type { UsageService } from "../usage/usage";
 import type { BrainScope } from "../vault/scope";
 
 export type RunKind = "ask" | "brief" | "stage" | "capture" | "explore-summary" | "automation" | "recorder" | "route" | "workflow";
@@ -30,6 +32,9 @@ export interface RunRequest {
   addDirs?: string[];
   projectId?: string;
   taskId?: string;
+  /** What the run counts as on the Usage page, when its kind alone does not say (Upkeep is a workflow run). */
+  usageKind?: UsageKind;
+  workflowId?: string;
   /** Called for each normalised event while the run is going (the Ask panel streams from this). */
   onEvent?: (event: AgentEvent) => void;
 }
@@ -48,6 +53,8 @@ export interface RunServiceDeps {
   providers: ProviderRegistry;
   runsDir: string;
   fullAutoConfirmed?: () => boolean;
+  /** Where the tokens and cost each run reports are kept. */
+  usage?: UsageService;
   /**
    * What a builder stage needs to ask the owner. Without it, a writable run gets only its allowed commands
    * and anything else is refused.
@@ -58,6 +65,11 @@ export interface RunServiceDeps {
     writeMcpConfig: (runId: string, dir: string) => string;
   };
 }
+
+const USAGE_KINDS: Record<RunKind, UsageKind> = {
+  ask: "chat", brief: "brief", stage: "builder", capture: "recorder", "explore-summary": "chat",
+  automation: "workflow", recorder: "recorder", route: "chat", workflow: "workflow",
+};
 
 /** Runs that only read: they get read tools and nothing ever asks. */
 const READ_ONLY_KINDS: RunKind[] = ["ask", "brief", "capture", "explore-summary", "recorder", "route"];
@@ -154,6 +166,13 @@ export class RunService {
           outcome.error ?? null,
           id,
         );
+      if (done.usage?.length) {
+        this.deps.usage?.record({
+          provider: req.providerId, kind: req.usageKind ?? USAGE_KINDS[req.kind], projectId: req.projectId ?? null,
+          workflowId: req.workflowId ?? null, runId: id, model: req.role?.model ?? null,
+        }, done.usage);
+      }
+      if (done.limits?.length) this.deps.usage?.setLimits(req.providerId === "codex" ? "codex" : "claude-code", done.limits);
       this.deps.bus.emit("run.done", { runId: id, kind: req.kind, ok: outcome.ok, cancelled }, req.projectId);
       return { ...outcome, id };
     });

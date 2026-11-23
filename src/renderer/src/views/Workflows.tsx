@@ -2,6 +2,7 @@ import { Plus } from "lucide-react";
 import { useState } from "react";
 import { describeNext } from "@shared/schedule";
 import { brainUpkeepTemplate, describeSchedule, workflowMayDoLabels, workflowOutputLabels, type Workflow, type WorkflowView } from "@shared/workflow";
+import { formatTokens } from "../components/UsageMeter";
 import { BackgroundRuns, useBackgroundRuns } from "../components/BackgroundRuns";
 import { useQuery } from "../lib/hooks";
 import { office } from "../lib/ipc";
@@ -24,6 +25,7 @@ function WorkflowTimes({ workflow }: { workflow: WorkflowView }) {
       : workflow.enabled ? "Only when you run it" : "Off"}</dd>
     <dt className="ui-muted">Last run</dt>
     <dd>{workflow.lastFiredAt ? <Time iso={workflow.lastFiredAt} /> : "Never"}
+      {last?.tokens ? <span className="ui-muted"> {"·"} {formatTokens(last.tokens)}</span> : null}
       {last?.lateFor && <span className="ui-muted"> {"·"} Ran late (Office was closed at {clock.format(new Date(last.lateFor))})</span>}</dd>
     {last && <>
       <dt className="ui-muted">Result</dt>

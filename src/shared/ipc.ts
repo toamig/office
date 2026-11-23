@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { AutonomyLevel } from "./autonomy";
 import { OfficeConfirmation } from "./office-tools";
+import { LimitWindow, UsageTotals, UsageView } from "./usage";
 import { InstalledPlugin, ToolEdit, ToolEditPreview, ToolEntry, ToolTest, ToolTestResult } from "./tool-config";
 import { ClaudeTaskView, Workflow, WorkflowResult, WorkflowView } from "./workflow";
 import { PermissionProfile, Pipeline, Role } from "./schemas";
@@ -121,6 +122,8 @@ export const eventTypes = [
   "chat.preview",
   /** A dev server started for a session changed (output, ready, stopped). */
   "devserver.changed",
+  /** Usage was recorded, or a plan limit was reported. */
+  "usage.changed",
   /** The brain's health (validation, hub status) was refreshed by the background job. */
   "vault.health",
   /** Something the welcome flow looks at changed: the settings it reads, the tools, the hooks. */
@@ -283,6 +286,9 @@ export const channels = {
     req: z.object({ provider: z.enum(["claude-code", "codex"]), projectId: z.string().optional() }),
     res: z.array(InstalledPlugin),
   },
+  "usage.summary": { req: z.void(), res: UsageView },
+  "usage.limits": { req: z.void(), res: z.object({ claudeCode: z.array(LimitWindow).nullable(), updatedAt: z.string().nullable() }) },
+  "usage.session": { req: z.object({ sessionId: z.string() }), res: UsageTotals },
   "devserver.state": { req: z.object({ sessionId: z.string() }), res: DevServerState },
   "devserver.suggest": { req: z.object({ sessionId: z.string() }), res: z.object({ command: z.string(), port: z.number().nullable() }).nullable() },
   "devserver.start": {

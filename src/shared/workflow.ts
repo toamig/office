@@ -51,6 +51,8 @@ export const WorkflowView = Workflow.extend({
     status: WorkflowRunStatus, result: z.string().nullable(),
     /** The slot this run was for when Office was closed at that time. */
     lateFor: z.string().nullable().default(null),
+    /** The tokens the run reported using, when it reported any. */
+    tokens: z.number().nullable().default(null),
   }).nullable(),
   /** The next three runs. */
   upcoming: z.array(z.string()).default([]),

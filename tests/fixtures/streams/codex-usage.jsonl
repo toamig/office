@@ -1,0 +1,4 @@
+{"type":"thread.started","thread_id":"01a20876-1844-7643-8a81-f0a49a6f301a"}
+{"type":"turn.started"}
+{"type":"item.completed","item":{"id":"item_1","type":"agent_message","text":"Hello from fake OpenAI."}}
+{"type":"turn.completed","usage":{"input_tokens":2000,"cached_input_tokens":500,"cache_write_input_tokens":0,"output_tokens":30,"reasoning_output_tokens":10}}

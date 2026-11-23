@@ -18,6 +18,7 @@ import { IpcFailure } from "../../core/ipc";
 import { writeTextFile } from "../../core/settings";
 import { nowIso } from "../../core/util";
 import { interactionFor, type PermissionBroker } from "../runs/permissions";
+import type { UsageService } from "../usage/usage";
 import type { ProviderRegistry } from "../providers/registry";
 import type { Provider, RunPermission } from "../providers/types";
 import type { SessionService } from "../sessions/service";
@@ -39,6 +40,8 @@ export interface ChatServiceDeps {
   /** Writes the MCP config that serves office_permission to this chat's program; returns its path. */
   writeMcpConfig: (id: string, dir: string) => string;
   projectFolder?: (id: string) => string | undefined;
+  /** Where the tokens and cost of each turn are kept. */
+  usage?: UsageService;
 }
 
 /** What a new saved chat is called until its first message names it. */
@@ -711,6 +714,10 @@ export class ChatService {
         if (event.t === "assistant" && event.text) live.lastAssistant = event.text;
         this.take(id, live, event);
       }
+      if (parser.limits) {
+        this.deps.usage?.setLimits("claude-code", parser.limits);
+        parser.limits = null;
+      }
     }
     await this.ended(id, live);
   }
@@ -792,6 +799,7 @@ export class ChatService {
       return;
     }
     this.append(id, event);
+    if (event.t === "result") this.recordUsage(id, live, event);
     if (event.t === "result" || event.t === "error") {
       live.working = false;
       live.succeeded = event.t === "result" && event.ok;
@@ -801,6 +809,16 @@ export class ChatService {
       else this.deps.sessions.setStatus(id, "idle", event.message);
       if (live.succeeded && live.kind === "claude") this.drain(id);
     }
+  }
+
+  /** Keeps what the turn used. An incognito chat leaves no trace, so it is not counted. */
+  private recordUsage(id: string, live: Live, event: Extract<ChatEvent, { t: "result" }>): void {
+    if (!event.usage?.length || this.secret.get(id)?.incognito) return;
+    const session = this.deps.sessions.find(id);
+    this.deps.usage?.record({
+      provider: live.kind === "codex" ? "codex" : "claude-code", kind: "chat", projectId: session?.projectId ?? null, sessionId: id,
+      model: null,
+    }, event.usage);
   }
 
   private authFailure(id: string, live: Live, failure: string): void {

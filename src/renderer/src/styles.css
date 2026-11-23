@@ -120,6 +120,10 @@ body {
 .switcher-button {
   display: flex;
   width: 260px;
+  min-width: 0;
+  flex-shrink: 1;
+  overflow: hidden;
+  white-space: nowrap;
   align-items: center;
   gap: 8px;
   margin-right: 6px;

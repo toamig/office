@@ -4,6 +4,8 @@ import { emptyChat, reduceChat, replayChat, toolGroup, type ChatItem, type ChatS
 import type { ChatLine, ChatOptions, ChatState, SessionRow } from "@shared/models";
 import { isChatSession } from "@shared/roles";
 import { AutonomyPicker } from "../../components/AutonomyPicker";
+import { formatTokens } from "../../components/UsageMeter";
+import { useQuery } from "../../lib/hooks";
 import { OfficeConfirmations } from "../../components/OfficeConfirmations";
 import { PermissionRequests } from "../../components/PermissionRequests";
 import { StatusChip } from "../../components/StatusChip";
@@ -127,6 +129,7 @@ export function ChatView({ session, onChanged, headerActions }: {
     if (el) el.scrollTop = el.scrollHeight;
   }, []);
   const { wrapUp } = useSessionActions();
+  const used = useQuery("usage.session", { sessionId: id }, ["usage.changed"]).data?.tokens ?? 0;
 
   const setMode = (mode: "hidden" | "side" | "full") => {
     setPanelMode(mode);
@@ -261,6 +264,7 @@ export function ChatView({ session, onChanged, headerActions }: {
       <header className="chat-header" data-testid="chat-header">
         <span className="pane-title">{session.title ?? session.provider}</span>
         <StatusChip status={session.status} />
+        {used > 0 && <span className="ui-muted tabular-nums" title="Tokens this session has used, as the program reported them" data-testid="session-tokens">{formatTokens(used)}</span>}
         {session.branch && <span className="pane-branch"><GitBranch size={12} />{session.branch}</span>}
         <div className="flex-1" />
         {!plain && <Button size="sm" onClick={() => wrapUp(session)} data-testid="wrap-up">Wrap up</Button>}

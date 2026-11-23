@@ -2,6 +2,7 @@ import type { ChatModel, Inventory } from "../../../shared/models";
 import type { Role } from "../../../shared/types";
 import type { BrainScope } from "../vault/scope";
 import type { ConversationMcp } from "../runs/mcp-config";
+import type { LimitWindow, UsageReport } from "../../../shared/usage";
 
 /**
  * Who answers "may I run this?" in a headless run (spec 6.3, plan 9.5). Claude Code only; Codex runs in
@@ -43,11 +44,19 @@ export type AgentEvent =
   | { kind: "result"; text: string; ok: boolean }
   | { kind: "error"; message: string }
   /** A tool the run asked for and did not get, because nobody could answer. */
-  | { kind: "denied"; name: string; summary: string };
+  | { kind: "denied"; name: string; summary: string }
+  /** What the program reports it used for the run (tokens, and cost when it says). */
+  | { kind: "usage"; reports: UsageReport[] }
+  /** The plan windows the program reports (a rate limit event). */
+  | { kind: "limits"; windows: LimitWindow[] };
 
 export interface AgentRunResult {
   /** Tools the run asked for and was refused because nobody could answer, as "Bash: rm -rf x". */
   denied?: string[];
+  /** What the run used, as the program reported it. */
+  usage?: UsageReport[];
+  /** The plan windows the program reported during the run. */
+  limits?: LimitWindow[];
   ok: boolean;
   resultText: string;
   providerSessionId?: string;

@@ -14,6 +14,7 @@ export type ViewId =
   | "setup"
   | "tools"
   | "workflows"
+  | "usage"
   | "gallery";
 
 interface Place {

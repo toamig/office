@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { UsageReport } from "./usage";
 import { AutonomyLevel } from "./autonomy";
 import { Workspace } from "./schemas";
 
@@ -674,6 +675,8 @@ export const ChatEvent = z.discriminatedUnion("t", [
     ok: z.boolean(),
     durationMs: z.number().nullable().default(null),
     error: z.string().optional(),
+    /** What the turn used, as the program reported it. */
+    usage: z.array(UsageReport).optional(),
   }),
   z.object({ t: z.literal("error"), message: z.string() }),
   /** The owner stopped the turn, or the process went away. */

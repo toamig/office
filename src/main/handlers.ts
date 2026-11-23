@@ -213,6 +213,16 @@ function registerSetupHandlers(ctx: AppContext): void {
   );
   ctx.ipc.handle("setup.inventory", (req) => inventory.get(req.projectId));
   ctx.ipc.handle("tools.list", (req) => ctx.toolConfig.list(req.projectId));
+  ctx.ipc.handle("usage.summary", () => ctx.usage.summary({
+    project: (id) => ctx.store.state.workspace?.projects.find((project) => project.id === id)?.name,
+    session: (id) => { const row = ctx.sessions.find(id); return row ? { title: row.title ?? row.provider, projectId: row.projectId } : undefined; },
+    workflow: (id) => workflowsFor(ctx.store.state.workspace).find((workflow) => workflow.id === id)?.name,
+  }));
+  ctx.ipc.handle("usage.limits", () => {
+    const limits = ctx.usage.limits("claude-code");
+    return { claudeCode: limits.windows.length > 0 ? limits.windows : null, updatedAt: limits.updatedAt };
+  });
+  ctx.ipc.handle("usage.session", (req) => ctx.usage.forSession(req.sessionId));
   ctx.ipc.handle("devserver.state", (req) => ctx.devServers.state(req.sessionId));
   ctx.ipc.handle("devserver.suggest", (req) => ctx.devServers.suggestion(req.sessionId));
   ctx.ipc.handle("devserver.start", (req) => ctx.devServers.start(req.sessionId, { command: req.command, port: req.port ?? null }));

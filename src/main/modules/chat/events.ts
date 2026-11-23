@@ -1,5 +1,6 @@
 import type { ChatEvent } from "../../../shared/models";
 import { planEvent, planSteps } from "../../../shared/chat";
+import { claudeLimits, claudeUsage, codexUsage, type LimitWindow } from "../../../shared/usage";
 
 type Json = Record<string, unknown>;
 
@@ -72,6 +73,8 @@ function resultText(content: unknown): string {
  * results become cards, and the result line ends the turn.
  */
 export class ClaudeChatParser {
+  /** The plan windows of the latest rate limit line, until the caller takes them. */
+  limits: LimitWindow[] | null = null;
   private messageId = "";
   private readonly subagents = new Set<string>();
   private failure = "";
@@ -108,8 +111,14 @@ export class ClaudeChatParser {
         }];
       }
     }
+    if (type === "rate_limit_event") {
+      const windows = claudeLimits(message);
+      if (windows.length > 0) this.limits = windows;
+      return [];
+    }
     if (type === "result") {
       const failed = message["is_error"] === true || Boolean(this.failure);
+      const usage = claudeUsage(message);
       const errors = Array.isArray(message["errors"]) ? message["errors"].map(str).filter(Boolean).join("\n") : "";
       const error = this.failure || str(message["result"]) || errors || "The turn failed";
       this.failure = "";
@@ -119,6 +128,7 @@ export class ClaudeChatParser {
           ok: !failed,
           durationMs: typeof message["duration_ms"] === "number" ? message["duration_ms"] : null,
           ...(failed ? { error } : {}),
+          ...(usage.length > 0 ? { usage } : {}),
         },
       ];
     }
@@ -241,7 +251,8 @@ export class CodexChatParser {
       return type === "turn.failed" ? [{ t: "result", ok: false, durationMs: Date.now() - this.started, error: this.failed }] : [];
     }
     if (type === "turn.completed") {
-      return [{ t: "result", ok: true, durationMs: Date.now() - this.started }];
+      const usage = codexUsage(event, null, Date.now() - this.started);
+      return [{ t: "result", ok: true, durationMs: Date.now() - this.started, ...(usage.length > 0 ? { usage } : {}) }];
     }
     const item = obj(event["item"]);
     const id = str(item["id"]) || `i${Date.now()}`;

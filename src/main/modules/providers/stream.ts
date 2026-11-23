@@ -1,4 +1,5 @@
 import type { StreamHandle } from "../../core/exec";
+import { claudeLimits, claudeUsage, codexUsage, type LimitWindow, type UsageReport } from "../../../shared/usage";
 import type { AgentEvent, AgentRun, AgentRunResult } from "./types";
 
 type Json = Record<string, unknown>;
@@ -50,8 +51,14 @@ export function parseClaudeLine(line: string): AgentEvent[] {
     for (const d of denials) {
       events.push({ kind: "denied", name: str(d["tool_name"]), summary: short(d["tool_input"]) });
     }
+    const usage = claudeUsage(obj);
+    if (usage.length > 0) events.push({ kind: "usage", reports: usage });
     events.push({ kind: "result", text: str(obj["result"]), ok: obj["is_error"] !== true });
     return events;
+  }
+  if (type === "rate_limit_event") {
+    const windows = claudeLimits(obj);
+    return windows.length > 0 ? [{ kind: "limits", windows }] : [];
   }
   if (type === "error") return [{ kind: "error", message: str(obj["message"]) || short(obj) }];
   return [];
@@ -84,6 +91,10 @@ export function parseCodexLine(line: string): AgentEvent[] {
       ];
     }
     return [];
+  }
+  if (type === "turn.completed") {
+    const reports = codexUsage(obj);
+    return reports.length > 0 ? [{ kind: "usage", reports }] : [];
   }
   if (type === "turn.failed") {
     return [
@@ -122,6 +133,8 @@ export function startAgentRun(
   let resultOk = true;
   let cancelled = false;
   const denied: string[] = [];
+  const usage: UsageReport[] = [];
+  const limits = new Map<string, LimitWindow>();
 
   const done = (async (): Promise<AgentRunResult> => {
     for await (const line of stream.lines) {
@@ -134,6 +147,8 @@ export function startAgentRun(
           resultOk = event.ok;
         } else if (event.kind === "error") error = event.message;
         else if (event.kind === "denied") denied.push(`${event.name}: ${event.summary}`);
+        else if (event.kind === "usage") usage.push(...event.reports);
+        else if (event.kind === "limits") for (const window of event.windows) limits.set(window.key, window);
         queue.push(event);
         wake?.();
       }
@@ -154,6 +169,8 @@ export function startAgentRun(
       ...(sessionId ? { providerSessionId: sessionId } : {}),
       ...(error ? { error } : {}),
       ...(denied.length > 0 ? { denied } : {}),
+      ...(usage.length > 0 ? { usage } : {}),
+      ...(limits.size > 0 ? { limits: [...limits.values()] } : {}),
     };
   })();
 

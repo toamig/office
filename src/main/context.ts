@@ -43,6 +43,7 @@ import { ExploreService } from "./modules/explore/explore";
 import { AskService } from "./modules/ask/ask";
 import { RequestRouter } from "./modules/ask/router";
 import { ChatService } from "./modules/chat/service";
+import { UsageService } from "./modules/usage/usage";
 import { DevServers, stopWithSession } from "./modules/chat/dev-servers";
 import { OfficeTools } from "./modules/chat/office-tools";
 import { RunService } from "./modules/runs/service";
@@ -122,6 +123,7 @@ export interface AppContext {
   chat: ChatService;
   officeTools: OfficeTools;
   devServers: DevServers;
+  usage: UsageService;
   /** Warnings shown in the health strip (failed pushes, validate errors). */
   warnings: Array<{ at: string; message: string }>;
   /** Starting a brain, adding projects, the agent pointer (M9). */
@@ -265,7 +267,9 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
   });
   const bridgeScript = join(dirname(relayScript), "office-permission-mcp.mjs");
   const conversationBridge = new ConversationBridge(bridgeScript, () => box.current.workspaceRoot);
+  const usage = new UsageService({ db, changed: () => bus.emit("usage.changed", {}) });
   const runs = new RunService({
+    usage,
     db,
     bus,
     providers,
@@ -312,6 +316,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
     idleDays: () => box.current.sessionIdleDays,
   });
   const chat = new ChatService({
+    usage,
     bus,
     providers,
     sessions,
@@ -414,6 +419,7 @@ function createAgents(base: Base, notes: Notes, relayScript: string, tokens: Cla
   });
   return {
     providers,
+    usage,
     runs,
     ask,
     github,
@@ -497,6 +503,7 @@ function createOrchestration(base: Base, notes: Notes, agents: Agents) {
     defaultProvider: cheapestProvider,
     fullAutoConfirmed: () => box.current.confirmedFullAuto,
     claudeTasks: () => readClaudeTasks(claudeDir(), appDataDir()),
+    tokensOf: (runId) => agents.usage.forRun(runId).tokens,
     output: (root, workflow, result) => workflowResults.save(root, workflow, result),
     changed: () => bus.emit("workflow.changed", {}),
     validate: (root) => runValidate(root, notes.folderTools.enabled() ? () => notes.folderTools.validate(root) : undefined),

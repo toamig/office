@@ -197,7 +197,8 @@ function HealthPanel() {
 /** The morning screen: what waits on you, live agents, health. */
 export function Home() {
   return (
-    <Page title="Home" subtitle="What needs you, what is running and what changed." testId="home">
+    <Page title="Home" subtitle="What needs you, what is running and what changed." testId="home"
+      primary={<Button onClick={() => useUi.getState().navigate("usage")} data-testid="home-usage">Usage</Button>}>
       <RequestComposer />
       <div className="home-brief-grid">
         <BriefPanel />

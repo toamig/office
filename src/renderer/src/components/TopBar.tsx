@@ -1,10 +1,11 @@
-import { ArrowLeft, ArrowRight, PanelLeft, PanelRight, RefreshCw, Search } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, PanelLeft, PanelRight, RefreshCw, Search } from "lucide-react";
 import { useInspector } from "../lib/inspector";
 import { office } from "../lib/ipc";
 import { useSidebarCollapsed } from "../lib/sidebar";
 import { useUi } from "../stores/ui";
 import { Button, notify, notifyError } from "../ui";
 import { PendingBell } from "./PendingBell";
+import { UsageMeter } from "./UsageMeter";
 
 /** The padding that keeps controls clear of the native window buttons drawn in the corner. */
 const BUTTONS_CLEARANCE =
@@ -113,6 +114,10 @@ export function TopBar() {
           <PanelRight size={16} />
         </BarButton>
       )}
+      <UsageMeter />
+      <BarButton label="Usage" onClick={() => useUi.getState().navigate("usage")} testId="usage-button">
+        <BarChart3 size={16} />
+      </BarButton>
       <PendingBell />
       <Button onClick={() => void sync()} disabled={syncing} data-testid="sync-all">
         <RefreshCw size={14} className={syncing ? "animate-spin" : ""} />

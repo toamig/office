@@ -213,6 +213,18 @@ async function needsPermission(text) {
 
 // ---------- chat: a long-lived `claude -p --input-format stream-json`, as Claude Code does it ----------
 // Each stdin line is a user message; the answer streams out as stream_event partials, the finished assistant
+/** What the real program reports on a result line, with small made-up counts, so usage can be tested. */
+const usage = () => ({
+  total_cost_usd: 0.0123,
+  usage: { input_tokens: 1200, output_tokens: 340, cache_read_input_tokens: 800, cache_creation_input_tokens: 60 },
+  modelUsage: { "claude-fake-1": { inputTokens: 1200, outputTokens: 340, cacheReadInputTokens: 800, cacheCreationInputTokens: 60, costUSD: 0.0123 } },
+});
+const limits = () => ({
+  type: "rate_limit_event",
+  rate_limit_info: { status: "allowed", rateLimitType: "five_hour", utilization: 0.42, resetsAt: Math.floor(Date.now() / 1000) + 3 * 3600,
+    unifiedWindows: { five_hour: { utilization: 0.42, resetsAt: Math.floor(Date.now() / 1000) + 3 * 3600 }, seven_day: { utilization: 0.81, resetsAt: Math.floor(Date.now() / 1000) + 4 * 86400 } } },
+});
+
 // message, tool calls and results, and a result line. The text of the message picks what happens:
 //   THINK, READ <path>, EDIT, RUN <cmd>, TODO, NEEDS_PERMISSION: <cmd>, SLOW, anything else is echoed.
 async function chatLoop() {
@@ -285,7 +297,8 @@ async function chatLoop() {
       answer = outcome;
     }
     await say(id, answer);
-    out({ type: "result", subtype: "success", is_error: false, result: answer, duration_ms: Date.now() - started, session_id: sessionId });
+    out(limits());
+    out({ type: "result", subtype: "success", is_error: false, result: answer, duration_ms: Date.now() - started, session_id: sessionId, ...usage() });
   }
 }
 
@@ -304,7 +317,8 @@ if (prompt !== null) {
     if (/NEEDS_PERMISSION: /.test(prompt)) [final, denials] = await needsPermission(prompt);
     else final = respond(prompt);
     out({ type: "assistant", message: { content: [{ type: "text", text: final }] } });
-    out({ type: "result", subtype: "success", is_error: false, result: final, session_id: sessionId, permission_denials: denials });
+    out(limits());
+    out({ type: "result", subtype: "success", is_error: false, result: final, session_id: sessionId, permission_denials: denials, ...usage() });
     process.exit(0);
   } catch (err) {
     out({ type: "result", subtype: "error_during_execution", is_error: true, result: String(err.message), session_id: sessionId });

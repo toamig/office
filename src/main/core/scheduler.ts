@@ -36,6 +36,8 @@ export interface SchedulerDeps {
   now?: () => Date;
   fullAutoConfirmed?: () => boolean;
   /** The Claude Code tasks that are on, to warn when one runs the same thing. */
+  /** The tokens a run reported using. */
+  tokensOf?: (runId: string) => number;
   claudeTasks?: () => Array<{ id: string; name: string; enabled: boolean | null }>;
 }
 
@@ -147,7 +149,8 @@ export function workflowRequest(
 Available projects: ${JSON.stringify(projects.map(({ id, name }) => ({ id, name })))}`
     : "Return the result as concise Markdown.";
   const common = {
-    kind: "workflow" as const, title: workflow.name, providerId: provider, prompt: `${workflow.prompt}
+    kind: "workflow" as const, title: workflow.name, providerId: provider, workflowId: workflow.id,
+    ...(workflow.template === "brain-upkeep" ? { usageKind: "upkeep" as const } : {}), prompt: `${workflow.prompt}
 
 ${output}`,
     ...(workflow.projectId ? { projectId: workflow.projectId } : {}),
@@ -240,11 +243,11 @@ export class Scheduler {
 
   private latestRun(root: string, id: string): Pick<WorkflowView, "lastRun" | "lastFiredAt"> {
     const row = this.deps.db.prepare(`SELECT l.fired_at AS at, l.status, l.result,
-      l.late_for AS lateFor, r.status AS agentStatus, r.error, r.output_path AS outputPath
+      l.late_for AS lateFor, l.run_id AS runId, r.status AS agentStatus, r.error, r.output_path AS outputPath
       FROM automations_log l LEFT JOIN runs r ON r.id = l.run_id
       WHERE l.workspace = ? AND l.automation = ? AND (l.status IS NOT NULL OR l.run_id IS NOT NULL)
       ORDER BY l.fired_at DESC, l.rowid DESC LIMIT 1`).get(root, id) as {
-        at: string; status: string | null; result: string | null; agentStatus: string | null; lateFor: string | null;
+        at: string; status: string | null; result: string | null; agentStatus: string | null; lateFor: string | null; runId: string | null;
         error: string | null; outputPath: string | null;
       } | undefined;
     if (!row) return { lastFiredAt: null, lastRun: null };
@@ -254,6 +257,7 @@ export class Scheduler {
       lastRun: status.success ? {
         status: status.data, result: row.result ?? row.error ?? (row.status === null ? historicalResult(row.outputPath) : null),
         lateFor: row.lateFor,
+        tokens: row.runId ? this.deps.tokensOf?.(row.runId) || null : null,
       } : null,
     };
   }

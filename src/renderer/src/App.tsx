@@ -28,6 +28,7 @@ import { Setup } from "./views/Setup";
 import { Tools } from "./views/Tools";
 import { Workflows } from "./views/Workflows";
 import { Banner, NotificationStack, notify, notifyError } from "./ui";
+import { Usage } from "./views/Usage";
 import { Welcome } from "./views/welcome/Welcome";
 
 /** The views that are drawn fresh each time; the Agents view is kept alive by App and never comes through here. */
@@ -61,6 +62,7 @@ function CurrentView({ configured }: { configured: boolean }) {
   if (view === "inbox") return <Inbox />;
   if (view === "tools") return <Tools />;
   if (view === "workflows") return <Workflows />;
+  if (view === "usage") return <Usage />;
   if (view === "gallery" && Gallery)
     return (
       <Suspense fallback={null}>
